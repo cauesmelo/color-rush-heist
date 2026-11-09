@@ -1,0 +1,54 @@
+/* Standalone preview: plain green page, the 960x540 game centred, nothing
+ * else. Inside an itch.io iframe (or ?embed=1) the same game fills the frame,
+ * letterboxed on the same green so standalone and iframe canvases match. */
+html,
+body {
+  background: #168546;
+}
+.itch-embed body {
+  padding: 0;
+}
+.itch-embed #surface {
+  width: min(100vw, calc(100dvh * 16 / 9));
+}
+#surface:fullscreen .stage {
+  max-width: 100vw;
+}
+#surface:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  aspect-ratio: auto;
+  background: #000;
+}
+#surface:fullscreen .stage {
+  inset: 0;
+  margin: auto;
+  width: min(100vw, calc(100dvh * 16 / 9));
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+/* Fullscreen sits in the game's own top-right button group. */
+.itch-fullscreen {
+  position: absolute;
+  top: max(8px, 1.3cqw);
+  right: max(8px, 1.3cqw);
+  z-index: 6;
+}
+[data-screen="story"] .itch-fullscreen,
+[data-screen="results"] .itch-fullscreen,
+[data-screen="ending"] .itch-fullscreen {
+  display: none;
+}
+@media (orientation: portrait) and (max-width: 820px) {
+  .itch-embed.touch-pads body {
+    padding: 4px;
+  }
+  .itch-embed.touch-pads #surface {
+    width: calc(100vw - 8px);
+    height: calc(100dvh - 8px);
+  }
+  .touch-pads .itch-fullscreen {
+    top: calc((100vw - 12px) * 9 / 16 + 8px + 26px);
+    right: 20px;
+  }
+}

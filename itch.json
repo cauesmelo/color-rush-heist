@@ -1,0 +1,11 @@
+{
+  "slug": "color-rush-heist",
+  "title": "Color Rush Heist",
+  "embed": {
+    "width": 960,
+    "height": 540,
+    "clickToPlay": true,
+    "fullscreenButton": true,
+    "mobileFriendly": "Test physical devices before enabling"
+  }
+}

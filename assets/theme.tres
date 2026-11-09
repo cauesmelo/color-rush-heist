@@ -1,0 +1,7 @@
+[gd_resource type="Theme" load_steps=2 format=3 uid="uid://dqosqwgwrjv6w"]
+
+[ext_resource type="FontFile" uid="uid://b2eveva78xecr" path="res://assets/font.ttf" id="1_cpqw4"]
+
+[resource]
+default_font = ExtResource("1_cpqw4")
+default_font_size = 21

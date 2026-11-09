@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en" data-screen="boot">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#168546" />
+    <meta name="description" content="Color Theft Story — Color Rush Heist: Rubik steals his red back from the Uno cards, made from the original game's art." />
+    <title>Color Theft Story — Color Rush Heist</title>
+    <link rel="icon" href="./assets/cofre.png" />
+    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./embed.css" />
+  </head>
+  <body>
+    <main id="surface" aria-label="Color Theft Story: Color Rush Heist">
+      <div class="stage" id="stage">
+        <canvas
+          id="game"
+          width="960"
+          height="540"
+          tabindex="0"
+          aria-label="Color Theft Story: Color Rush Heist. Arrows or A D move, Space jumps (twice when white), Shift or K dashes, Z white, X green, C red, P pauses."
+        ></canvas>
+        <button id="start" class="start-hit" aria-label="Press any key to start">
+          <span class="sr-only">Start</span>
+        </button>
+        <div class="corner">
+          <button id="music" class="icon-btn" type="button" aria-pressed="false" aria-label="Music">&#9835;</button>
+          <button id="pause" class="icon-btn" type="button" aria-label="Pause" hidden>&#10074;&#10074;</button>
+        </div>
+        <div id="pause-card" class="card-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
+          <div data-panel="menu" class="menu">
+            <h2 id="pause-title">Paused</h2>
+            <button id="resume" class="primary" type="button">Resume</button>
+            <button id="opt-retry" type="button">Back to checkpoint</button>
+            <button id="opt-restart" type="button">Restart stage</button>
+            <div class="row toggles">
+              <button id="opt-sfx" type="button" aria-pressed="true">Sound</button>
+              <button id="opt-music" type="button" aria-pressed="false">Music</button>
+              <button id="opt-timer" type="button" aria-pressed="false">Timer</button>
+            </div>
+            <div class="row">
+              <button data-show="controls" type="button">Controls</button>
+              <button data-show="art" type="button">Art</button>
+              <button data-show="credits" type="button">Credits</button>
+            </div>
+          </div>
+          <div data-panel="controls" class="menu" hidden>
+            <h2>Controls</h2>
+            <dl class="controls">
+              <div><dt><kbd>&lt;</kbd><kbd>&gt;</kbd></dt><dd>move</dd></div>
+              <div><dt><kbd>Space</kbd></dt><dd>jump</dd></div>
+              <div><dt><kbd>Shift</kbd></dt><dd>dash</dd></div>
+              <div><dt><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd></dt><dd>colors</dd></div>
+              <div><dt><kbd>R</kbd></dt><dd>checkpoint</dd></div>
+              <div><dt><kbd>P</kbd></dt><dd>pause</dd></div>
+            </dl>
+            <p class="rule">Cards can't see their own color.</p>
+            <button data-show="menu" type="button">Back</button>
+          </div>
+          <!-- itch.io build: "Art" credits the artist instead of linking out to
+               the development art archive (gallery.html still ships for QA). -->
+          <div data-panel="art" class="menu" hidden>
+            <h2>Art</h2>
+            <p class="art-credit">Art by<br /><strong>Vitor Farias</strong></p>
+            <button data-show="menu" type="button">Back</button>
+          </div>
+          <div data-panel="credits" class="menu" hidden>
+            <h2>Credits</h2>
+            <figure class="relic">
+              <img src="./assets/intro.jpeg" alt="The original jam title card of Color Theft Story" />
+              <figcaption>The original jam title card</figcaption>
+            </figure>
+            <p class="small">Color Theft Story by Vitor Farias and @cauesmelo (minigamejam 22). Font: monogram by datagoblin (CC0).</p>
+            <button data-show="menu" type="button">Back</button>
+          </div>
+        </div>
+        <div id="results-actions" class="results-actions" hidden>
+          <button id="continue" class="primary" type="button">Continue &#9656;</button>
+          <button id="again" type="button">Play again</button>
+        </div>
+        <p id="live" class="sr-only" aria-live="polite"></p>
+      </div>
+      <div id="touch" class="touch" hidden>
+        <div class="pad-left">
+          <button data-input="left" type="button" aria-label="Move left">&#9664;</button>
+          <button data-input="right" type="button" aria-label="Move right">&#9654;</button>
+        </div>
+        <div class="pad-right">
+          <div class="forms">
+            <button data-color="white" class="form white" type="button" aria-label="White: double jump"><i><b><em></em></b></i></button>
+            <button data-color="green" class="form green" type="button" aria-label="Green: hidden from green cards" hidden><i><b><em></em></b></i></button>
+            <button data-color="red" class="form red" type="button" aria-label="Red: smash dash" hidden><i><b><em></em></b></i></button>
+          </div>
+          <button data-action="dash" class="dash" type="button" aria-label="Dash">DASH</button>
+          <button data-action="jump" class="jump" type="button" aria-label="Jump">JUMP</button>
+        </div>
+        <p class="rotate-hint">&#8635; turn sideways for a bigger view</p>
+      </div>
+    </main>
+    <script type="module" src="./embed.js"></script>
+    <script type="module" src="./game.mjs"></script>
+  </body>
+</html>

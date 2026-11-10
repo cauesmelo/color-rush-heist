@@ -107,6 +107,11 @@ const cxOf = (g) => g.player.x + g.player.w / 2;
 const feetOf = (g) => g.player.y + g.player.h;
 const progOf = (g) => dirOf(g) * cxOf(g);
 const active = (c) => !["away", "stunned", "drained", "defeated"].includes(c.state);
+/** A flattened `pad` card is still a springboard (RESEARCH_COMBAT.md section 5):
+ * a person who has bounced on a card knows its grey flat remains bounce again. */
+const bouncy = (c) => active(c) || (c.pad && c.state === "drained");
+/** Stomps plus pad bounces: every time Rubik left a card's head upward. */
+const hops = (g) => g.stomps + (g.bounces ?? 0);
 function solidAt(g, M, tx, ty) {
   return ty >= 0 && M.blocked(g, tx, ty);
 }
@@ -157,11 +162,11 @@ function autoAir(c, M, input, knows) {
       return true;
     })();
   // Bounce: a card's head below within reach while falling -> hold jump.
-  const card = c.guards.some((k) => active(k) && Math.abs(k.x - cx) < 40 && feet <= k.floor - M.GUARD.h + 4 && k.floor - M.GUARD.h - feet < 50);
-  c.autoState ??= { held: !!p.jumpHeld, stomps: c.stomps };
+  const card = c.guards.some((k) => bouncy(k) && Math.abs(k.x - cx) < 40 && feet <= k.floor - M.GUARD.h + 4 && k.floor - M.GUARD.h - feet < 50);
+  c.autoState ??= { held: !!p.jumpHeld, stomps: hops(c) };
   const st = c.autoState;
-  if (c.stomps > st.stomps) {
-    st.stomps = c.stomps;
+  if (hops(c) > st.stomps) {
+    st.stomps = hops(c);
     input.jump = true; // pressed as he lands: the high bounce
     st.held = true;
     return;
@@ -173,7 +178,7 @@ function autoAir(c, M, input, knows) {
   }
   // Aim at a card's head ahead and below while falling (Mario's habit).
   if (p.vy > 0) {
-    const head = c.guards.find((k) => active(k) && (k.x - cx) * dir > -40 && (k.x - cx) * dir < 160 && k.floor - M.GUARD.h > feet - 4 && k.floor - M.GUARD.h - feet < 200);
+    const head = c.guards.find((k) => bouncy(k) && (k.x - cx) * dir > -40 && (k.x - cx) * dir < 160 && k.floor - M.GUARD.h > feet - 4 && k.floor - M.GUARD.h - feet < 200);
     if (head) {
       input.left = cx > head.x + 8;
       input.right = cx < head.x - 8;
@@ -278,8 +283,8 @@ const reaches = (target, extra = () => true) => (c) => {
   if (c.phase === "dead") return false;
   if (c.phase === "won") return true;
   // A stomp past the start is progress too (a chain of backs over water).
-  c.stompBase ??= c.stomps;
-  if (c.stomps > c.stompBase && c.hitstop <= 0 && progOf(c) >= target - 6 * T && extra(c)) return true;
+  c.stompBase ??= hops(c);
+  if (hops(c) > c.stompBase && c.hitstop <= 0 && progOf(c) >= target - 6 * T && extra(c)) return true;
   if (c.player.grounded && c.hitstop <= 0 && progOf(c) >= target && extra(c)) return true;
   return undefined;
 };
@@ -405,7 +410,7 @@ function planAir(g, M, bot) {
     const dir = dirOf(g),
       cx = cxOf(g),
       card = g.guards
-        .filter((k) => active(k) && (k.x - cx) * dir > -60 && (k.x - cx) * dir < 260 && k.floor - M.GUARD.h > feetOf(g) - 10)
+        .filter((k) => bouncy(k) && (k.x - cx) * dir > -60 && (k.x - cx) * dir < 260 && k.floor - M.GUARD.h > feetOf(g) - 10)
         .sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx))[0];
     const tries = [{ mode: "brake" }];
     if (card) tries.unshift({ mode: "aim", x: card.x });
@@ -437,7 +442,7 @@ function planAir(g, M, bot) {
   for (const kind of options) {
     const ok = [];
     const knows = { air: bot.knows.has("air"), dash: g.dashUnlocked && bot.knows.has("dash") };
-    for (let a = 0; a <= 48; a += 3) ok.push(simulateFromAir(g, M, kind, a, knows) ? a : null);
+    for (let a = 0; a <= 72; a += 3) ok.push(simulateFromAir(g, M, kind, a, knows) ? a : null);
     let best = null,
       run = null;
     for (const a of ok) {
@@ -488,7 +493,15 @@ function simulateFromAir(g, M, kind, a, knows) {
     M.update(c, TICK, input);
     if (c.phase === "dead") return false;
     if (c.phase === "won") return true;
-    if (hit && c.player.grounded && c.hitstop <= 0 && i > a + 2) return progOf(c) > start + 16;
+    if (hit && c.player.grounded && c.hitstop <= 0 && i > a + 2) {
+      if (progOf(c) <= start + 16) return false;
+      // Calibration (levels round): a jump only counts if he can walk on from
+      // where he lands. "16 px further" alone accepted an air jump pressed in
+      // the middle of a bounce that landed at a 7-tile wall's FOOT, so the
+      // earliest window in the list won and a bounce never topped a wall. A
+      // person presses the air jump when he sees the arc will not top the edge.
+      return probeWalk(c, M, 40).kind !== "stall";
+    }
   }
   return false;
 }
@@ -516,7 +529,7 @@ export function trySpring(g, M, bot, id, d, target, wait = 0) {
     knowsAir = bot.knows.has("air");
   for (let i = 0; i < wait; i++) M.update(c, TICK, {});
   let phase = 0,
-    st = c.stomps,
+    st = hops(c),
     airAt = -1,
     off = false;
   for (let i = 0; i < 6 * 120; i++) {
@@ -526,7 +539,7 @@ export function trySpring(g, M, bot, id, d, target, wait = 0) {
       p = c.player,
       input = {};
     if (phase === 0) {
-      if (Math.abs(cx - card.x) <= d && p.grounded && active(card)) {
+      if (Math.abs(cx - card.x) <= d && p.grounded && bouncy(card)) {
         input.jump = true;
         phase = 1;
       } else if (cx < card.x) input.right = true;
@@ -535,7 +548,7 @@ export function trySpring(g, M, bot, id, d, target, wait = 0) {
       input.left = cx > card.x + 6;
       input.right = cx < card.x - 6;
       if (!p.grounded) off = true;
-      if (c.stomps > st) phase = 2;
+      if (hops(c) > st) phase = 2;
       else if (off && p.grounded) return false; // landed beside it
     } else {
       if (dir > 0) input.right = true;
@@ -552,13 +565,18 @@ export function trySpring(g, M, bot, id, d, target, wait = 0) {
   }
   return false;
 }
-function planSpringboard(g, M, bot, target) {
+function planSpringboard(g, M, bot, target, onlyId = null, maxWait = 3.5 * 120) {
   const cx = cxOf(g),
     feet = feetOf(g);
-  const cards = g.guards.filter((c) => active(c) && Math.abs(c.floor - feet) < 40 && Math.abs(c.x - cx) < 14 * T).sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx));
+  // Discovery (levels round): a first-timer thinks of a card as the way over a
+  // wall only if it stands within 5 tiles of where he is stuck (real keys, 1-2:
+  // he hopped at a 7-tile wall for a minute with a flat pad 8 tiles behind him);
+  // the casual looks about 10 tiles, the expert 14.
+  const reach = { first: 5, casual: 10, expert: 14 }[bot.persona.id] * T;
+  const cards = g.guards.filter((c) => (!onlyId || c.id === onlyId) && bouncy(c) && Math.abs(c.floor - feet) < 40 && Math.abs(c.x - cx) < reach).sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx));
   for (const card of cards.slice(0, 2)) {
     // He may first wait (standing still) for the card to turn its back.
-    for (let wait = 0; wait <= 3.5 * 120; wait += 60) {
+    for (let wait = 0; wait <= maxWait; wait += 60) {
       const ok = [];
       for (let d = 20; d <= 200; d += 30) ok.push(trySpring(g, M, bot, card.id, d, target, wait) ? d : null);
       const w = bestRun(ok);
@@ -648,7 +666,12 @@ export function decide(g, M, bot) {
     // bounce; the first-timer does when he happens to be holding jump (60%).
     // (A key still held from the takeoff already gives the high bounce:
     // releasing it now would cut the bounce, so he keeps holding.)
-    if (ev.type === "stomp" && (bot.persona.id !== "first" || bot.r() < 0.6)) {
+    if (ev.type === "stomp" || ev.type === "bounce") {
+      bot.bounced = true;
+      bot.hopAt = bot.tick;
+      bot.mashRoll = undefined;
+    }
+    if ((ev.type === "stomp" || ev.type === "bounce") && (bot.persona.id !== "first" || bot.r() < 0.6)) {
       bot.plan = bot.plan.filter((x) => x.type !== "release");
       if (!bot.jumpHeld) schedule(bot, bot.tick, "jump");
       schedule(bot, bot.tick + 50, "release");
@@ -678,6 +701,14 @@ export function decide(g, M, bot) {
   }
   if (g.phase !== "playing") return want;
   const prog = progOf(g);
+  // The theft flips the travel direction (1-6): progress toward the NEW end
+  // starts from here, or the stuck logic would walk him back at the vault.
+  if (bot.lastDir !== undefined && bot.lastDir !== dir) {
+    bot.best = prog;
+    bot.bestAt = bot.tick;
+    bot.stuckTries = 0;
+  }
+  bot.lastDir = dir;
   if (prog > bot.best + 8) {
     bot.best = prog;
     bot.bestAt = bot.tick;
@@ -689,7 +720,16 @@ export function decide(g, M, bot) {
   let waiting = false;
   if (bot.persona.stealth !== "none" && p.grounded) {
     const c = blockingCard(g, M, bot);
-    if (c) {
+    // A card that has noticed him and walks at him is a fight, not a wait
+    // (levels round: the casual used to stand still in front of a chasing
+    // walker and take its spear three times). He picks a jump that lands on
+    // its head, the way the first-timer's habit of jumping at things does by
+    // accident; a card that holds its post is still waited out.
+    if (c && !bot.approach && bot.tick >= (bot.fightNext ?? 0) && ["suspect", "alert"].includes(c.state) && c.type !== "sentinel" && Math.abs(c.floor - feetOf(g)) < 40 && Math.abs(c.x - cxOf(g)) < 260) {
+      bot.fightNext = bot.tick + 45;
+      if (planSpringboard(g, M, bot, dir * c.x + 60, c.id, 0)) bot.log.fights = (bot.log.fights ?? 0) + 1;
+    }
+    if (c && !bot.approach) {
       if (bot.persona.stealth === "anticipate" && bot.tick % 12 !== 0) waiting = bot.lastWaiting ?? true;
       else if (bot.persona.stealth === "anticipate") {
         // The expert steps a copy with the cards moving: go now if that run
@@ -717,19 +757,19 @@ export function decide(g, M, bot) {
   if (bot.backUntil > bot.tick) moveDir = -dir;
   if (bot.approach) {
     const card = g.guards.find((k) => k.id === bot.approach.id);
-    if (!card || !active(card) || bot.tick > bot.approach.until) bot.approach = null;
+    if (!card || !bouncy(card) || bot.tick > bot.approach.until) bot.approach = null;
     else if (bot.tick < bot.approach.from) moveDir = 0;
     else if (p.grounded && Math.abs(cxOf(g) - card.x) <= bot.approach.d) {
       schedule(bot, bot.tick, "jump");
       schedule(bot, bot.tick + 240, "release");
-      bot.spring = { id: card.id, phase: 1, st: g.stomps, at: bot.tick };
+      bot.spring = { id: card.id, phase: 1, st: hops(g), at: bot.tick };
       bot.airPlanned = true;
       bot.approach = null;
     } else moveDir = cxOf(g) < card.x ? 1 : -1;
   }
   if (bot.spring && (!p.grounded || bot.tick - bot.spring.at < 3)) {
     const card = g.guards.find((k) => k.id === bot.spring.id);
-    if (bot.spring.phase === 1 && g.stomps > bot.spring.st) bot.spring.phase = 2;
+    if (bot.spring.phase === 1 && hops(g) > bot.spring.st) bot.spring.phase = 2;
     if (bot.spring.phase === 1 && card) moveDir = cxOf(g) < card.x - 6 ? 1 : cxOf(g) > card.x + 6 ? -1 : 0;
     else moveDir = dir;
   }
@@ -747,7 +787,10 @@ export function decide(g, M, bot) {
   // Ground planning (not while waiting or reacting).
   const grounded = p.grounded;
   if (grounded && !bot.wasGrounded) bot.airPlanned = false;
-  if (!grounded && bot.wasGrounded) bot.takeoffAt = bot.tick;
+  if (!grounded && bot.wasGrounded) {
+    bot.takeoffAt = bot.tick;
+    bot.mashRoll = undefined;
+  }
   bot.wasGrounded = grounded;
   const pendingJump = bot.plan.some((x) => x.type === "jump" || x.type === "dash");
   if (grounded && !pendingJump && !bot.approach && moveDir === dir && bot.tick >= bot.busyUntil && bot.tick - bot.lastPlanAt >= (bot.failedPlan ? 30 : 6)) {
@@ -759,7 +802,8 @@ export function decide(g, M, bot) {
       // after two failed tries at the same wall).
       if (!planned && outcome.kind === "stall" && !bot.approach && bot.tick >= (bot.springNext || 0)) {
         const bin = Math.floor(cxOf(g) / T / 4);
-        if (bot.persona.id !== "first" || (bot.triesAt[bin] || 0) >= 2) {
+        // The first-timer must also have bounced on a card at least once.
+        if (bot.persona.id !== "first" || ((bot.triesAt[bin] || 0) >= 2 && bot.bounced)) {
           planned = planSpringboard(g, M, bot, dir * outcome.x + 40);
           bot.springNext = bot.tick + 90;
         }
@@ -792,7 +836,13 @@ export function decide(g, M, bot) {
   // The first-timer mashes in the air against a wall too, once he sees he
   // is stuck on it (reaction time after the takeoff) and nothing is planned.
   const planned = bot.airPlanned || bot.plan.some((x) => x.type === "jump");
-  if (!grounded && bot.persona.mash && !planned && bot.tick >= bot.mashNext && bot.tick - bot.takeoffAt > bot.react * 120 && p.vx === 0 && !p.airJumped && p.color === "white") {
+  // Calibration (levels round): the mash press came a FIXED reaction time after
+  // the takeoff, so a bounce at a wall always got its air jump at the same
+  // early moment and never topped it. A person mashing presses at scattered
+  // moments: each airtime draws its own delay (0.1-0.55 s after the takeoff or
+  // the bounce), so the apex is hit now and then.
+  if (!grounded && bot.persona.mash && bot.mashRoll === undefined) bot.mashRoll = 0.1 + bot.r() * 0.45;
+  if (!grounded && bot.persona.mash && !planned && bot.tick >= bot.mashNext && bot.tick - Math.max(bot.takeoffAt, bot.hopAt ?? -1e9) > (bot.mashRoll ?? 0.3) * 120 && p.vx === 0 && !p.airJumped && p.color === "white") {
     const front = Math.floor((cxOf(g) + dir * (p.w / 2 + 4)) / T);
     if (wallHeight(g, M, front, feetOf(g)) > 0) {
       schedule(bot, bot.tick, "release");

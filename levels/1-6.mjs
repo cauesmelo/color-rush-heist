@@ -115,10 +115,12 @@ export default defineLevel({
   ],
   orbs: [{ id: "crossing", x: px(76), y: 334 }], // at the apex of a jump from the row-14 banks
   guards: [
-    // Inbound: its cone covers the white climb onto the ledge at the corridor's
-    // end, so the swap back to green is timed to its back. Escape: it faces
-    // the incoming Rubik: green past it, or the roof gates above it.
-    { id: "corridor", job: "watch", kind: "green", mode: "patrol", x: px(32) + 16, floor: px(16), dir: -1, min: px(28) + 16, max: px(38) + 16 },
+    // Inbound it is 1-3's disguise recombined (green walks through it under
+    // the canopy). Its job is the escape: it sees red, so the runner home
+    // swaps to green before the corridor, knocks it, or takes the roof gates
+    // above it (sticker 3). Revision five called it a watch over the ledge
+    // climb, but the climb leaves its floor-level cone before any "?".
+    { id: "corridor", job: "swap", kind: "green", mode: "patrol", x: px(32) + 16, floor: px(16), dir: -1, min: px(28) + 16, max: px(38) + 16 },
     // Guards the swap alcove (sticker 1: green jump through it, white air
     // jump); in the escape it faces the island: green, or the stacked gate.
     { id: "lookout", job: "watch", pair: "ledge-red", kind: "green", mode: "patrol", x: px(47) + 16, floor: px(12), dir: 1, min: px(46) + 16, max: px(50) },

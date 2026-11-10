@@ -47,10 +47,22 @@ function replayTo(id, route, stop) {
   return null;
 }
 
-/** One bot run from the checkpoint reached by `stop`, after `delay` s idle. */
-export function runFrom(id, stop, delay, label, mode = "smart") {
-  const g = replayTo(id, ROUTES[id].baseline, stop);
-  if (!g) return null;
+/** A copy of a game in progress (the frozen level is shared, not cloned). */
+function cloneGame(g) {
+  const copy = structuredClone(g);
+  Object.defineProperty(copy, "level", { value: g.level, enumerable: false });
+  return copy;
+}
+const startCache = new Map();
+/** One bot run from the checkpoint reached by `stop`, after `delay` s idle.
+ * `focus`: a card id whose outcome is all that matters; the run ends as soon
+ * as it is decided (passed, or a death after the bot came near it). */
+export function runFrom(id, stop, delay, label, mode = "smart", focus = null) {
+  const key = `${id}|${label}`;
+  if (!startCache.has(key)) startCache.set(key, replayTo(id, ROUTES[id].baseline, stop));
+  const start = startCache.get(key);
+  if (!start) return null;
+  const g = cloneGame(start);
   const p0 = g.player, cx0 = p0.x + p0.w / 2, dir = g.stolen ? -1 : 1;
   const cards = {};
   for (const gd of g.guards) {
@@ -61,6 +73,7 @@ export function runFrom(id, stop, delay, label, mode = "smart") {
   const deaths = [], bot = makeBot(mode, {}), deaths0 = g.deaths;
   while (t < delay) { M.advance(g, DT, {}); t += DT; }
   while (t < 60 && g.phase !== "won" && !bot.stuck && g.deaths - deaths0 < 5) {
+    if (focus && cards[focus] && (cards[focus].done || (cards[focus].zoneDeaths !== null && g.deaths > cards[focus].zoneDeaths))) break;
     const w = decide(g, M, bot, DT);
     M.advance(g, DT, { left: w.left, right: w.right, jump: w.jump && !prevJump, jumpReleased: !w.jump && prevJump, dash: w.dash, color: w.color || undefined });
     prevJump = w.jump;
@@ -155,7 +168,7 @@ export function probeCard(id, cardId, delays = DELAYS_PROBE) {
     return !!near;
   });
   const at = near || far, stop = (g, tick) => tick === at;
-  const rs = delays.map((d) => runFrom(id, stop, d, `probe:${cardId}`)).filter(Boolean).map((r) => r.rows.find((x) => x.id === cardId)).filter(Boolean);
+  const rs = delays.map((d) => runFrom(id, stop, d, `probe:${cardId}`, "smart", cardId)).filter(Boolean).map((r) => r.rows.find((x) => x.id === cardId)).filter(Boolean);
   const count = (f) => rs.filter(f).length;
   return { id: cardId, job: spec.job, offLine: !!spec.offLine, n: rs.length, clean: count((x) => x.clean), passed: count((x) => x.passed != null), caught: rs.reduce((a, x) => a + x.caught, 0), killed: rs.reduce((a, x) => a + x.killed, 0) };
 }

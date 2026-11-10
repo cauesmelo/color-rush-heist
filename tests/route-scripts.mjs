@@ -171,16 +171,13 @@ export const SCRIPTS = {
   },
   "1-5": {
     baseline(pl) {
-      // The arena as green: the teaching card hums.
-      pl.right().color("green").to(tx(33) + 8);
-      // White double jump onto P1, landing behind the cover block.
-      pl.press({ color: "white", jump: true }).airJump().land();
-      jumpAt(pl, tx(36) + 8).land(); // hop the cover block
-      pl.color("green").to(tx(52) + 4); // green past the P1 patrol
-      pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
-      // Behind P2's cover (it cuts the sentry's cone): wait for its back, hop
-      // the cover onto it (a stomp from behind), bounce down to the post.
-      p2Hop(pl);
+      // The arena as green: the teaching card hums. Below the lip, wait for
+      // P1's back, white up, green again in the air, through P1 as green.
+      pl.right().color("green");
+      p1Climb(pl);
+      // Below P2's post (out of its cone): wait for its back, white up, green
+      // in the air, onto its back, and the bounce carries down to the post.
+      p2Climb(pl);
       // The enforcer (red) sees green and it is the gate: wait at the post
       // (the step's riser cuts its cone) for its back, then up the step and
       // straight onto its back.
@@ -216,12 +213,8 @@ export const SCRIPTS = {
       pl.check(pl.g.stomps === 1, "teacher stomped");
       pl.landAt(tx(27));
       pl.check(pl.g.stickers[0].collected, "arena sticker");
-      pl.right().to(tx(33) + 8);
-      pl.press({ color: "white", jump: true }).airJump().land();
-      jumpAt(pl, tx(36) + 8).land();
-      pl.color("green").to(tx(52) + 4);
-      pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
-      p2Hop(pl);
+      p1Climb(pl, { quick: true });
+      p2Climb(pl);
       // Sticker 2: white (behind the riser), the same stomp held, and an air
       // jump at the bounce's peak onto the high perch behind it.
       pl.right().to(tx(62) + 16).color("white");
@@ -261,11 +254,39 @@ export const SCRIPTS = {
  * wait for the sentry to face away, then hop the cover onto its back: the
  * stomp bounces Rubik down to the post. (Hopping at its face lands on its
  * raised spear: a stumble since revision five, not a launch.) */
-function p2Hop(pl) {
+/** 1-5 develop: the arena climb onto P1, timed to P1's back (or, `quick`,
+ * the expert's swap 0.15 s after the air jump, under its 0.25 s "?"). */
+function p1Climb(pl, { quick = false } = {}) {
+  const c = (p) => p.guard("p1");
+  pl.right().to(tx(33) + 8);
+  if (!quick) {
+    pl.stop();
+    pl.until((p) => c(p).dir === 1 && c(p).turning <= 0 && c(p).turnClock < 0.3, {}, 1200, "p1 looks away");
+    pl.right();
+  }
+  pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
+  pl.until((p) => p.p.grounded, { right: true }, 240, "onto P1");
+  pl.check(Math.abs(pl.feet - tx(12)) < 1 && pl.p.color === "green", "on P1, green");
+}
+/** 1-5 develop: the climb onto P2's post. Wait below it until P2 has just
+ * turned away, white up (green 0.15 s after the air jump), stomp its back,
+ * and ride the bounce down to the post. `quick`: no wait; if P2 faces him,
+ * walk through it as green (the quick swap never drew a "?") and drop. */
+function p2Climb(pl, { quick = false } = {}) {
   const s = (p) => p.guard("p2");
-  pl.stop();
-  pl.until((p) => s(p).dir === 1 && s(p).turning <= 0 && s(p).turnClock < 0.4, {}, 900, "p2 away");
-  pl.right().jump();
+  pl.right().to(tx(44) + 8).jump().land(); // hop P1's block
+  pl.right().to(tx(49) + 8);
+  if (!quick) {
+    pl.stop();
+    pl.until((p) => s(p).dir === 1 && s(p).turning <= 0 && s(p).turnClock < 0.3, {}, 1200, "p2 looks away");
+    pl.right();
+  }
+  pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
+  pl.until((p) => p.p.grounded || p.g.stomps > 0 && s(p).state === "stunned", { right: true }, 240, "onto P2's post");
+  if (s(pl).state !== "stunned" && s(pl).dir === 1) {
+    pl.right().jump().steerTo((p) => s(p).x - 6);
+    pl.check(s(pl).state === "stunned", "p2 stomped from behind");
+  }
   pl.until((p) => p.p.grounded && p.feet > tx(15), (p) => (p.cx < tx(61) ? { right: true } : {}), 600, "down to the post");
 }
 
@@ -612,13 +633,9 @@ export const EXPERT = {
   // perch over the enforcer's cone, then the high line of slabs above both
   // crossing cones, a dash off its end onto the goal block.
   "1-5"(pl) {
-    pl.right().color("green").to(tx(33) + 8);
-    pl.press({ color: "white", jump: true }).airJump().land();
-    jumpAt(pl, tx(36) + 8).land();
-    pl.color("green").to(tx(52) + 4);
-    pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
-    pl.jump();
-    pl.until((p) => p.p.grounded && p.feet > tx(15), (p) => (p.cx < tx(61) ? { right: true } : {}), 600, "down to the post");
+    pl.right().color("green");
+    p1Climb(pl, { quick: true });
+    p2Climb(pl, { quick: true });
     // No wait for the enforcer's back: white, up the step and one double
     // jump over it to the floor beyond, timed so it never sees him long enough
     // (the first timing that stays unseen is kept).

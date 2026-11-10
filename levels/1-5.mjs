@@ -44,10 +44,14 @@ export default defineLevel({
     ground(3, 12, 14); // start ledge: its face cuts the arena card's cone
     ground(13, 34, 16); // the arena: open sky, dry ground
     // --- Develop (35-58): steps, a patrol, a sentry, cover -------------------
-    ground(35, 52, 12); // 4-tile step (white) onto P1
-    fill(37, 38, 10, 11); // 2-tile cover block on P1
-    ground(53, 58, 8); // 4-tile step onto P2, the sentry's post
-    fill(54, 54, 6, 7); // 2-tile cover at the top of the step
+    ground(35, 50, 12); // 4-tile step (white) onto P1
+    // (Revision five's cover block on P1 is gone: it cut P1's cone over the
+    // arena climb, so the climb was never watched.)
+    ground(51, 58, 8); // 4-tile step onto P2, the sentry's post (8 wide: P2
+    // stands 6 tiles back from the lip, where its cone is fat)
+    fill(45, 46, 10, 11); // a 2-tile block on P1 (a green hop): it cuts P1's
+    // cone toward the P2 climb, so each climb has one watcher
+    // (P2's cover block at the step's top is gone too: it hid the climb.)
     // --- Twist (59-82): the enforcer post (old Stage 1, shifted) -------------
     ground(59, 82, 16);
     fill(64, 65, 14, 15); // step up to the perch: its riser shields the post face
@@ -79,12 +83,15 @@ export default defineLevel({
     // The ladder in the open (it hums at green Rubik, so a green player can
     // skip the lesson); stomping it on its recovery is sticker 1's bounce.
     { id: "teacher", job: "teach", kind: "green", mode: "patrol", x: px(30) + 16, floor: px(16), dir: -1, min: px(22) + 16, max: px(30) + 16 },
-    // Patrols P1 under the 4-tile step up to P2: the white climb is timed to
-    // its back (or the swap back to green made in the air).
-    { id: "p1", job: "watch", kind: "green", mode: "patrol", x: px(48) + 16, floor: px(12), dir: 1, min: px(42) + 16, max: px(50) + 16 },
-    // On P2 behind its cover block: white lands next to it, so the swap back
-    // to green has to happen before the hop down to the post.
-    { id: "p2", job: "gate", kind: "green", mode: "sentry", x: px(57), floor: px(8), dir: -1, min: px(56) + 16, max: px(57) + 16, turnEvery: 2.5 },
+    // P1 watches the white climb out of the arena, 1-3's watcher recombined
+    // with the spear: 5 tiles back from the lip, it looks at it 3 s and
+    // away 1.2 s (+ the 0.4 s look-back each way). Wait in the arena (below its cone) for its back; a climb
+    // into its face earns "?", the lock, "!" and the spear.
+    { id: "p1", job: "watch", kind: "green", mode: "sentry", x: px(40) + 16, floor: px(12), dir: -1, min: px(40) + 16, max: px(40) + 16, turnEvery: [3, 1.2] },
+    // P2 watches the climb onto its post the same way (2.6 s at it, 1.4 s
+    // away): climb while it looks away, land behind it, stomp its back, and
+    // the bounce carries down to the post.
+    { id: "p2", job: "gate", kind: "green", mode: "sentry", x: px(57), floor: px(8), dir: -1, min: px(56) + 16, max: px(57) + 16, turnEvery: [2.6, 1.4] },
     // The enforcer post: stationary red sentry turning every 3 s.
     { id: "enforcer", job: "gate", kind: "red", mode: "sentry", x: px(72) + 16, floor: px(16), dir: -1, min: px(68) + 16, max: px(76) + 16, turnEvery: 3 },
     // The floor's red sentry sees green: stomp it from behind when it faces

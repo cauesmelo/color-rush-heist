@@ -1365,7 +1365,12 @@ function steal(g) {
   // REVERSE: every card turns to face the vault side, i.e. the incoming
   // Rubik on his run home; escape-only cards arrive at their posts.
   for (const guard of g.guards) {
-    if (guard.state === "drained") continue;
+    // A card Rubik put down stays down: the REVERSE turns the living cards
+    // around, it does not bring the defeated ones back (the old rule only
+    // spared the `stunned` and `drained`; since the combat rebuild a stomp
+    // defeats, and the card Rubik stomped on the way in was alive again at the
+    // theft and hit him on the way home).
+    if (guard.state === "drained" || guard.state === "defeated") continue;
     guard.dir = guard.theftDir ?? 1;
     guard.bumps = 0;
     if (guard.drainOnTheft) {

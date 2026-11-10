@@ -1313,31 +1313,58 @@ function roundRect(x, y, w, h, r) {
   ctx.roundRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h), r);
 }
 const COLORS = { white: "#f3f0e4", green: "#5fbf3a", red: "#e8382c" };
-/** Color glyphs so form is never told by color alone (Xbox AG 103). */
-function glyph(color, x, y, s = 12, ink = "#1b1420") {
+/** Color glyphs so form is never told by color alone (Xbox AG 103): white
+ * is a square, green a triangle, red a diamond (the touch pads' shapes too).
+ * `outline` rims a filled glyph in ink, so a green or red glyph on a light
+ * disc keeps its edge when hue and brightness collapse (protanopia,
+ * deuteranopia, achromatopsia: red #e8382c and green #5fbf3a fall to similar
+ * olive or grey; checked with Chrome's emulated vision deficiencies). */
+function glyph(color, x, y, s = 12, ink = "#1b1420", outline = null) {
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   ctx.fillStyle = ink;
   ctx.strokeStyle = ink;
   ctx.lineWidth = Math.max(2, s / 5);
+  ctx.lineJoin = "miter";
   if (color === "white") ctx.strokeRect(-s / 2 + 1, -s / 2 + 1, s - 2, s - 2);
-  else if (color === "green") {
+  else {
     ctx.beginPath();
-    ctx.moveTo(0, -s / 2);
-    ctx.lineTo(s / 2, s / 2);
-    ctx.lineTo(-s / 2, s / 2);
+    if (color === "green") {
+      ctx.moveTo(0, -s / 2);
+      ctx.lineTo(s / 2, s / 2);
+      ctx.lineTo(-s / 2, s / 2);
+    } else {
+      ctx.moveTo(0, -s / 2 - 1);
+      ctx.lineTo(s / 2 + 1, 0);
+      ctx.lineTo(0, s / 2 + 1);
+      ctx.lineTo(-s / 2 - 1, 0);
+    }
     ctx.closePath();
-    ctx.fill();
-  } else {
-    ctx.beginPath();
-    ctx.moveTo(0, -s / 2 - 1);
-    ctx.lineTo(s / 2 + 1, 0);
-    ctx.lineTo(0, s / 2 + 1);
-    ctx.lineTo(-s / 2 - 1, 0);
-    ctx.closePath();
+    if (outline) {
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
     ctx.fill();
   }
   ctx.restore();
+}
+/** The colour badge every colour mechanic wears: a cream disc with an ink rim
+ * and the colour's glyph. Cards wear their own colour (the one they can't
+ * see) at the corner; Rubik wears his current form at the back of his head;
+ * red-only stones wear red's. Shape, not hue, is what tells them apart. */
+function badge(color, x, y, r = 9) {
+  ctx.save();
+  ctx.fillStyle = "#1b1420";
+  ctx.beginPath();
+  ctx.arc(Math.round(x), Math.round(y), r + 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fbf9f2";
+  ctx.beginPath();
+  ctx.arc(Math.round(x), Math.round(y), r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  glyph(color, x, y, Math.round(r * 1.15), color === "white" ? "#1b1420" : COLORS[color], "#1b1420");
 }
 /** Uno-style form card: white rounded border, colored field, tilted oval. */
 function formCard(color, x, y, w, h, keyLabel, angle = 0, alpha = 1) {
@@ -1358,7 +1385,7 @@ function formCard(color, x, y, w, h, keyLabel, angle = 0, alpha = 1) {
   ctx.beginPath();
   ctx.ellipse(0, 0, w * 0.32, h * 0.36, 0.5, 0, Math.PI * 2);
   ctx.fill();
-  glyph(color, 0, 0, w * 0.32, color === "white" ? "#6f6a5e" : COLORS[color]);
+  glyph(color, 0, 0, w * 0.32, color === "white" ? "#6f6a5e" : COLORS[color], "#1b1420");
   ctx.restore();
   if (keyLabel) {
     const kx = x + w / 2 + Math.cos(angle) * 0,
@@ -1514,7 +1541,9 @@ function drawStones() {
       y = wy(s.y * T);
     if (x < -80 || x > W + 20) continue;
     // Tile_15's art (atlas cells 8..9 x 2..3) at 2x, plus a crack pattern and
-    // red's diamond glyph: "only red breaks this", never told by color alone.
+    // red's badge: "only red breaks this", never told by color alone (a bare
+    // red diamond on the stone's olive centre vanished under protanopia and
+    // deuteranopia: red and olive are the confusion pair).
     ctx.drawImage(img.tiles, 128, 32, 32, 32, x, y, 64, 64);
     ctx.strokeStyle = "#3a0b0b";
     ctx.lineWidth = 3;
@@ -1531,7 +1560,7 @@ function drawStones() {
     ctx.strokeStyle = game.stolen ? "#ff6a50" : "#b8463a";
     ctx.lineWidth = 1;
     ctx.stroke();
-    glyph("red", x + 32, y + 32, 10, game.stolen ? "#ff4a3a" : "#9e3a30");
+    badge("red", x + 32, y + 32, 9);
   }
 }
 /** 1-6 after the theft, while the chamber door is still sealed: the way out
@@ -1941,16 +1970,9 @@ function drawGuard(guard) {
   ctx.drawImage(image, col * sheet.cw, row * sheet.ch, sheet.cw, sheet.ch, -sheet.cx * 2, -sheet.feet * 2, dw, dh);
   ctx.restore();
   spearUp(guard, x, floor);
-  // Corner badge: the card's own glyph (it can't see its own color).
-  if (guard.state !== "drained") {
-    const bx = x - guard.dir * 14,
-      by = floor - 74;
-    ctx.fillStyle = "#fbf9f2";
-    ctx.beginPath();
-    ctx.arc(bx, by, 8, 0, Math.PI * 2);
-    ctx.fill();
-    glyph(guard.kind, bx, by, 8, COLORS[guard.kind]);
-  }
+  // Corner badge: the card's own glyph (it can't see its own color), beside
+  // the original suit numeral (green 1, red 3).
+  if (guard.state !== "drained") badge(guard.kind, x - guard.dir * 14, floor - 74, 9);
   // Awareness bubbles: every state change has a cue.
   const head = floor - M.GUARD.h - 14,
     bob = reducedMotion ? 0 : Math.sin(clock * 6 + guard.x) * 2;
@@ -2069,6 +2091,11 @@ function drawPlayer() {
     scaleX = sq ? 1 + (sq.sx - 1) * k : 1,
     scaleY = sq ? 1 + (sq.sy - 1) * k : 1;
   drawRubik(key, sx, sy, cx, feet, p.direction, blink ? (reducedMotion ? 0.65 : 0.45) : 1, 0, scaleX, scaleY);
+  // His form's badge at the back of his head (the eyes are at the front), so
+  // white, green and red Rubik differ by shape as well as hue. Not during a
+  // swap's storm (the original transformation hides him), and only once he
+  // owns a second form (1-1 is white only: nothing to tell apart).
+  if (p.storm <= 0 && (game.unlocked.green || game.unlocked.red)) badge(p.color, cx - p.direction * 17 * scaleX, feet - 49 * scaleY, 7);
   // White's air jump, unspent while airborne: two small puffs under the feet
   // (the air jump's own burst colour; they are what bursts when it fires), so
   // the double jump reads on Rubik himself, like the dash's dim (rubric E2).

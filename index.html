@@ -25,6 +25,9 @@
         <button id="start" class="start-hit" aria-label="Press any key to start">
           <span class="sr-only">Start</span>
         </button>
+        <!-- The release label (package.json "version", CHANGELOG.md), shown on
+             the title only; tests/release.test.mjs keeps the three in step. -->
+        <p id="version" class="version">v1.0</p>
         <div class="corner">
           <button id="music" class="icon-btn" type="button" aria-pressed="false" aria-label="Music">&#9835;</button>
           <button id="pause" class="icon-btn" type="button" aria-label="Pause" hidden>&#10074;&#10074;</button>
@@ -94,7 +97,8 @@
               <img src="./assets/intro.jpeg" alt="The original jam title card of Color Theft Story" />
               <figcaption>The original jam title card</figcaption>
             </figure>
-            <p class="small">Color Theft Story by Vitor Farias and @cauesmelo (minigamejam 22). Font: monogram by datagoblin (CC0).</p>
+            <p class="small">Art by Vitor Farias. Color Theft Story by Vitor Farias and @cauesmelo (minigamejam 22); music: the original jam track. Font: monogram by datagoblin (CC0).</p>
+            <p class="small">Color Rush Heist v1.0, web version 2026. Developed with AI assistance (Claude Code).</p>
             <button data-show="menu" type="button">Back</button>
           </div>
         </div>

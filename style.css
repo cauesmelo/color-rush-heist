@@ -97,6 +97,26 @@ a {
 .start-hit:focus-visible {
   outline-offset: -6px;
 }
+/* v1.0 label: DOM text on the title only, bottom left (the title art's
+ * credit sits bottom right). */
+.version {
+  display: none;
+  position: absolute;
+  left: max(8px, 1.3cqw);
+  bottom: max(6px, 0.9cqw);
+  margin: 0;
+  padding: 0 6px 2px;
+  border-radius: 5px;
+  background: rgba(27, 20, 32, 0.72);
+  color: var(--card);
+  font-size: max(16px, 2cqw);
+  line-height: 1.1;
+  pointer-events: none;
+  z-index: 5;
+}
+[data-screen="title"] .version {
+  display: block;
+}
 .corner {
   position: absolute;
   top: max(8px, 1.3cqw);

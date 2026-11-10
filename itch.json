@@ -6,7 +6,8 @@
     "height": 540,
     "clickToPlay": true,
     "fullscreenButton": true,
-    "mobileFriendly": "Test physical devices before enabling"
+    "mobileFriendly": false,
+    "orientation": "landscape"
   },
   "withhold": {
     "assets/player/": "a generic third-party pack (Pink Monster) whose licence is unverified; kept in the repository, left out of the upload"

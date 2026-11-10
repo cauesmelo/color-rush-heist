@@ -248,7 +248,7 @@ function makeGuard(spec) {
 
 /** Every teaching bubble in World 1. A level lists the (at most two) it may
  * show; the campaign passes the saved states in, so nothing is taught twice. */
-export const HINT_IDS = Object.freeze(["move", "airjump", "white", "green", "dash"]);
+export const HINT_IDS = Object.freeze(["move", "airjump", "behind", "white", "green", "dash"]);
 
 /** A new game of one level.
  * @param level  a level object (levels/*.mjs) or its id ("1-3"); default 1-1.
@@ -841,6 +841,7 @@ function stomp(g, guard) {
   guard.timer = GUARD.stun;
   guard.sight = 0;
   g.stomps++;
+  if (g.hints.behind === "shown") g.hints.behind = "done";
   event(g, "stomp", guard.x, guard.floor - GUARD.h, { guard: guard.id });
 }
 
@@ -909,6 +910,8 @@ function spike(g, guard) {
   p.grounded = false;
   p.bumpGrace = WORLD.bumpGrace;
   event(g, "spike", guard.x, guard.floor - GUARD.h, { guard: guard.id });
+  // 1-2's bubble: the first spear-up teaches "from behind" (drawn, no text).
+  if (levelHint(g, "behind") && g.hints.behind === "pending") showHint(g, "behind");
   if (guard.state === "recover" || guard.state === "drained") return;
   guard.dir = away;
   alertGuard(g, guard, canSee(guard, p.color));

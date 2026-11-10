@@ -44,7 +44,7 @@ export default defineLevel({
   kit: { forms: ["white"], start: "white", dash: false },
   spears: false,
   unseen: false, // a stomp lesson, not a stealth level: no Unseen stamp here
-  hints: [],
+  hints: ["behind"], // after the first spear-up: a card with an arrow onto its back
   beacon: 0.2,
   tint: null,
   build({ fill, ground, ledge, water, back }) {

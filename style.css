@@ -60,6 +60,14 @@ body {
   overflow: hidden;
   background: #0b0a10;
 }
+/* The canvas's own box: clips the portrait crop (the stage itself must not
+ * clip: the portrait pause/fullscreen buttons sit just below it). */
+.view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
 canvas {
   display: block;
   width: 100%;
@@ -466,6 +474,26 @@ kbd {
     flex: none;
     overflow: visible;
     border-radius: 6px;
+  }
+  /* In a level the view is taller than 16:9 of the width: the canvas keeps
+   * its 16:9 shape at that height and is centred, its sides cropped (the HUD
+   * pulls in by the hidden amount, game.mjs measureCrop). Map, tallies and
+   * menus show the whole 16:9 frame. */
+  .touch-pads {
+    --play-h: clamp(calc((100vw - 12px) * 9 / 16), calc(100dvh - 400px), calc((100vw - 12px) * 1.3));
+  }
+  .touch-pads[data-screen="play"] .stage {
+    aspect-ratio: auto;
+    height: var(--play-h);
+  }
+  .touch-pads[data-screen="play"] .view canvas {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: auto;
+    height: 100%;
+    aspect-ratio: 16 / 9;
+    transform: translateX(-50%);
   }
   .touch-pads .touch {
     position: relative;

@@ -52,4 +52,8 @@ body {
     top: calc((100vw - 12px) * 9 / 16 + 8px + 26px);
     right: 20px;
   }
+  /* In a level the portrait view is taller (style.css --play-h). */
+  .touch-pads[data-screen="play"] .itch-fullscreen {
+    top: calc(var(--play-h) + 8px + 26px);
+  }
 }

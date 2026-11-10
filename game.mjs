@@ -104,11 +104,13 @@ function loadImage(key, file) {
     image.src = "./assets/" + file;
   });
 }
-function makeCanvas(w, h) {
+/** readback: the canvas is read with getImageData (one-off texture bakes):
+ * ask for a CPU-backed context. Canvases drawn every frame stay GPU-backed. */
+function makeCanvas(w, h, readback = false) {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
-  const x = c.getContext("2d");
+  const x = c.getContext("2d", readback ? { willReadFrequently: true } : undefined);
   x.imageSmoothingEnabled = false;
   return [c, x];
 }
@@ -136,7 +138,7 @@ function buildDerived() {
   }
   // Sample fills so letterbox areas match the art.
   {
-    const [c, x] = makeCanvas(480, 270);
+    const [c, x] = makeCanvas(480, 270, true);
     x.drawImage(img.forest, 0, 0);
     const top = x.getImageData(2, 2, 1, 1).data,
       bottom = x.getImageData(2, 268, 1, 1).data;
@@ -146,7 +148,7 @@ function buildDerived() {
   // The sight cone keeps its original gradient, but its faint far end is
   // raised to a visible minimum so the WHOLE detection area can be seen.
   {
-    const [c, x] = makeCanvas(176, 47);
+    const [c, x] = makeCanvas(176, 47, true);
     x.drawImage(img.cone, 0, 0);
     const data = x.getImageData(0, 0, 176, 47);
     for (let i = 3; i < data.data.length; i += 4)
@@ -172,7 +174,7 @@ function buildDerived() {
   }
   // Drained (grey) card: luminance copy of the green sheet.
   {
-    const [c, x] = makeCanvas(img.cardGreen.width, img.cardGreen.height);
+    const [c, x] = makeCanvas(img.cardGreen.width, img.cardGreen.height, true);
     x.drawImage(img.cardGreen, 0, 0);
     const data = x.getImageData(0, 0, c.width, c.height);
     for (let i = 0; i < data.data.length; i += 4) {
@@ -194,8 +196,11 @@ function buildDerived() {
   // Dim (spent dash) and flash (refill) versions of each Rubik sheet.
   for (const color of ["white", "green", "red"]) {
     for (const [suffix, fill] of [
-      ["Dim", "rgba(20,20,40,0.42)"],
+      // Spent air dash: a light shade (the form's colour still reads).
+      ["Dim", "rgba(30,28,48,0.28)"],
       ["Flash", "rgba(255,255,255,0.8)"],
+      // Dash afterimages: solid silhouettes in the form's own colour.
+      ["Ghost", { white: "#dfeeff", green: "#8ee05a", red: "#ff6a52" }[color]],
     ]) {
       const [c, x] = makeCanvas(192, 224);
       x.drawImage(img[color], 0, 0);
@@ -254,6 +259,8 @@ let LV = getLevel(save.last) || LEVELS[0],
   lastRespawns = 0,
   clock = 0; // wall clock for decoration (never affects the simulation)
 const cam = { x: 0, y: 164, shake: 0, look: 80 };
+/** Canvas px hidden at each side by the portrait play crop (HUD pulls in). */
+let hudInset = 0;
 const fx = { vaultOpen: 0, particles: [], flash: 0, flashColor: "#fff", reverse: -1, iris: 0, irisDir: 0, intro: null, get: null, refill: 0, swirl: null, clear: 0, chipDeal: {}, locked: 0, death: null, goal: 0, goalColor: null, result: null };
 /** World-map state: the node Rubik stands on, his walk between nodes, the
  * chalk path that draws in after a new unlock. */
@@ -310,6 +317,8 @@ const SOUNDS = {
   die: [["square", 440, 110, 0.35, 0.06]],
   win: [["square", 523, 523, 0.1, 0.06], ["square", 659, 659, 0.1, 0.06, 0.1], ["square", 784, 784, 0.1, 0.06, 0.2], ["square", 1046, 1046, 0.3, 0.06, 0.3]],
   locked: [["square", 110, 100, 0.12, 0.05]],
+  spike: [["square", 1400, 900, 0.05, 0.05], ["triangle", 220, 120, 0.12, 0.06, 0.02]],
+  dashjump: [["noise", 1100, 400, 0.1, 0.05], ["square", 520, 820, 0.08, 0.04]],
   hint: [["sine", 660, 880, 0.08, 0.03]],
   ui: [["square", 700, 700, 0.03, 0.03]],
 };
@@ -620,9 +629,9 @@ addEventListener("keydown", (event) => {
   if (screen === "story") {
     if (event.repeat || key === "tab") return;
     event.preventDefault();
-    // The key that skips the comic also counts as the first input of play
-    // (so the 1-1 card never holds it back).
-    startLevel(C.WORLD1[0], { skipIntro: true });
+    // The key that skips the comic also counts as input (it is held), but the
+    // "1-1 Home Cliff" card still shows: play goes live at 0.4 s as usual.
+    startLevel(C.WORLD1[0]);
     if (gameKeys.has(key)) {
       held.add(key);
       queueKey(key);
@@ -636,7 +645,17 @@ addEventListener("keydown", (event) => {
     }
     return;
   }
-  if (["results", "world"].includes(screen)) return; // native buttons own these
+  if (["results", "world"].includes(screen)) {
+    // Native buttons own these; arrows move focus between Continue and Retry.
+    if (key.startsWith("arrow")) {
+      event.preventDefault();
+      const buttons = [...ui.results.querySelectorAll("button:not([hidden])")],
+        at = buttons.indexOf(document.activeElement),
+        step = key === "arrowleft" || key === "arrowup" ? -1 : 1;
+      buttons[(Math.max(0, at) + step + buttons.length) % buttons.length]?.focus({ preventScroll: true });
+    }
+    return;
+  }
   if (screen === "map") {
     if (menuOpen) {
       if ((key === "escape" || key === "p") && !event.repeat) {
@@ -713,7 +732,7 @@ document.addEventListener("visibilitychange", () => {
 canvas.addEventListener("pointerdown", (event) => {
   if (event.pointerType === "touch") inputMode = "touch";
   syncTouch();
-  if (screen === "story") startLevel(C.WORLD1[0], { skipIntro: true });
+  if (screen === "story") startLevel(C.WORLD1[0]);
   else if (screen === "ending") setScreen("title");
   else if (screen === "map" && !menuOpen) {
     const box = canvas.getBoundingClientRect(),
@@ -837,7 +856,7 @@ function retryCheckpoint() {
 // (detail = 0) is the only click handled, so taps never double-fire.
 for (const button of document.querySelectorAll("[data-input],[data-action],[data-color]")) {
   const activate = () => {
-    if (screen === "story") startLevel(C.WORLD1[0], { skipIntro: true });
+    if (screen === "story") startLevel(C.WORLD1[0]);
     // On the map the deck still works: arrows walk, JUMP enters.
     if (screen === "map" && !menuOpen) {
       if (button.dataset.input) mapStep(button.dataset.input === "left" ? -1 : 1);
@@ -905,6 +924,14 @@ function fitSurface() {
 }
 addEventListener("resize", fitSurface);
 document.addEventListener("fullscreenchange", fitSurface);
+/** Portrait phones in a level: the canvas is shown taller than 16:9 of the
+ * width (CSS crops its sides, see style.css), so measure what is hidden. */
+function measureCrop() {
+  const view = $("view"),
+    sw = view?.clientWidth || 0,
+    cw = canvas.clientWidth || 0;
+  hudInset = cw > sw + 1 ? ((cw - sw) / 2) * (W / cw) : 0;
+}
 function syncTouch() {
   const root = document.documentElement,
     was = root.classList.contains("touch-pads");
@@ -952,7 +979,9 @@ function cameraTarget() {
   if (screenFeet < H * 0.3) y = feet - H * 0.3;
   if (screenFeet > H * 0.86) y = feet - H * 0.86;
   return {
-    x: Math.max(0, Math.min(maxCamX(), cx - W / 2 + cam.look)),
+    // In the portrait crop the hidden side strips may hang past the level's
+    // ends, so Rubik stays in the visible middle even at a level's start.
+    x: Math.max(-hudInset, Math.min(maxCamX() + hudInset, cx - W / 2 + cam.look)),
     y: Math.max(0, Math.min(maxCamY, y)),
   };
 }
@@ -965,7 +994,7 @@ function snapCamera() {
 }
 function updateCamera(dt) {
   const p = game.player;
-  const wantLook = (Math.abs(p.vx) > 40 ? Math.sign(p.vx) : p.direction) * 90;
+  const wantLook = (Math.abs(p.vx) > 40 ? Math.sign(p.vx) : p.direction) * (hudInset > 0 ? 60 : 90);
   cam.look += (wantLook - cam.look) * Math.min(1, dt * 2.5);
   const t = cameraTarget();
   if (manual || reducedMotion) {
@@ -1022,6 +1051,11 @@ function recordWin() {
     unlocked: C.unlockedIds(save).find((x) => !wasOpen.includes(x)) || null,
   };
 }
+/** Rubik's squash/stretch: scale x/y for `dur` seconds, easing back to 1. */
+function squash(sx, sy, dur) {
+  if (reducedMotion) return;
+  fx.squash = { sx, sy, t: dur, dur };
+}
 /** Consume new model events: sounds, particles, transitions. */
 function handleEvents() {
   for (const e of game.events) {
@@ -1033,9 +1067,22 @@ function handleEvents() {
       case "jump":
       case "land":
         dust(e.x, e.y, 0, e.type === "land" ? 6 : 4);
+        // Stretch on takeoff, squash on landing (a beat, never longer).
+        if (e.type === "jump") squash(0.86, 1.16, 0.12);
+        else if (Math.abs(e.speed ?? 0) > 0 || true) squash(1.18, 0.84, 0.1);
         break;
       case "airjump":
         burst(e.x, e.y, 8, "#f4f1e6", 90, 0.3, 4, 80);
+        squash(0.9, 1.12, 0.1);
+        break;
+      case "dashjump":
+        dust(e.x, e.y, -game.player.dashDirection, 8);
+        squash(1.2, 0.86, 0.12);
+        break;
+      case "spike":
+        // The raised spear: a bright clink, Rubik popped away (no damage).
+        burst(e.x, e.y - 6, 8, "#fbf9f2", 140, 0.3, 3, 200);
+        squash(1.15, 0.88, 0.1);
         break;
       case "dash":
         dust(e.x - e.direction * 16, p.y + p.h, -e.direction, 6);
@@ -1043,6 +1090,8 @@ function handleEvents() {
       case "stomp":
       case "bounce":
         burst(e.x, e.y, 10, "#fff6c4", 150, 0.45);
+        squash(0.84, 1.2, 0.14);
+        cam.shake = reducedMotion ? 0 : Math.max(cam.shake, 1.5);
         break;
       case "drain":
         fx.swirl = { x: e.x, y: e.y, age: 0 };
@@ -1134,6 +1183,14 @@ function updateFx(dt) {
   fx.particles = fx.particles.filter((q) => q.age < q.life);
   fx.flash = Math.max(0, fx.flash - dt);
   fx.refill = Math.max(0, fx.refill - dt);
+  if (fx.squash) {
+    fx.squash.t -= dt;
+    if (fx.squash.t <= 0) fx.squash = null;
+  }
+  // Dust kicked up on a sharp turnaround on the ground.
+  const pp = game.player;
+  if (pp.grounded && fx.lastVx !== undefined && Math.sign(pp.vx) !== Math.sign(fx.lastVx) && Math.abs(fx.lastVx) > 200) dust(pp.x + pp.w / 2, pp.y + pp.h, Math.sign(pp.vx), 5);
+  fx.lastVx = pp.vx;
   fx.locked = Math.max(0, fx.locked - dt);
   if (fx.intro) {
     fx.intro.age += dt;
@@ -1420,7 +1477,10 @@ function drawStones() {
 function drawCheckpoints() {
   LV.checkpoints.forEach((cp, index) => {
     if (cp.get) return; // saved by a GET moment: no marker
-    const x = wx(cp.x),
+    // The sign stands 40 px behind the respawn spot (the side Rubik came
+    // from), so a respawned Rubik never wears it like a hat.
+    const back = LV.home && index >= LV.checkpoints.findIndex((c) => c.get) ? 40 : -40,
+      x = wx(cp.x + back),
       y = wy(cp.floor);
     if (x < -60 || x > W + 60) return;
     const active = game.checkpointIndex === index,
@@ -1491,6 +1551,26 @@ function drawGoal() {
   chalkFace(x, y - 100 + bob, 22, won && k > 0.25 ? COLORS[fx.goalColor || game.player.color] : "rgba(20,16,26,0.35)", won, Math.max(0.08, Math.abs(flip)));
 }
 /** 1-4's stray storm swirl: rubik_storm frames 1-3 at 2x over a stump. */
+/** Storm wisps at the lip of every gap 1-4's main line dashes: the swirl's
+ * own streaks drifting across (pointing the way), never text. */
+function drawDashMarks() {
+  for (const mark of LV.dashMarks || []) {
+    const x = wx(mark.x),
+      y = wy(mark.floor);
+    if (x < -120 || x > W + 60) continue;
+    for (let i = 0; i < 3; i++) {
+      const t = reducedMotion ? 0.5 : (clock * 0.9 + i / 3) % 1,
+        len = 22 - i * 5,
+        sx = x + 6 + t * 70,
+        sy = y - 46 - i * 13;
+      ctx.globalAlpha = reducedMotion ? 0.75 : Math.sin(t * Math.PI) * 0.85;
+      ctx.fillStyle = i === 1 ? "#cfe3ff" : "#ffffff";
+      ctx.fillRect(Math.round(sx), Math.round(sy), len, 3);
+      ctx.fillRect(Math.round(sx + len - 4), Math.round(sy - 3), 4, 3);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
 function drawPickups() {
   for (const pickup of game.pickups) {
     if (pickup.taken) continue;
@@ -1645,6 +1725,39 @@ function drawCone(guard) {
   }
   ctx.drawImage(derived.cones[key], 0, 0);
   ctx.restore();
+  // A crisp edge on cones that can see Rubik's current colour, so the
+  // detection area reads against the busy forest (same clip as above).
+  if (asleep) return;
+  ctx.save();
+  ctx.beginPath();
+  if (guard.dir > 0) ctx.rect(wx(tip), 0, reach, H);
+  else ctx.rect(wx(tip - reach), 0, reach, H);
+  ctx.clip();
+  const edge = coneEdge(guard.dir);
+  ctx.translate(wx(guard.x), wy(guard.floor));
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = key === "alert" ? "rgba(120,10,10,0.85)" : key === "suspect" ? "rgba(110,50,0,0.8)" : "rgba(24,14,30,0.6)";
+  ctx.stroke(edge);
+  ctx.restore();
+}
+/** The cone silhouette's top and bottom edges as one path, relative to the
+ * card (x = its centre, y = its floor), cached per facing. */
+const coneEdges = {};
+function coneEdge(dir) {
+  if (coneEdges[dir]) return coneEdges[dir];
+  const path = new Path2D(),
+    card = { x: 0, floor: 0, dir },
+    cols = [];
+  for (let c = 175; c >= 1; c--) if (M.CONE_PROFILE[c]) cols.push(c);
+  const xAt = (c) => M.coneColumnX(card, c) + (dir > 0 ? 0 : 2);
+  cols.forEach((c, i) => {
+    const y = -M.CONE.top + M.CONE_PROFILE[c][0] * 2;
+    if (i === 0) path.moveTo(xAt(c), y);
+    else path.lineTo(xAt(c), y);
+  });
+  [...cols].reverse().forEach((c) => path.lineTo(xAt(c), -M.CONE.top + (M.CONE_PROFILE[c][1] + 1) * 2));
+  path.closePath();
+  return (coneEdges[dir] = path);
 }
 function guardFrame(guard, sheet) {
   const t = guard.anim;
@@ -1698,7 +1811,7 @@ function drawGuard(guard) {
     [row, col] = guardFrame(guard, sheet),
     dw = sheet.cw * 2,
     dh = sheet.ch * 2;
-  if (guard.absorb && guard.state === "asleep") {
+  if (guard.absorb && guard.state !== "drained" && !game.unlocked.green) {
     // The glowing card holds Rubik's green: it pulses, unlike its neighbours.
     const a = reducedMotion ? 0.4 : 0.3 + Math.sin(clock * 4) * 0.12,
       g = ctx.createRadialGradient(x, floor - 44, 6, x, floor - 44, 80);
@@ -1715,9 +1828,14 @@ function drawGuard(guard) {
     ctx.translate(0, -6);
     ctx.rotate(guard.state === "drained" ? 0.22 : -0.18);
   }
-  if (guard.state === "asleep") ctx.translate(0, 4);
+  if (guard.squash > 0 && !reducedMotion) {
+    // Stomped: squashed flat for a beat, springing back.
+    const k = guard.squash / 0.16;
+    ctx.scale(1 + 0.28 * k, 1 - 0.36 * k);
+  }
   ctx.drawImage(image, col * sheet.cw, row * sheet.ch, sheet.cw, sheet.ch, -sheet.cx * 2, -sheet.feet * 2, dw, dh);
   ctx.restore();
+  spearUp(guard, x, floor);
   // Corner badge: the card's own glyph (it can't see its own color).
   if (guard.state !== "drained") {
     const bx = x - guard.dir * 14,
@@ -1731,12 +1849,7 @@ function drawGuard(guard) {
   // Awareness bubbles: every state change has a cue.
   const head = floor - M.GUARD.h - 14,
     bob = reducedMotion ? 0 : Math.sin(clock * 6 + guard.x) * 2;
-  if (guard.state === "asleep") {
-    for (let i = 0; i < 3; i++) {
-      const t = (clock * 0.6 + i / 3) % 1;
-      text("z", x + guard.dir * -10 + t * 18 * -guard.dir, head - t * 34, 16 + i * 8, "#fbf9f2", "center", "#1b1420");
-    }
-  } else if (["suspect", "search"].includes(guard.state)) bubble(x, head + bob, "?", { fill: "#ffe3b0" });
+  if (["suspect", "search"].includes(guard.state)) bubble(x, head + bob, "?", { fill: "#ffe3b0" });
   else if (["alert", "windup", "lunge", "recover"].includes(guard.state)) bubble(x, head + bob, "!", { fill: "#ffb3a6" });
   else if (guard.state === "stunned") {
     for (let i = 0; i < 3; i++) {
@@ -1753,6 +1866,33 @@ function drawGuard(guard) {
     ctx.fillRect(x - 4, head + bob - 14, 8, 6);
   }
   if (guard.state === "calm" && guard.turning > 0 && guard.turning < M.GUARD.lookBack) text("…", x, head + 6, 32, "#fbf9f2", "center");
+}
+/** The spear-up tell: while Rubik is above a card it can't be stomped from
+ * (it faces where he came from, or it is aware), its spear tip stands over
+ * its head. Drawn, not written: the same art language as the lunge. */
+function spearUp(guard, x, floor) {
+  if (["drained", "stunned", "away"].includes(guard.state) || M.stompable(game, guard)) return;
+  const p = game.player,
+    dx = p.x + p.w / 2 - guard.x,
+    above = p.y + p.h < guard.floor - M.GUARD.h + 6;
+  if (Math.abs(dx) > 110 || !above) return;
+  const tipX = x + guard.dir * 6,
+    tipY = floor - M.GUARD.h - 26;
+  ctx.fillStyle = "#1b1420";
+  ctx.fillRect(tipX - 2, tipY + 8, 4, 22);
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY - 4);
+  ctx.lineTo(tipX + 8, tipY + 10);
+  ctx.lineTo(tipX - 8, tipY + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#fbf9f2";
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(tipX + 4, tipY + 8);
+  ctx.lineTo(tipX - 4, tipY + 8);
+  ctx.closePath();
+  ctx.fill();
 }
 function drawStar(x, y) {
   ctx.fillStyle = "#ffe066";
@@ -1776,12 +1916,13 @@ function playerFrame(p) {
   if (Math.abs(p.vx) > 20) return [p.color, (Math.floor(clock * (8 + Math.abs(p.vx) / 40)) % 4) * 32, 64];
   return [p.color, (Math.floor(clock * 4) % 2) * 32, 0];
 }
-function drawRubik(sheetKey, sx, sy, cx, feet, direction, alpha = 1, rotation = 0) {
+function drawRubik(sheetKey, sx, sy, cx, feet, direction, alpha = 1, rotation = 0, scaleX = 1, scaleY = 1) {
   const image = sheetKey === "storm" ? img.storm : sheetKey.length > 5 ? derived[sheetKey] : img[sheetKey];
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(Math.round(cx), Math.round(feet));
   if (rotation) ctx.rotate(rotation);
+  if (scaleX !== 1 || scaleY !== 1) ctx.scale(scaleX, scaleY); // feet stay planted
   if (direction < 0) ctx.scale(-1, 1);
   ctx.drawImage(image, sx, sy, 32, 32, -33, -64, 64, 64);
   ctx.restore();
@@ -1799,8 +1940,9 @@ function drawPlayer() {
     [sheet, sx, sy] = playerFrame(p),
     cx = wx(p.x + p.w / 2),
     feet = wy(p.y + p.h);
-  if (p.dashTime > 0 && !reducedMotion)
-    for (let i = 3; i > 0; i--) drawRubik(sheet, sx, sy, cx - p.dashDirection * i * 22, feet, p.direction, 0.12 * (4 - i));
+  // Dash afterimages: three silhouettes in the form's colour, close behind.
+  if (p.dashTime > 0 && sheet !== "storm")
+    for (let i = 3; i > 0; i--) drawRubik(p.color + "Ghost", sx, sy, cx - p.dashDirection * i * (reducedMotion ? 26 : 20), feet, p.direction, reducedMotion ? 0.3 : 0.62 - i * 0.14);
   // Grace blinks (steady half-alpha under reduced motion: a cue, not a flash).
   const graced = p.grace > 0 || p.bumpGrace > 0,
     blink = graced && (reducedMotion || Math.floor(clock * 14) % 2 === 0);
@@ -1810,7 +1952,11 @@ function drawPlayer() {
     if (fx.refill > 0) key = p.color + "Flash";
     else if (p.dashCharge <= 0 && !p.grounded && p.dashTime <= 0) key = p.color + "Dim";
   }
-  drawRubik(key, sx, sy, cx, feet, p.direction, blink ? (reducedMotion ? 0.65 : 0.45) : 1);
+  const sq = fx.squash,
+    k = sq ? sq.t / sq.dur : 0,
+    scaleX = sq ? 1 + (sq.sx - 1) * k : 1,
+    scaleY = sq ? 1 + (sq.sy - 1) * k : 1;
+  drawRubik(key, sx, sy, cx, feet, p.direction, blink ? (reducedMotion ? 0.65 : 0.45) : 1, 0, scaleX, scaleY);
   if (fx.swirl && !reducedMotion) {
     const t = fx.swirl.age / 0.7,
       sx0 = wx(fx.swirl.x),
@@ -1843,6 +1989,8 @@ const HINTS = {
   move: { keys: ["<", ">"], touch: ["<", ">"] },
   // 1-1's twist: the jump key twice ("jump, jump" - white's air jump).
   airjump: { keys: ["Space", "Space"], touch: ["JUMP", "JUMP"] },
+  // 1-2: after the first spear-up, a card with an arrow dropping onto its back.
+  behind: { keys: [], touch: [], art: "behind" },
   white: { keys: ["Z"], touch: [], chip: "white", thought: true },
   green: { keys: ["X"], touch: [], chip: "green" },
   dash: { keys: ["Shift"], touch: ["DASH"], dash: true },
@@ -1886,6 +2034,7 @@ function drawHint() {
   for (const label of labels) w += (label.length > 1 ? ctx.measureText(label).width + 16 : 34) + 8;
   if (hint.chip) w += 34;
   if (hint.dash) w += 34;
+  if (hint.art) w += 64;
   const x = wx(p.x + p.w / 2),
     y = wy(p.y) - 16;
   ctx.save();
@@ -1911,11 +2060,38 @@ function drawHint() {
     ctx.fillStyle = "#1b1420";
     for (let i = 0; i < 3; i++) ctx.fillRect(cx + i * 4, y - 40 + i * 8, 26 - i * 6, 4);
   }
+  if (hint.art === "behind") {
+    // A card facing right (its spear at the front) and an arrow curving
+    // down onto its back: stomp from behind.
+    ctx.fillStyle = COLORS.green;
+    ctx.fillRect(cx + 30, y - 38, 18, 26);
+    ctx.fillStyle = "#1b1420";
+    ctx.fillRect(cx + 50, y - 46, 2, 30);
+    ctx.beginPath();
+    ctx.moveTo(cx + 51, y - 52);
+    ctx.lineTo(cx + 56, y - 44);
+    ctx.lineTo(cx + 46, y - 44);
+    ctx.fill();
+    ctx.strokeStyle = "#1b1420";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx + 6, y - 46);
+    ctx.quadraticCurveTo(cx + 22, y - 54, cx + 32, y - 42);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx + 34, y - 38);
+    ctx.lineTo(cx + 26, y - 44);
+    ctx.lineTo(cx + 36, y - 47);
+    ctx.fill();
+  }
   ctx.restore();
 }
 function drawHud() {
   const p = game.player,
     forms = ["white", "green", "red"].filter((c) => game.unlocked[c]);
+  // In the portrait crop the canvas is wider than the view: pull the HUD in.
+  ctx.save();
+  ctx.translate(hudInset, 0);
   // Form cards: the current form in front, unlocked others fanned behind.
   const others = forms.filter((c) => c !== p.color);
   const shake = fx.locked > 0 && !reducedMotion ? Math.sin(fx.locked * 60) * 3 : 0;
@@ -1943,6 +2119,9 @@ function drawHud() {
     ctx.globalAlpha = 1;
     if (LV.id === "1-4" && game.dashes < 3 && inputMode !== "touch") keycap("Shift", dx + 18, dy + 52);
   }
+  ctx.restore();
+  ctx.save();
+  ctx.translate(-hudInset, 0);
   // Sticker strip: this level's three slots, top right under the buttons.
   // Solid = taken this run; faint = already in the save from an earlier run.
   const fx0 = W - 16 - 84,
@@ -1969,29 +2148,37 @@ function drawHud() {
     }
   });
   let below = fy0 + 58;
-  // Escape pressure without a fail timer: the "Quick getaway" par counts
-  // down under the sticker face. At zero it just greys out; nothing fails.
-  if (game.stolen && game.theftTime !== null) {
-    const left = Math.max(0, (LV.par ?? 0) - ((game.finishTime ?? game.time) - game.theftTime)),
+  // The "Quick" stamp, shown as the seal it awards: its seconds count down
+  // while it can still be earned; at zero the seal greys and is struck
+  // through (medal only - nothing fails, the escape goes on).
+  if (game.stolen && game.theftTime !== null && LV.par !== null) {
+    const left = Math.max(0, LV.par - ((game.finishTime ?? game.time) - game.theftTime)),
       on = left > 0,
-      cx = W - 16 - 84 + 14,
-      cy = below - 6;
-    ctx.fillStyle = on ? "#fbf9f2" : "#6a5f70";
+      cx = W - 16 - 84 + 22,
+      cy = below + 8;
+    ctx.fillStyle = on ? COLORS.red : "#4a3f4e";
     ctx.beginPath();
-    ctx.arc(cx, cy, 11, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 18, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "#1b1420";
+    ctx.strokeStyle = on ? "#fbf9f2" : "#7a6f80";
     ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
     ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx, cy - 7);
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + 5, cy + 2);
+    ctx.arc(cx, cy, 14, 0, Math.PI * 2);
     ctx.stroke();
-    text(String(Math.ceil(left)), W - 16, below + 4, 32, on ? (left < 8 ? "#ffcf2e" : "#fbf9f2") : "#6a5f70", "right");
-    below += 30;
+    ctx.setLineDash([]);
+    text(on ? String(Math.ceil(left)) : "-", cx, cy + 8, 16, "#ffffff", "center", on ? "#5a0e0a" : null);
+    text("Quick", cx + 26, cy + 8, 16, on ? "#fbf9f2" : "#7a6f80", "left", on ? "#1b1420" : null);
+    if (!on) {
+      ctx.fillStyle = "#7a6f80";
+      ctx.fillRect(cx + 24, cy + 1, 44, 2);
+    }
+    below += 40;
   }
   if (settings.timer) text(fmtTime(game.time), W - 16, below + 4, 32, "#fbf9f2", "right");
+  ctx.restore();
+  ctx.save();
+  ctx.translate(hudInset, 0);
   // During the getaway, a small home arrow at the left edge until home is on
   // screen (the chalk cube face is the home marker).
   if (game.stolen && game.phase !== "won" && LV.home && LV.home.x1 < cam.x) {
@@ -2016,6 +2203,7 @@ function drawHud() {
     for (let i = 0; i < 9; i++) ctx.strokeRect(38 + (i % 3) * 9, y + 9 + Math.floor(i / 3) * 9, 8, 8);
     ctx.globalAlpha = 1;
   }
+  ctx.restore();
 }
 // No key glyph while white is the only form (1-1, 1-2): nothing to switch to.
 const keyFor = (color) => (inputMode === "touch" || !game.unlocked.green ? null : { white: "Z", green: "X", red: "C" }[color]);
@@ -2074,9 +2262,11 @@ function drawGetCard() {
   ctx.globalAlpha = a;
   ctx.fillStyle = "rgba(10,8,14,0.5)";
   ctx.fillRect(0, 0, W, H);
+  // 420 x 250: narrow enough for the portrait crop; the caption has its own
+  // band under the portrait so it never runs into the circle.
   const color = get.ability === "dash" ? "white" : get.ability,
-    cw = 440,
-    ch = 230,
+    cw = 420,
+    ch = 250,
     x = W / 2 - cw / 2,
     y = H / 2 - ch / 2 - 20;
   ctx.translate(W / 2, H / 2 - 20);
@@ -2090,31 +2280,38 @@ function drawGetCard() {
   ctx.fill();
   ctx.fillStyle = "rgba(251,249,242,0.9)";
   ctx.beginPath();
-  ctx.ellipse(x + 112, y + ch / 2, 86, 96, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(x + 104, y + 98, 74, 78, -0.4, 0, Math.PI * 2);
   ctx.fill();
   // Rubik at 4x in the new color (dash: the storm frames).
   ctx.imageSmoothingEnabled = false;
   if (get.ability === "dash") {
     const f = 1 + (reducedMotion ? 0 : Math.floor(clock * 10) % 3);
-    ctx.drawImage(img.storm, f * 32, 0, 32, 32, x + 48, y + ch / 2 - 64, 128, 128);
-  } else ctx.drawImage(img[color], (Math.floor(clock * 4) % 2) * 32, 0, 32, 32, x + 48, y + ch / 2 - 70, 128, 128);
-  text(info.title, x + 316, y + 70, 48, "#ffffff", "center", "#000");
+    ctx.drawImage(img.storm, f * 32, 0, 32, 32, x + 40, y + 34, 128, 128);
+  } else ctx.drawImage(img[color], (Math.floor(clock * 4) % 2) * 32, 0, 32, 32, x + 40, y + 30, 128, 128);
+  text(info.title, x + 296, y + 78, 48, "#ffffff", "center", "#000");
   if (get.ability === "dash") {
-    if (inputMode === "touch") dashPill(x + 280, y + 128);
-    else bigKey(info.key, x + 278, y + 128);
+    if (inputMode === "touch") dashPill(x + 260, y + 136);
+    else bigKey(info.key, x + 258, y + 136);
   } else {
-    formCard(color, x + 262, y + 92, 30, 42, null);
-    if (inputMode !== "touch") bigKey(info.key, x + 306, y + 128);
+    formCard(color, x + 244, y + 100, 30, 42, null);
+    if (inputMode !== "touch") bigKey(info.key, x + 288, y + 136);
   }
-  text(info.caption, x + 316, y + 182, 32, "#ffffff", "center", "#000");
+  ctx.fillStyle = "rgba(10,8,14,0.35)";
+  roundRect(x + 18, y + 188, cw - 36, 44, 10);
+  ctx.fill();
+  text(info.caption, W / 2, y + 218, 32, "#ffffff", "center", "#000");
   ctx.restore();
 }
 /** Uno REVERSE card sweeping across: the theft's turning point. */
 function drawReverse() {
   if (fx.reverse < 0 || fx.get) return;
-  const t = fx.reverse / 1.1,
+  // Never over Rubik: the card and the caption take the half of the screen
+  // he isn't in (the cards are held still meanwhile, model.mjs theftCalm).
+  const rubikY = wy(game.player.y + M.PLAYER.h / 2),
+    low = rubikY < H / 2,
+    t = fx.reverse / 1.1,
     x = reducedMotion ? W / 2 : W + 160 - (W + 320) * Math.min(1, t * 1.15),
-    y = H / 2;
+    y = low ? H - 150 : 150;
   ctx.save();
   ctx.globalAlpha = reducedMotion ? 1 : Math.min(1, (1 - t) * 4);
   ctx.translate(x, y);
@@ -2150,21 +2347,23 @@ function drawReverse() {
   }
   ctx.restore();
   if (fx.reverse < 1.1) text("REVERSE!", x, y + 120, 48, "#ffffff", "center", "#000000");
-  // The goal, stated once: run home; red dash breaks the cracked stones.
-  if (fx.reverse > 0.35) {
-    const a = Math.min(1, (fx.reverse - 0.35) * 5, (2.6 - fx.reverse) * 3);
+  // The goal, stated once, after the card has swept by: run home; red dash
+  // breaks the cracked stones.
+  if (fx.reverse > 0.95) {
+    const a = Math.min(1, (fx.reverse - 0.95) * 5, (2.6 - fx.reverse) * 3);
     ctx.globalAlpha = Math.max(0, a);
-    text("Run home!", W / 2, 128, 48, "#ffffff", "center", "#000000");
+    const by = low ? H - 150 : 88; // the caption block's top
+    text("Run home!", W / 2, by + 40, 48, "#ffffff", "center", "#000000");
     const touch = inputMode === "touch",
       rowW = touch ? 300 : 320,
       rx = W / 2 - rowW / 2;
     ctx.fillStyle = "rgba(27,20,32,0.8)";
-    roundRect(rx - 10, 140, rowW + 20, 52, 12);
+    roundRect(rx - 10, by + 52, rowW + 20, 52, 12);
     ctx.fill();
-    formCard("red", rx, 144, 30, 42, null);
-    text("+", rx + 46, 176, 32, "#fbf9f2", "center", null);
-    const kw = touch ? dashPill(rx + 60, 182) : bigKey("Shift", rx + 60, 182);
-    text("breaks stones", rx + 72 + kw, 176, 32, "#fbf9f2", "left", null);
+    formCard("red", rx, by + 56, 30, 42, null);
+    text("+", rx + 46, by + 88, 32, "#fbf9f2", "center", null);
+    const kw = touch ? dashPill(rx + 60, by + 94) : bigKey("Shift", rx + 60, by + 94);
+    text("breaks stones", rx + 72 + kw, by + 88, 32, "#fbf9f2", "left", null);
     ctx.globalAlpha = 1;
   }
 }
@@ -2217,6 +2416,7 @@ function drawWorld() {
   drawGoal();
   drawVault();
   drawPickups();
+  drawDashMarks();
   drawOrbs();
   drawStickers();
   for (const guard of game.guards) drawGuard(guard);
@@ -2250,12 +2450,16 @@ function drawBoot() {
 }
 function drawTitle() {
   ctx.drawImage(img.title, 0, 0, W, H);
-  // On touch screens "press any key" is wrong: a pill over that line says tap.
+  // On touch screens "press any key" is wrong: an opaque pixel plate covers
+  // the baked line (source y 184-198 -> 368-396 at 2x) and says tap.
   if (inputMode === "touch") {
-    ctx.fillStyle = "rgba(18,26,48,0.92)";
-    roundRect(W / 2 - 290, 354, 580, 48, 14);
+    ctx.fillStyle = "#0b1226";
+    roundRect(W / 2 - 300, 356, 600, 52, 10);
     ctx.fill();
-    text("Tap to start", W / 2, 388, 48, "#ffffff", "center", "#000000");
+    ctx.strokeStyle = "#fbf9f2";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    text("Tap to start", W / 2, 394, 48, "#ffffff", "center", "#000000");
   }
 }
 const STORY = { drain: 0.8, black: 0.35, panel: 1.8, first: 1.15, hold: 1.4 };
@@ -2300,8 +2504,30 @@ function drawStory() {
   if (t >= end) drawIris(Math.min(1, (t - end) / 0.8));
   if (t >= close) startLevel(C.WORLD1[0], { skipIntro: false });
 }
+/** The ending: the colorized forest, red Rubik home, and end_game.png framed
+ * as the comic's last page. The original line "That's it by now." is
+ * covered by a plate reading "That's it for now." (the asset is untouched),
+ * and one more line says what comes next. */
 function drawEnding() {
-  ctx.drawImage(img.ending, 0, 0, W, H);
+  ctx.drawImage(derived.forestColor, 0, 0, W, H);
+  ctx.fillStyle = "rgba(14,10,20,0.45)";
+  ctx.fillRect(0, 0, W, H);
+  const fw = 480,
+    fh = 270,
+    fx0 = W / 2 - fw / 2,
+    fy0 = 60;
+  ctx.fillStyle = "#fbf9f2";
+  roundRect(fx0 - 12, fy0 - 12, fw + 24, fh + 24, 14);
+  ctx.fill();
+  ctx.drawImage(img.ending, fx0, fy0, fw, fh); // exactly 1x: the page itself
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(fx0 + 168, fy0 + 166, 150, 22);
+  text("That's it for now.", W / 2, fy0 + 184, 16, "#ffffff", "center", null);
+  drawRubik("red", (Math.floor(clock * 4) % 2) * 32, 0, fx0 - 60, fy0 + fh + 4, 1, 1);
+  drawRubik("green", (Math.floor(clock * 4 + 1) % 2) * 32, 0, fx0 + fw + 60, fy0 + fh + 4, -1, 1);
+  text("World 2: Blue Mountains - coming soon", W / 2, fy0 + fh + 70, 32, "#ffffff", "center", "#000");
+  text(`${C.stickerTotal(save)}/${C.TOTAL_STICKERS} stickers`, W / 2, fy0 + fh + 104, 16, "#ffcf2e", "center", null);
+  if (screenTime > 1.2) text(inputMode === "touch" ? "tap to continue" : "any key to continue", W / 2, H - 18, 16, "#cfc6d6", "center", null);
   drawIris(Math.max(0, 1 - screenTime / 0.8));
 }
 /** Card panel shared by the tally screens. */
@@ -2656,6 +2882,7 @@ function frame(now) {
     if (fx.irisDir) fx.iris = Math.max(0, Math.min(1, fx.iris + fx.irisDir * dt * (1 / 0.8)));
     if (fx.iris === 0 || fx.iris === 1) fx.irisDir = 0;
   }
+  measureCrop();
   render();
   syncTouch();
   requestAnimationFrame(frame);

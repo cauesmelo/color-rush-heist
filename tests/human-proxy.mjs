@@ -210,6 +210,12 @@ export function simulate(g, M, plan, { frozen = true, horizon = 300, dir = dirOf
     released = false;
   for (let i = 0; i < horizon; i++) {
     const input = { ...(plan.stopUntil && i < plan.stopUntil ? {} : move) };
+    // Levels round: once over the obstacle he lets go of the direction in the
+    // air (a person does not fly on into the card waiting behind a wall).
+    if (plan.brake != null && !c.player.grounded && dir * (c.player.x + c.player.w / 2) >= plan.brake) {
+      delete input.left;
+      delete input.right;
+    }
     if (plan.back && i < plan.back) Object.assign(input, dir > 0 ? { left: true, right: false } : { right: true, left: false });
     if (i === plan.k) {
       input.jump = true;
@@ -290,9 +296,14 @@ export const reaches = (target, extra = () => true) => (c) => {
 };
 
 /** The jump plans a person tries, simplest first, with only known verbs. */
-function candidatePlans(g, bot) {
+function candidatePlans(g, bot, M) {
   const p = g.player,
-    air = bot.knows.has("air") && p.color === "white",
+    // Calibration (levels round): the colour swap to white came on the same tick
+    // as the jump, so at planning time he was still green, only plain jumps were
+    // considered and a 4-tile wall under a card's cone (1-3) was mashed at the
+    // learned rhythm forever. A person who knows white swaps first, then jumps.
+    wantsWhite = g.unlocked.white && p.color !== "white" && M && wantColor(g, M, bot) === "white",
+    air = bot.knows.has("air") && (p.color === "white" || wantsWhite),
     dash = g.dashUnlocked && bot.knows.has("dash") && p.dashCharge > 0;
   const families = [{ hold: 36 }];
   if (air) families.push({ hold: 30, air: "apex" });
@@ -302,6 +313,7 @@ function candidatePlans(g, bot) {
   if (dash) families.push({ dash: "now", k: 0, hold: 0, noJump: true });
   // Chains: whatever habits he has, applied in the air (orbs, bounces).
   families.push({ hold: 40, auto: { air, dash: g.dashUnlocked && bot.knows.has("dash") } });
+  if (wantsWhite) for (const f of families) f.color = "white";
   return families;
 }
 
@@ -361,7 +373,7 @@ function planGround(g, M, bot, outcome) {
   const bin = Math.floor(cx / T / 4),
     naive = bot.persona.id === "first" && !(bot.deathsAt[bin] > 0) && !(bot.deathsAt[bin + dir] > 0) && !((bot.triesAt[bin] || 0) >= 2);
   if (outcome.kind !== "death") bot.triesAt[bin] = (bot.triesAt[bin] || 0) + 1;
-  const families = candidatePlans(g, bot).filter((f) => !naive || (f.air == null && f.dash == null && !f.auto && !f.noJump));
+  const families = candidatePlans(g, bot, M).filter((f) => !naive || (f.air == null && f.dash == null && !f.auto && !f.noJump));
   // Calibration (levels round): the first working technique won, however thin
   // its window (a 3-tick one at 1-4's orb gap), and an expert aiming at it with
   // 30 ms of noise missed it again and again. The casual and the expert choose
@@ -369,6 +381,7 @@ function planGround(g, M, bot, outcome) {
   // simplest first.
   const worked = [];
   for (const family of families) {
+    if (outcome.kind !== "death") family.brake = target + 24;
     const w = window(g, M, family, target, kMin, kMax, 3, 260);
     if (!w) continue;
     worked.push({ family, w });
@@ -388,6 +401,7 @@ function planGround(g, M, bot, outcome) {
     schedule(bot, press + family.hold + noise(bot) * 0.5, "release");
     bot.airPlanned = family.air != null || family.dash != null;
     bot.intent = family;
+    bot.brakeAt = family.brake ?? null;
     return true;
   }
   bot.log.noPlan++;
@@ -683,6 +697,9 @@ export function decide(g, M, bot) {
       bot.bounced = true;
       bot.hopAt = bot.tick;
       bot.mashRoll = undefined;
+      // A bounce starts a new arc: the brake planned for the jump he took off
+      // with must not stop him short of the wall he now bounces toward.
+      bot.brakeAt = null;
     }
     if ((ev.type === "stomp" || ev.type === "bounce") && (bot.persona.id !== "first" || bot.r() < 0.6)) {
       bot.plan = bot.plan.filter((x) => x.type !== "release");
@@ -788,6 +805,7 @@ export function decide(g, M, bot) {
   }
   if (p.grounded && bot.spring && bot.tick - bot.spring.at > 20) bot.spring = null;
   if (p.grounded) bot.steer = null;
+  if (bot.brakeAt != null && !p.grounded && progOf(g) >= bot.brakeAt) moveDir = 0;
   if (bot.steer && !p.grounded && bot.tick >= bot.steer.from) {
     const s2 = steerInput(g, bot.steer);
     moveDir = s2.right ? 1 : s2.left ? -1 : 0;
@@ -845,10 +863,16 @@ export function decide(g, M, bot) {
   // held bounce -> stomp) must also play them: before this, only the planning
   // sim did, so the real run took off with the plan and then pressed nothing.
   let habit = null;
-  if (grounded) {
+  if (grounded && bot.airborne) {
+    // Landed: the plan he took off with is spent.
+    bot.airborne = false;
     bot.intent = null;
+    bot.brakeAt = null;
     g.autoState = undefined;
-  } else if (bot.intent?.auto && bot.tick - bot.takeoffAt > 2) {
+  } else if (!grounded) {
+    bot.airborne = true;
+  }
+  if (!grounded && bot.intent?.auto && bot.tick - bot.takeoffAt > 2) {
     habit = {};
     autoAir(g, M, habit, bot.intent.auto);
     if (habit.left || habit.right) moveDir = habit.right ? 1 : -1;

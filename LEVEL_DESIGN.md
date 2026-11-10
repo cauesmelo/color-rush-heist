@@ -67,22 +67,24 @@ puddle, the stump and the "pool" checkpoint: 0 deaths (median and p90), 17.5 s.
 The goal stands before the end wall: passing above it from the slabs only drops Rubik
 behind it, a 2-tile step from the face.
 
-## 1-2 Stomping Ground — stomp → stomp from behind → GREEN GET (134 columns)
+## 1-2 Stomping Ground — the head stomp → the flat card is a springboard → the island chain → GREEN GET (134 columns)
 
-Rebuilt after the user's feedback ("no sleeping enemies; I like the head stomp").
-Kit: white. Every card is awake; `spears: false` (being seen only gets Rubik pushed).
-No Ghost or Takedown stamp: this is the stomp lesson, not a stealth level.
+Rebuilt in the levels round (`LEVEL_DESIGN_V1.md`): the old pit (a skilled player jumped over
+it) and the pad card left 8 tiles behind a 7-tile wall (a naive player hopped at the wall for
+minutes with nothing saying the grey card was a springboard) are gone. Kit: white. Every card is
+awake and fights (walker, sentinel); every gate card is a `pad` and stands at the foot of what it
+opens. No Ghost or Takedown stamp; the Chain stamp (4 stomps off the island chain) stays.
 
 | Columns | Beat | Content | Stickers / CP |
 | --- | --- | --- | --- |
-| 0–32 | Introduce | A slow patrol (60% pace, cols 14–18) in a dry pit (13–20) 6 tiles below the start cliff; its cone is in the pit, so Rubik watches from above. A rock lip (9–14, rows 4–9) over the cliff's end leaves 2 tiles of headroom, so no jump (coyote included) leaves the cliff: he walks off onto its back while it walks away. The far rim is 6 tiles up: only the stomp's held bounce (or bounce + air jump) reaches it, never a double jump (175 + 12 < 192). Revision five's open pit was double-jumped edge to edge | CP start; ★1 at the held bounce's peak (a tap tops out 24 px below); CP "chain" on the rim |
-| 33–64 | Develop | 30 tiles of water with four 1-tile islands, each with a lookout staring ahead (fixed, facing the way Rubik travels): bounce from back to back | ★3 (mastery) on a slab 8 tiles over the last island: a held bounce + air jump |
-| 65–106 | Twist | A far bank 2 below the islands (under the last cone), a 2-tile block whose riser shields the mid face, then a patrol pacing before a 7-tile wall: drop behind it while it walks to the wall, stomp, air-jump at the peak; an 8-tile ledge off to the left. Then a short dip, a breather before the finale (its patrol and pedestal lookout were removed in revision five: the guided line double-jumped both) | CP mid (65); ★2 on the 8-tile ledge; CP "wall" on the wall top |
+| 0–32 | Introduce | The start cliff, a 2-tile step down, 16 flat tiles (17–32). The teach card is a **sentinel on its post** (col 25), staring at the way Rubik comes: it cannot chase, so the first strike is a read (a 0.65 s windup with the strike strip on the floor, a jab 100 px ahead). Its head is the answer: a stomp bounces Rubik up through sticker 1. Not a gate | CP start; ★1 over the post (any bounce off its head passes it); CP "dip" (30, behind the post: it only faces left) |
+| 33–62 | Develop | **The wall duel.** A dip 2 below the flat ground (33–50) ends at a 7-tile wall (51–62; a double jump tops out 37 px short). A walker patrols 42–49, up to the wall's foot. Pinned against the wall by a card that chases at 190 px/s, jumping over it is the instinct; the landing is the stomp; the air jump at the bounce's peak (owned since 1-1) tops the wall; the flat pad stays at the foot, so a hop beside it bounces again | ★2 on an 8-tile ledge over the dip (the same trick, drift left); CP "wall" on the wall top |
+| 63–106 | Twist | The first water: four sentinels on 1-tile islands, all staring ahead (the chain; 4 stomps without touching ground = Chain stamp). A miss costs a heart and a hop back (checkpoint on the wall top). Far bank 2 below the islands, under the last cone | ★3 on a slab 8 tiles over the last island (held bounce + air jump); CP "mid" on the far bank |
 | 107–133 | Conclude | 2-tile steps up to the old Stage 1 run-up under its rock overhang: every walk, run, jump or double jump off the edge lands on the back of the **green card**, a lookout facing away that always takes the stomp. Green swirls in → **GREEN GET** → the goal face fills green | auto CP "green" |
 
-Hint: "from behind", shown after the first spear-up (a drawn card with an arrow onto
-its back), retired by the first stomp. Tests prove no double jump reaches the 7-tile
-wall top, the 8-tile ledge or the ★3 slab.
+Hint: the first hit shows a card with an arrow onto its head ("behind", retired by the first
+stomp). Tests prove no double jump reaches the 7-tile wall top, the 8-tile ledge or the slab.
+Proxies, 12 seeds: see `LEVEL_DESIGN_V1.md`.
 
 ## 1-3 Hide in Green — disguise → white/green trade-off (124 columns)
 
@@ -113,10 +115,10 @@ over); dash **off** until the swirl. Storm tint. `spears: false`. No Ghost or Ta
 
 | Columns | Beat | Content | Stickers / CP |
 | --- | --- | --- | --- |
-| 0–19 | Introduce | A stray storm swirl on a stump (8): hop on it → **DASH GET** (card, checkpoint). Flat ground to try it | CP start; auto CP "dash" |
+| 0–19 | Introduce | A stray storm swirl **on the path** at standing height (8): walking into it is the **DASH GET** (card, checkpoint). It used to rest on a 1-tile stump a runner could hop clean over (the proxies did, then met a 20-tile gap with no dash). Flat ground to try it | CP start; auto CP "dash" |
 | 20–31 | Introduce | Gap A: 8 tiles of water + a recovery rock 2 down = 12 tiles bank to bank. Green needs the dash (white may double-jump it); the Shift/DASH bubble after two slow rock landings or falls | ★1 on the jump + dash line |
-| 32–69 | Develop | A 12-tile gap, then a 14-tile gap, bank to bank at the same height (a short hop + dash lands; the ledge assist catches a lip): one air dash per airtime, landing restores it | CP "gap2" on the bank between them |
-| 70–121 | Twist | **20 tiles** of water with a refill orb at the apex (white needs the dash too), then 20 tiles with a lookout on a pillar mid-gap, facing the way Rubik flies: stomp its back to refill the dash | CP mid (72); ★2 on a low dash right off that stomp's refill, then an air jump to the bank |
+| 32–69 | Develop | A 12-tile gap, then a 14-tile gap, bank to bank at the same height (a short hop + dash lands; the ledge assist catches a lip): one air dash per airtime, landing restores it. Levels round: a 4-tile recovery rock 2 down at the far side of each (Gap A's idea), so a late dash lands on dry rock and a hop gets back up (the first-timer proxy fell 28 times here) | CP "gap2" on the bank between them |
+| 70–121 | Twist | **20 tiles** of water with a refill orb at the apex (white needs the dash too). Levels round: a second orb where the second dash ends (a third dash: the guided line had about 20 px to spare after its second one, which no person lands) and a 3-tile rock 2 down at the bank's foot whose near edge one jump + dash still cannot reach (swept), so the orb stays needed. Then 20 tiles with a lookout on a pillar mid-gap, facing the way Rubik flies: stomp its back to refill the dash | CP mid (72); ★2 on a low dash right off that stomp's refill, then an air jump to the bank |
 | 122–161 | Conclude | 27 tiles of water (126–152) with one card on a pillar 13 tiles out (139). The gap is wider than white's double jump + dash (~25 tiles bank to bank; a sweep of every takeoff tick, air-jump and dash timing never lands), and green's plain jump (~10) can't reach the card. The card turns: 2.2 s facing the bank with its spear up (landing on it pops Rubik into the water), 1.8 s away. Wait on the bank, jump + dash onto its back, then bounce + dash to the island (153–158). The orbs and the island patrol (a free disguise pass) are gone | CP late (123); ★3: white, bounce off the chain card + air jump + dash (green's bounce peaks 85 px lower) |
 
 Hint: Shift/DASH. Storm wisps (the swirl's streaks) drift across the lip of every

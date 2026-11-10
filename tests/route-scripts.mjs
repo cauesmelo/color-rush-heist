@@ -131,7 +131,7 @@ export const SCRIPTS = {
   "1-4": {
     baseline(pl) {
       // Green from the start (no double jump): the dash is the way over.
-      pl.right().to(tx(7) + 4).jump(); // hop onto the stump: the swirl -> DASH GET
+      pl.right().to(tx(7) + 20); // walk into the swirl: DASH GET
       pl.until((p) => p.g.dashUnlocked).settle().land();
       jumpDash(pl, tx(19) + 26, tx(16), "Gap A"); // sticker 1 on this line
       jumpDash(pl, tx(37) + 26, tx(16), "develop 12");
@@ -155,7 +155,7 @@ export const SCRIPTS = {
       pl.right().to(tx(158)).check(pl.g.phase === "won", "goal face");
     },
     mastery(pl) {
-      pl.right().to(tx(7) + 4).jump();
+      pl.right().to(tx(7) + 20);
       pl.until((p) => p.g.dashUnlocked).settle().land();
       jumpDash(pl, tx(19) + 26, tx(16), "Gap A");
       jumpDash(pl, tx(37) + 26, tx(16), "develop 12");
@@ -660,7 +660,7 @@ export const EXPERT = {
       dashEnd().land();
       pl.check(Math.abs(pl.feet - tx(16)) < 1, label);
     };
-    pl.right().to(tx(7) + 4).jump();
+    pl.right().to(tx(7) + 20);
     pl.until((p) => p.g.dashUnlocked).settle().land();
     gap(tx(19) + 26, "Gap A");
     gap(tx(37) + 26, "develop 12");

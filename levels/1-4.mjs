@@ -10,11 +10,11 @@
  * need the dash as green (white may still double-jump them), and the twist
  * gaps are 20 tiles so white needs the dash too.
  *
- * introduce: the swirl on a stump -> DASH GET; flat ground to try it; Gap A
+ * introduce: the swirl on the path -> DASH GET; flat ground to try it; Gap A
  *            (12 tiles) with a recovery rock 2 tiles down near its far side.
  * develop:   a 12-tile gap to a higher bank, then a 14-tile gap.
- * twist:     20 tiles with a refill orb at the apex; 20 tiles with a dozing
- *            card on a pillar mid-gap as a stomp refill.
+ * twist:     20 tiles with a refill orb at the apex; 20 tiles with a lookout
+ *            on a pillar mid-gap as a stomp refill.
  * conclude:  an orb -> card -> orb chain onto an island with a green patrol
  *            (go green before landing); the goal face beyond it.
  */
@@ -38,19 +38,33 @@ export default defineLevel({
     fill(0, 2, 0, 21);
     // --- Introduce (3-31): the swirl, flat ground, Gap A ---------------------
     ground(3, 19, 16);
-    fill(8, 8, 15, 15); // the stump the swirl rests on
+    // Levels round: the swirl used to rest on a 1-tile stump 5 tiles from the
+    // start, a lure a runner could hop clean over (the proxies did, then met a
+    // 20-tile gap with no dash). It now floats at standing height on the path:
+    // walking into it is the GET, and the GET card is the lesson.
     water(20, 27); // Gap A: 8 tiles of water...
     ground(28, 31, 18); // ...and a recovery rock 2 tiles down (12 tiles bank to bank)
     // --- Develop (32-73) -------------------------------------------------------
     ground(32, 37, 16);
     water(38, 49); // 12 tiles, bank to bank at the same height
+    // Levels round: a recovery rock 2 down at the far side of each develop gap
+    // (Gap A's idea), so a late dash lands on dry rock and a hop gets back up,
+    // not on a heart and a hop back (the first-timer proxy fell here 28 times).
+    ground(46, 49, 18);
     ground(50, 55, 16); // (a checkpoint here: a failed 14 never replays the 12)
     water(56, 69); // 14 tiles
+    ground(66, 69, 18);
     // --- Twist (70-122) --------------------------------------------------------
     ground(70, 75, 16); // the midpoint face stands here
     water(76, 95); // 20 tiles: white needs the dash too (refill orb at the apex)
+    // Levels round: a 3-tile rock 2 down at the bank's foot. Its near edge is
+    // still out of one dash's reach (a jump + dash never lands on it: swept),
+    // so the orb is still needed; but the guided line had about 20 px to spare
+    // and no person lands that, so the rock catches the near misses (a hop up
+    // its 2-tile step puts him on the bank).
+    ground(93, 95, 18);
     ground(96, 101, 16);
-    water(102, 121); // 20 tiles, a dozing card on a pillar in the middle
+    water(102, 121); // 20 tiles, a lookout on a pillar in the middle (its stomp refills the dash)
     ground(112, 112, 18); // the pillar
     // --- Conclude (122-161) ----------------------------------------------------
     // 27 tiles of water with one card 13 tiles out: wider than white's
@@ -73,7 +87,7 @@ export default defineLevel({
     { id: "mid", x: px(72), floor: px(16) },
     { id: "late", x: px(123) + 16, floor: px(16) },
   ],
-  pickups: [{ id: "swirl", ability: "dash", x: px(8) + 16, y: px(15) - 34 }],
+  pickups: [{ id: "swirl", ability: "dash", x: px(8) + 16, y: px(16) - 34 }],
   stickers: [
     { id: 1, x: px(24), y: 396, line: "main", note: "Gap A: on the jump + dash line" },
     { id: 2, x: 3728, y: 440, line: "off", note: "low dash right off the pillar card's bounce (its stomp refill), then an air jump to the bank" },
@@ -81,6 +95,11 @@ export default defineLevel({
   ],
   orbs: [
     { id: "twist", x: px(86), y: 410 },
+    // Levels round: the guided line has about 20 px to spare after its second
+    // dash (measured on the baseline route), which no person lands. A second orb
+    // where the second dash ends gives a third dash: the same chain, with a few
+    // tiles of slack.
+    { id: "twist-2", x: px(91) + 16, y: 410 },
   ],
   guards: [
     // Lookouts on pillars, staring ahead (the way Rubik flies): stomp their

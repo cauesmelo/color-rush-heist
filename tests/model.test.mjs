@@ -530,7 +530,9 @@ test("1-4: gap widths force the dash - green can't jump the 12/14-tile gaps, whi
   // white's air jump, an intended alternative.)
   const twist = { start: { x: 72 * T, feet: 16 * T }, top: 16 * T, past: 96 * T };
   assert.equal(anyReaches("1-4", { ...twist, form: "white" }, jumpFamily({ maxTakeoff: 80, air: true })), false, "white double jump");
-  assert.equal(getLevel("1-4").map[B.WATER_ROW].slice(76, 96), "~".repeat(20));
+  // 17 tiles of water, then the 3-tile recovery rock 2 down (levels round).
+  assert.equal(getLevel("1-4").map[B.WATER_ROW].slice(76, 93), "~".repeat(17));
+  assert.equal(getLevel("1-4").map[B.WATER_ROW].slice(93, 96), "###");
   assert.equal(getLevel("1-4").map[B.WATER_ROW].slice(102, 122).replace("#", "~"), "~".repeat(20));
 });
 test("1-4: before the swirl Shift does nothing; DASH GET; refills chain dashes in the air", () => {

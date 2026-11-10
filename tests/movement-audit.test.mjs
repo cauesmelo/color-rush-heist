@@ -225,7 +225,7 @@ test("A3: presses at the edges - landing, respawn, freezes, stomps - are honoure
   // fires as the world resumes.
   const get = (pressBeforeEnd) => {
     const g = noCards(fresh("1-4"));
-    place(g, 7 * T + 4, 16 * T, { color: "green" });
+    place(g, 8 * T - 6, 16 * T, { color: "green" }); // 22 px short of the swirl: the jump takes it while rising
     let n = 0;
     while (!g.dashUnlocked && n++ < 240) ticks(g, 1, n === 1 ? { right: true, jump: true } : { right: true });
     assert.ok(g.dashUnlocked && g.hitstop > 1, "DASH GET freezes the world");

@@ -9,6 +9,10 @@ const tx = (tiles) => tiles * T;
 // Small vocabulary shared by the scripts.
 const jumpAt = (pl, x) => pl.to(x).jump();
 const doubleAt = (pl, x) => pl.to(x).jump().airJump();
+/** The high bounce off a stomp: a key still held from the takeoff already
+ * gives it (a second press can't happen without a release: it would only
+ * spend white's air jump), so press only when jump is up. */
+const bounce = (pl) => (pl.p.jumpHeld ? pl : pl.jump());
 
 export const SCRIPTS = {
   "1-1": {
@@ -54,24 +58,17 @@ export const SCRIPTS = {
   },
   "1-2": {
     baseline(pl) {
-      stompIntoPit(pl);
-      islandChain(pl, false);
-      wallStomp(pl, { ledge: false });
-      // Over the dip in one double jump, then the run-up.
-      pl.to(tx(93) + 8).jump().airJump().landAt(tx(104));
-      pl.right();
-      jumpAt(pl, tx(106)).land(); // 2-tile steps
-      jumpAt(pl, tx(108)).land();
+      teachStomp(pl);
+      dipStomp(pl, { ledge: false });
+      yardStomp(pl);
+      isleChain(pl, { slab: false });
       glowDrop(pl);
     },
     mastery(pl) {
-      stompIntoPit(pl);
-      islandChain(pl, true);
-      wallStomp(pl, { ledge: true });
-      pl.to(tx(93) + 8).jump().airJump().landAt(tx(104));
-      pl.right();
-      jumpAt(pl, tx(106)).land();
-      jumpAt(pl, tx(108)).land();
+      teachStomp(pl);
+      dipStomp(pl, { ledge: true });
+      yardStomp(pl);
+      isleChain(pl, { slab: true });
       glowDrop(pl);
     },
   },
@@ -501,61 +498,108 @@ function heistEscape(pl, { roof = false, alcove = false, knockAll = false } = {}
 
 /** 1-2 introduce: from the cliff's edge, jump onto the slow pit card's back
  * while it walks away; the held bounce clears the far rim. */
-function stompIntoPit(pl) {
-  // Under the rock lip at the cliff's edge: no jump, so watch the card and
-  // walk off onto its back while it walks away; jump in the stomp's freeze
-  // for the high bounce, which clears the 6-tile far rim.
-  pl.right().to(tx(12) + 4).stop();
-  const card = (p) => p.guard("pit");
-  pl.until((p) => card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(14) + 24 && card(p).x < tx(15) + 24, {}, 1500, "pit card walking away");
-  pl.right().until((p) => !p.p.grounded, { right: true }, 120, "off the edge").steerTo((p) => card(p).x - 6);
-  pl.check(card(pl).state === "stunned", "pit card stomped");
-  pl.jump().landAt(tx(29) + 16);
-  pl.check(Math.abs(pl.feet - tx(12)) < 1, "far rim");
-}
-/** 1-2 develop: bounce from back to back along the island lookouts
- * (mastery: air jump off the last bounce onto sticker 3's slab). */
-function islandChain(pl, slab) {
-  pl.right().to(tx(32) + 10).jump();
-  for (const id of ["isle-a", "isle-b", "isle-c", "isle-d"]) {
-    pl.steerTo((p) => p.guard(id).x - 4);
-    pl.check(pl.guard(id).state === "stunned", `${id} stomped`);
-  }
-  if (slab) {
-    pl.right().airJump().landAt(tx(61) + 16);
-    pl.check(pl.g.stickers[2].collected, "slab sticker");
-    pl.right().until((p) => !p.p.grounded, { right: true }, 120, "off the slab");
-  }
-  pl.landAt(tx(64) + 16);
-  pl.right().to(tx(66) + 16).stop().wait(0.1);
-  pl.jump().landAt(tx(68) + 24); // onto the 2-tile block
-  pl.check(Math.abs(pl.feet - tx(16)) < 1, "on the block");
-}
-/** 1-2 twist: drop behind the wall patrol as it walks to the wall, stomp,
- * air jump at the bounce's peak onto the wall (or drift left to sticker 2). */
-function wallStomp(pl, { ledge }) {
-  const card = (p) => p.guard("wall"); // waits on the block, above the patrol's cone
-  pl.until((p) => card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(74) && card(p).x < tx(76), {}, 1200, "wall card walking to the wall");
+/** 1-2 introduce: the teach card walks away on flat ground; jump on its
+ * back as it goes, and the bounce takes sticker 1. */
+function teachStomp(pl) {
+  const card = (p) => p.guard("first");
+  pl.right().to(tx(17) + 8).stop();
+  pl.until((p) => card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(22) && card(p).x < tx(23) + 16, {}, 1500, "first card walking away");
   pl.right().jump().steerTo((p) => card(p).x - 6);
-  pl.check(card(pl).state === "stunned", "wall card stomped");
+  pl.check(card(pl).state === "stunned", "first card stomped");
+  bounce(pl); // the high bounce: sticker 1 at its peak
+  pl.right().land();
+}
+/** 1-2 develop: from the intro floor's edge, onto the dip card's back as it
+ * walks to the wall, then an air jump at the bounce's peak onto the 7-tile
+ * wall (or drift left to sticker 2's 8-tile ledge and stomp it again). */
+function dipStomp(pl, { ledge }) {
+  const card = (p) => p.guard("dip");
+  const onBack = (label) => {
+    pl.choose(
+      [0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0].map((extra) => (q) => {
+        q.stop().wait(extra);
+        q.until((p) => card(p).state !== "stunned" && card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(41) && card(p).x < tx(42) + 16, {}, 1500, "dip card walking to the wall");
+        q.right().until((p) => card(p).x - p.cx < 110, { right: true }, 240, "close behind it").jump().steerTo((p) => card(p).x - 6);
+      }),
+      (q) => card(q).state === "stunned",
+      label,
+    );
+  };
+  pl.right().to(tx(33)).landAt(tx(35));
+  onBack("dip stomp");
+  bounce(pl);
   if (ledge) {
-    pl.airJump().landAt(tx(75));
+    pl.airJump().landAt(tx(42) + 16);
     pl.check(pl.g.stickers[1].collected, "the 8-tile ledge");
-    // Off the ledge's left end, behind the patrol, for a second stomp.
-    pl.left().until((p) => !p.p.grounded, { left: true }, 120, "off the ledge").landAt(tx(71) + 16);
-    pl.until((p) => card(p).state !== "stunned" && card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(74) && card(p).x < tx(76), {}, 1500, "wall card again");
-    pl.right().jump().steerTo((p) => card(p).x - 6);
-    pl.check(card(pl).state === "stunned", "wall card stomped again");
+    // Wait on the ledge (above every cone), then step off its right end onto
+    // the patrol's back as it walks to the wall, and stomp it again.
+    pl.stop();
+    pl.choose(
+      [44, 45, 46, 43].map((band) => (q) => {
+        q.until((p) => card(p).state !== "stunned" && card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(band) && card(p).x < tx(band) + 16, {}, 2400, "dip card under the ledge");
+        q.right().until((p) => !p.p.grounded, { right: true }, 120, "off the ledge").steerTo((p) => card(p).x - 6);
+      }),
+      (q) => card(q).state === "stunned" && q.g.stomps >= 3,
+      "dip stomp again",
+    );
+    bounce(pl);
   }
   pl.right().airJump();
   pl.until((p) => p.p.grounded, { right: true }, 240, "on the wall");
   pl.check(Math.abs(pl.feet - tx(11)) < 1, "on the wall");
 }
+/** 1-2 twist: wait in the yard below the turning sentry's cone, run at its
+ * back when it turns to the wall, stomp, air jump onto the 7-tile wall. */
+function yardStomp(pl) {
+  const card = (p) => p.guard("turner");
+  pl.right().to(tx(62) + 24).landAt(tx(66));
+  pl.choose(
+    [0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.2, 3.6].map((extra) => (q) => {
+      q.stop().until((p) => p.p.grounded, {}, 120, "in the yard").wait(extra);
+      q.until((p) => card(p).dir === 1 && card(p).turning <= 0, {}, 1500, "turner facing the wall");
+      q.right().to(tx(76)).jump().steerTo((p) => card(p).x - 6);
+    }),
+    (q) => card(q).state === "stunned",
+    "yard stomp",
+  );
+  bounce(pl);
+  pl.right().airJump();
+  pl.until((p) => p.p.grounded, { right: true }, 240, "on the yard wall");
+  pl.check(Math.abs(pl.feet - tx(11)) < 1, "on the yard wall");
+}
+/** 1-2 conclude: off the wall top onto island A's card, bounce to island
+ * B's, bounce to the bank (mastery: air jump off B's bounce onto the slab). */
+function isleChain(pl, { slab }) {
+  pl.right().to(tx(96)).jump();
+  pl.steerTo((p) => p.guard("isle").x - 4);
+  pl.check(pl.guard("isle").state === "stunned", "isle stomped");
+  bounce(pl); // the high bounce
+  if (slab) {
+    pl.right().airJump().landAt(tx(106) + 16);
+    pl.check(pl.g.stickers[2].collected, "slab sticker");
+    // Off the slab's end (the rock is a ceiling over it) and the air jump
+    // once clear of the rock.
+    // The slab is under the rock: no jump from it. Wait for the island card
+    // to recover and drop back onto it for a second bounce + air jump.
+    pl.stop().until((p) => p.guard("isle").state === "calm", {}, 600, "island card awake");
+    // Off the LEFT end: behind it (its front, the right side, is its cone).
+    pl.left().until((p) => !p.p.grounded, { left: true }, 120, "off the slab").steerTo((p) => p.guard("isle").x - 4);
+    pl.check(pl.guard("isle").state === "stunned", "isle stomped again");
+    bounce(pl);
+    pl.choose(
+      [0, 0.08, 0.16, 0.24, 0.32].map((w) => (q) => q.right().apex().wait(w).jump().landAt(tx(122))),
+      (q) => q.p.grounded && Math.abs(q.feet - tx(11)) < 1,
+      "second bounce to the bank",
+    );
+  } else pl.right().airJump();
+  pl.right().landAt(tx(122));
+  pl.check(Math.abs(pl.feet - tx(11)) < 1, "on the far bank");
+}
 /** 1-2 conclude: off the run-up onto the green card's back: GREEN GET. */
 function glowDrop(pl) {
-  pl.right().to(tx(118)).until((p) => p.g.gets.includes("green"));
+  pl.right().to(tx(130)).until((p) => p.g.gets.includes("green"));
   pl.settle().land();
-  pl.right().to(tx(128)).check(pl.g.phase === "won", "goal face");
+  pl.right().to(tx(140)).check(pl.g.phase === "won", "goal face");
 }
 /** 1-3: a watched 4-tile climb. Wait on the floor below the watcher's cone
  * (`base`) until it has just turned away, then white + jump, the air jump,

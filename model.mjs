@@ -886,8 +886,12 @@ function updateGuard(g, guard, dt) {
         break;
       }
       // Pinned at its patrol bound with Rubik out of reach: it gives up after
-      // 0.8 s and turns back (no endless wind-ups 10 px short).
-      if (atBound && !inReach) {
+      // 0.8 s and turns back (no endless wind-ups 10 px short). Before 1-5 a
+      // card has no spear to use, so being in reach changes nothing: it gives
+      // up the same way. (v1.0: 1-2's dip card used to stare at a Rubik
+      // standing at the wall's foot forever, its front always up, so its
+      // back - the only way up the wall - never came.)
+      if (atBound && (!inReach || g.level.spears === false)) {
         guard.stuck += dt;
         if (guard.stuck >= 0.8) {
           guard.stuck = 0;

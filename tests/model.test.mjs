@@ -263,17 +263,27 @@ test("checkpoints: at most 12 s of baseline route time apart wherever Rubik can 
       continue;
     }
     const g = fresh(id),
-      saves = [0];
+      saves = [0],
+      at = [g.player.x];
     let last = g.checkpoint;
     for (const [s, input] of ROUTES[id].baseline) {
       M.advance(g, s, input);
       if (g.checkpoint !== last) {
         saves.push(g.time);
+        at.push(g.player.x);
         last = g.checkpoint;
       }
     }
     saves.push(g.finishTime);
-    for (let i = 1; i < saves.length; i++) assert.ok(saves[i] - saves[i - 1] <= 12, `${id} gap ${i}: ${(saves[i] - saves[i - 1]).toFixed(1)} s`);
+    at.push(g.player.x);
+    // v1.0: a stretch where nothing can kill (no water between the two
+    // checkpoints, no spear, no catch: 1-2's dry intro and develop) has
+    // nothing to replay, so it may run longer.
+    const wet = (x0, x1) => level.map[B.WATER_ROW].slice(Math.floor(Math.min(x0, x1) / T), Math.ceil(Math.max(x0, x1) / T) + 1).includes("~");
+    for (let i = 1; i < saves.length; i++) {
+      if (level.spears === false && !level.caught && !wet(at[i - 1], at[i])) continue;
+      assert.ok(saves[i] - saves[i - 1] <= 12, `${id} gap ${i}: ${(saves[i] - saves[i - 1]).toFixed(1)} s`);
+    }
   }
   assert.equal(M.WORLD.respawnDelay, 0.45);
 });
@@ -316,8 +326,8 @@ test("1-1: hints - move after 4 s idle at the start; jump-jump after two short j
 test("1-2: stomp from above or behind stuns a card; a card facing Rubik raises its spear (no stomp)", () => {
   const drop = (dir, offset) => {
     const g = fresh("1-2"),
-      c = only(g, "wall");
-    Object.assign(c, { x: 76 * T, dir, state: "calm", turning: 0, turnClock: 0 });
+      c = only(g, "dip");
+    Object.assign(c, { x: 44 * T, dir, state: "calm", turning: 0, turnClock: 0 });
     place(g, c.x + offset, c.floor - M.GUARD.h - 30, { vy: 200, jumpHeld: true, jumps: 1 });
     g.player.grounded = false;
     ticks(g, seconds(0.2));
@@ -335,8 +345,8 @@ test("1-2: stomp from above or behind stuns a card; a card facing Rubik raises i
   assert.ok(front.g.player.x + M.PLAYER.w / 2 < front.c.x, "popped back the way he came");
   // An aware card always has its spear up, from any side.
   const g = fresh("1-2"),
-    c = only(g, "wall");
-  Object.assign(c, { x: 76 * T, dir: 1, state: "alert", timer: 1 });
+    c = only(g, "dip");
+  Object.assign(c, { x: 44 * T, dir: 1, state: "alert", timer: 1 });
   place(g, c.x - 14, c.floor - M.GUARD.h - 30, { vy: 200 });
   g.player.grounded = false;
   ticks(g, seconds(0.2));
@@ -345,8 +355,8 @@ test("1-2: stomp from above or behind stuns a card; a card facing Rubik raises i
 test("1-2: hold jump for the high bounce; a tap (or a walk-off) gives the short hop", () => {
   const bounce = (held) => {
     const g = fresh("1-2"),
-      c = only(g, "wall");
-    Object.assign(c, { x: 76 * T, dir: 1, state: "calm", turning: 0, turnClock: 0, pace: 0 });
+      c = only(g, "dip");
+    Object.assign(c, { x: 44 * T, dir: 1, state: "calm", turning: 0, turnClock: 0, pace: 0 });
     c.min = c.max = c.x;
     Object.assign(g.player, { x: c.x - 34, y: c.floor - M.GUARD.h - 112, vy: 100, grounded: false, jumpHeld: held, jumps: held ? 1 : 0, grace: 0 });
     let top = Infinity;
@@ -362,32 +372,21 @@ test("1-2: hold jump for the high bounce; a tap (or a walk-off) gives the short 
   assert.ok(low < high - 40 && low > M.GUARD.h + 40, `tap bounce ${low.toFixed(1)} px`);
 });
 test("1-2: nothing 7+ tiles up is reachable without a stomp; stomp + air jump reaches 8 tiles", () => {
-  // The twist wall (7 tiles over the patrol's floor) and the 8-tile ledge.
+  // v1.0: the develop's and the yard's 7-tile walls and the 8-tile ledge
+  // over the dip (sticker 2), from their floors, with every jump timing.
   for (const target of [
-    { start: { x: 72 * T, feet: 18 * T }, top: 11 * T, past: 82 * T + 8 },
-    { start: { x: 71 * T, feet: 18 * T }, top: 10 * T, past: 73 * T },
+    { start: { x: 46 * T, feet: 18 * T }, top: 11 * T, past: 51 * T + 8 },
+    { start: { x: 78 * T, feet: 18 * T }, top: 11 * T, past: 85 * T + 8 },
+    { start: { x: 37 * T, feet: 18 * T }, top: 10 * T, past: 40 * T },
   ])
-    assert.equal(anyReaches("1-2", target, jumpFamily({ maxTakeoff: 140, air: true })), false, `a double jump never gets to ${target.top}`);
-  // Sticker 3's slab (row 8): the highest double jump from the block or the
-  // far bank stays under it.
-  for (const [x, floor] of [
-    [68 * T + 20, 16 * T],
-    [64 * T + 16, 18 * T],
-  ]) {
-    const g = noCards(fresh("1-2"));
-    place(g, x, floor);
-    let best = Infinity;
-    ticks(g, 1, { jump: true });
-    for (let i = 0; i < 200; i++) {
-      ticks(g, 1, !g.player.airJumped && g.player.vy >= 0 ? { jump: true } : {});
-      best = Math.min(best, feet(g));
-    }
-    assert.ok(best > 8 * T, `double jump from ${x} tops out at ${best.toFixed(1)}`);
-  }
+    assert.equal(anyReaches("1-2", target, jumpFamily({ maxTakeoff: 140, air: true })), false, `a double jump never gets to ${target.top} past ${target.past}`);
+  // The far bank: no double jump off the wall top reaches it over the water
+  // (the island card's bounce is the way across).
+  assert.equal(anyReaches("1-2", { start: { x: 90 * T, feet: 11 * T }, top: 11 * T, past: 120 * T + 8 }, jumpFamily({ maxTakeoff: 140, air: true })), false, "the bank needs the island card");
   // The measured envelope: a held stomp + air jump clears the 8-tile ledge.
   const g = fresh("1-2"),
-    c = only(g, "wall");
-  Object.assign(c, { x: 76 * T, dir: 1, state: "calm", turning: 0, pace: 0 });
+    c = only(g, "dip");
+  Object.assign(c, { x: 44 * T, dir: 1, state: "calm", turning: 0, pace: 0 });
   c.min = c.max = c.x;
   Object.assign(g.player, { x: c.x - 34, y: c.floor - M.GUARD.h - 112, vy: 100, grounded: false, jumpHeld: true, jumps: 1, grace: 0 });
   let top = Infinity,
@@ -399,7 +398,7 @@ test("1-2: nothing 7+ tiles up is reachable without a stomp; stomp + air jump re
   assert.ok(c.floor - top > 8 * T + 16, `stomp + air jump ${(c.floor - top).toFixed(1)} px`);
 });
 test("1-2: the green card can't be skipped: every walk, run, jump and double jump off the run-up lands on its back", () => {
-  const edge = 118 * T; // the run-up's end
+  const edge = 130 * T; // the run-up's end
   let tries = 0;
   for (let jumpAt = edge - 220; jumpAt <= edge + 10; jumpAt += 10)
     for (const air of [false, true]) {
@@ -893,7 +892,8 @@ test("every card has a job, proved on the routes; cards that did no work are gon
   const ids = (id) => getLevel(id).guards.map((c) => c.id);
   for (const [id, gone] of [["1-2", ["chain-a", "chain-b"]], ["1-3", ["corridor-a", "floor"]], ["1-4", ["island"]], ["1-6", ["burst-a", "burst-b"]]])
     for (const card of gone) assert.ok(!ids(id).includes(card), `${id} ${card}`);
-  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 29);
+  // v1.0: 1-2 went from 7 cards to 5 (teach, dip, turner, isle, glow).
+  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 27);
 });
 test("no stacked cards: two cards on one floor keep 2+ tiles between their bodies, unless a declared pair", () => {
   for (const level of LEVELS)

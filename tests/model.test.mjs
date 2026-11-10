@@ -971,7 +971,7 @@ test("forgiving input: coyote time, buffered landing jump, variable height, same
   const tap = noCards(fresh("1-1"));
   place(tap, 64 * T, 14 * T);
   ticks(tap, 1, { jump: true, jumpReleased: true });
-  assert.ok(tap.player.vy < 0 && tap.player.vy > -(M.WORLD.jump * 0.5 + 1));
+  assert.ok(tap.player.vy < 0 && tap.player.vy > -(M.WORLD.jump * M.WORLD.jumpCut + 1));
 });
 
 // ------------------------------------------------------ movement feel ----
@@ -1053,7 +1053,7 @@ test("movement: falls are firmer than rises (x1.15 gravity past the apex), cappe
   }
   assert.equal(fastest, M.WORLD.maxFall);
 });
-test("movement: coyote time is 0.1 s and the jump buffer 0.12 s, to the tick", () => {
+test("movement: coyote time is 0.12 s (from the feet leaving) and the jump buffer 0.12 s, to the tick", () => {
   const coyote = (late) => {
     const g = noCards(fresh("1-1"));
     place(g, 12 * T - 30, 12 * T, { vx: 330 }); // running off the home cliff's edge
@@ -1063,13 +1063,14 @@ test("movement: coyote time is 0.1 s and the jump buffer 0.12 s, to the tick", (
     ticks(g, 1, { right: true, jump: true });
     return g.player.vy < -400;
   };
-  assert.equal(coyote(Math.round(0.08 * 120)), true, "a jump 0.08 s after the edge still works");
-  assert.equal(coyote(Math.round(0.11 * 120)), false, "0.11 s is too late");
+  assert.equal(coyote(13), true, "a jump on the 14th airborne tick (0.117 s after the feet leave) still works");
+  assert.equal(coyote(14), false, "the 15th (0.125 s) is too late");
   const buffer = (early) => {
     const g = flat();
     g.player.y -= 120;
     g.player.grounded = false;
     g.player.airJumped = true;
+    g.player.coyote = 0; // a fall, not a walk-off: only the buffer is under test
     g.player.vy = 300;
     // Press `early` seconds before touching down.
     let ticksToLand = 0;

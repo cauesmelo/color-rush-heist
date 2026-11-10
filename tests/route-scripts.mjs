@@ -1,6 +1,8 @@
 /** Planner scripts for every level's QA routes (see tests/route-planner.mjs).
  * Coordinates are world px (tile * 32); comments name the beat being played.
  * baseline = the guided main line; mastery = all three stickers. */
+import * as M from "../model.mjs";
+
 const T = 32;
 const tx = (tiles) => tiles * T;
 
@@ -95,16 +97,21 @@ export const SCRIPTS = {
       pl.jump().land(); // sticker 1 on the step
       pl.left().to(tx(19) + 8); // back out to the glade
       // Sticker 2: white up the slab, the canopy roof, green past the roof card.
-      pl.right().press({ color: "white", jump: true }).airJump();
-      pl.until((p) => p.p.grounded && p.feet <= tx(12) + 1, { right: true }, 240, "slab");
+      pl.right().press({ color: "white", jump: true }).airJump().landAt(tx(23));
+      pl.check(Math.abs(pl.feet - tx(12)) < 1, "slab");
       jumpAt(pl, tx(24) + 8).land(); // onto the canopy roof (2 up)
       pl.color("green").to(tx(47));
       pl.stop().wait(0.12).right().press({ color: "white", jump: true }).airJump().land();
       pl.check(pl.g.stickers[1].collected, "roof sticker");
-      pl.color("green").to(tx(61) + 8).land(); // off the roof's end
-      pl.to(tx(63) + 8);
-      pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
-      pl.until((p) => p.feet <= tx(12) + 1 && p.p.grounded, { right: true }, 240, "on the wall");
+      // Off the roof's end: the drop carries onto the 4-tile wall's top (its lip
+      // is caught), so the white climb is only needed when it falls short.
+      pl.color("green").to(tx(61) + 8).land();
+      if (pl.feet > tx(12) + 1) {
+        pl.to(tx(63) + 8);
+        pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
+        pl.until((p) => p.feet <= tx(12) + 1 && p.p.grounded, { right: true }, 240, "on the wall");
+      }
+      pl.check(Math.abs(pl.feet - tx(12)) < 1 && pl.p.color === "green", "on the wall, green");
       pl.to(tx(84)).land();
       pl.to(tx(95) + 24).press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
       // Sticker 3: green jump up through the alcove card, white air jump at the apex.
@@ -192,9 +199,9 @@ export const SCRIPTS = {
       pl.check(pl.guard("enforcer").state === "stunned", "enforcer stomped");
       pl.until((p) => p.p.grounded, (p) => (p.cx < tx(80) ? { right: true } : {}), 240, "past the enforcer");
       // Crossing cones: green for the green patrol; stomp the red sentry from
-      // behind once it faces away.
-      pl.right();
-      jumpAt(pl, tx(82) + 8).land();
+      // behind once it faces away. Off the perch's end onto the checkpoint block.
+      pl.right().to(tx(83) + 16).land();
+      pl.check(Math.abs(pl.feet - tx(14)) < 1, "on the block");
       pl.to(tx(85)).stop();
       pl.until((p) => p.guard("cross-red").dir === 1 && p.guard("cross-red").turning <= 0, {}, 900, "red away");
       pl.right().to(pl.guard("cross-red").x - 230).jump().steerTo((p) => p.guard("cross-red").x - 10);
@@ -333,21 +340,23 @@ function heistEscape(pl, { roof = false, alcove = false } = {}) {
     (f) => f.guard("landing").state === "stunned" && f.g.deaths === deaths,
     "landing knock",
   );
-  // The crossing back: jump, dash, the orb, dash; then either a bounce off the
-  // escape-only island card (its stomp refills the dash) or a landing on the
-  // island; either way jump/dash up to the ledge.
-  pl.to(tx(85) + 8).jump().apex().dash();
-  // The island card faces the incoming Rubik (spear up: no stomp). Land on
-  // the island clear of it, then a red ground dash knocks it aside (refund)
-  // and a jump + dash from the lip reaches the ledge. A few second-dash
-  // timings are tried; the first that reaches the ledge is kept.
+  // The crossing back: jump, dash, the orb, dash, onto the 4-tile island.
+  // The island card faces the incoming Rubik (spear up: no stomp) and
+  // patrols the island, so the landing is timed: wait on the bank, then fly
+  // and hold toward the island until the feet are over it (a lip caught by
+  // the box edge alone is scrambled onto while moving toward it). Green walks
+  // through the card; red knocks it aside with a ground dash (refund). Then a
+  // jump + dash from the lip reaches the ledge. The first option that reaches
+  // the ledge unseen and alive is kept.
   spotted = pl.g.spotted;
+  const island = tx(67); // the island's right edge
   pl.choose(
-    [0, 40, 80, 120, 160, 200, 240, 280].flatMap((vy) => [true, false].map((green) => [vy, green])).map(([vy, green]) => (f) => {
+    [0, 0.3, 0.6, 0.9, 1.2, 1.5].flatMap((wait) => [0, 120, 240].flatMap((vy) => [true, false].map((green) => [wait, vy, green]))).map(([wait, vy, green]) => (f) => {
+      f.stop().wait(wait).left().to(tx(85) + 8).jump().apex().dash();
       f.until((p) => p.p.dashCharge > 0 && p.p.dashTime <= 0 && p.p.vy >= vy, f.dir, 160, "orb").dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash");
       if (green) f.color("green"); // green lands unseen and walks through it
-      f.until((p) => p.p.grounded || p.g.phase !== "playing", {}, 240, "island");
+      f.until((p) => p.p.grounded || p.g.phase !== "playing", (p) => (p.cx - M.PLAYER.foot > island - 4 ? { left: true } : {}), 240, "island");
       if (!green && f.guard("ambush").state !== "stunned") {
         f.until((p) => p.p.dashCooldown <= 0, {}, 60, "cooldown").left().dash();
         f.until((p) => p.p.dashTime <= 0, f.dir, 60, "knock");
@@ -477,3 +486,64 @@ function orbCrossing(pl, lip, floor, label) {
     label,
   );
 }
+
+/** Expert lines for the skill-gradient audit (tests/movement-audit.test.mjs,
+ * D2). Not QA fixtures and not required to finish anything: the same goal by
+ * optional technique. 1-4: a dash-jump off every lip (a ground dash with a
+ * jump during it keeps 560 px/s) and the air dash at its apex; 1-6: the
+ * guided heist, then home over the roof gates (jump + red dash through the
+ * stacked gate, run the roof, dash the mid gate) instead of the corridor. */
+export const EXPERT = {
+  "1-4"(pl) {
+    const dashEnd = () => pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash end");
+    const groundDash = () => pl.until((p) => p.p.dashCooldown <= 0 && p.p.grounded && p.g.hitstop <= 0, pl.dir, 60, "cooldown").dash();
+    const dashJumpAt = (lip) => {
+      pl.to(lip - 60);
+      groundDash();
+      pl.wait(0.06).jump();
+    };
+    const gap = (lip, label) => {
+      dashJumpAt(lip);
+      pl.apex().dash();
+      dashEnd().land();
+      pl.check(Math.abs(pl.feet - tx(16)) < 1, label);
+    };
+    pl.right().to(tx(7) + 4).jump();
+    pl.until((p) => p.g.dashUnlocked).settle().land();
+    gap(tx(19) + 26, "Gap A");
+    gap(tx(37) + 26, "develop 12");
+    gap(tx(55) + 26, "develop 14");
+    dashJumpAt(tx(75) + 26);
+    pl.apex().dash();
+    pl.choose(
+      [150, 100, 200, 60, 250].map((vy) => (f) => {
+        f.until((p) => p.p.dashCharge > 0 && p.p.dashTime <= 0 && p.p.vy > vy, f.dir, 120, "orb").dash();
+        f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash").land();
+      }),
+      (f) => f.g.deaths === 0 && Math.abs(f.feet - tx(16)) < 1,
+      "twist orb",
+    );
+    dashJumpAt(tx(101) + 24);
+    pl.apex().dash();
+    dashEnd().steerTo((p) => p.guard("pillar").x - 6);
+    pl.check(pl.guard("pillar").state === "stunned", "pillar stomped");
+    pl.settle().apex().dash();
+    dashEnd().landAt(tx(123) + 16);
+    pl.right().to(tx(125) + 26).jump().apex().dash();
+    pl.steerTo((p) => p.guard("chain").x - 6);
+    pl.check(pl.guard("chain").state === "stunned", "chain stomped");
+    pl.right().settle().apex().dash();
+    dashEnd().dash();
+    // Onto the island beside its patrol, not on its head (a bounce costs ~1 s).
+    const stomps = pl.g.stomps;
+    pl.choose(
+      [150, 151, 149, 148, 147, 146, 145].map((target) => (f) => f.landAt(tx(target)).right().to(tx(151))),
+      (f) => f.g.phase === "won" && f.g.stomps === stomps,
+      "island",
+    );
+  },
+  "1-6"(pl) {
+    heistInbound(pl);
+    heistEscape(pl, { roof: true });
+  },
+};

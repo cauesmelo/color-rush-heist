@@ -28,33 +28,47 @@ export const WORLD = Object.freeze({
   viewportWidth: 960,
   viewportHeight: 540,
   // ---- Movement feel (crisp, readable, expressive; tests pin every number) --
-  // Vertical: rise under 1180 px/s^2, fall 15% harder once past the apex band
-  // (a firm, predictable landing), and a held jump floats at its peak.
+  // MOVEMENT_AUDIT.md measures each against common/docs/MOVEMENT_CRITERIA.md.
+  // Vertical: rise under 1180 px/s^2, fall 30% harder once past the apex band
+  // (an asymmetric arc: the landing reads firm and quick), and a held jump
+  // floats at its peak. Rise gravity sets every height (93 / 175 / 195 px);
+  // the fall factor only shortens the descent, so no gating height moves.
   gravity: 1180, // px/s^2 while rising
-  fallGravity: 1.15, // x gravity once vy > apexBand: falls read quicker than rises
+  fallGravity: 1.3, // x gravity once vy > apexBand (rubric band 1.3-2.2)
   maxFall: 760, // px/s; 6.3 px per 120 Hz tick, far below a 32 px tile
   jump: 470, // px/s -> 93 px apex with the apex hang (2 tiles safe, never 3)
   airJump: 0.94, // white's air jump: +83 px (175 px in all), so 4-tile ledges need it
   apexBand: 60, // |vy| below this while jump is held: half gravity (the apex hang)
-  jumpCut: 0.5, // releasing jump while rising halves vy: a tap is a ~25-45 px hop
+  jumpCut: 0.6, // releasing jump while rising keeps 60% of vy: a tap is a 34 px hop
+  // (0.36 of the 93 px held jump: a hop clears one tile, a hold two)
   // Horizontal: snappy starts and stops, a near-instant turnaround on the
-  // ground, full air control (precision first) with a little drift on release.
+  // ground, strong air control (precision first) with a little drift on release.
   speed: 330, // px/s run speed
-  acceleration: 2600, // 0 -> 330 in 0.13 s
+  acceleration: 3300, // 0 -> 330 in 0.10 s (12 ticks)
   braking: 3300, // no input on the ground: 330 -> 0 in 0.10 s
-  turn: 6000, // input against motion on the ground: momentum gone in 0.055 s, so a
-  // full 330 -> -330 turnaround takes 0.18 s (then the normal 0.13 s start)
-  airAcceleration: 2600, // same as the ground: the arc is the player's to steer
-  airTurn: 4200, // reversing mid-air: 0.16 s
+  turn: 8000, // input against motion on the ground: momentum gone in 0.042 s, so a
+  // full 330 -> -330 turnaround takes 0.142 s (rubric: <= 0.15 s)
+  airAcceleration: 2600, // 79% of the ground's: the arc is the player's to steer
+  airTurn: 4200, // reversing mid-air: 0.21 s, never an instant flip
   airBraking: 3000, // letting go mid-air drifts ~18 px before stopping (precise stomps)
   // Forgiveness windows.
-  coyote: 0.1, // s: a ground jump still works for 11 ticks (~92 ms) after leaving a ledge
+  coyote: 0.12, // s: a ground jump still works for 14 ticks (117 ms) after the FEET leave
+  // a ledge. Support is the feet's span (PLAYER.foot), 9 px inside each box
+  // edge, so this is the old 11-tick window counted from the box leaving
+  // plus the 3 ticks a run takes to clear those 9 px: the same takeoff point.
   jumpBuffer: 0.12, // s a jump press waits for the ground (kept alive through an air dash)
   dashBuffer: 0.1, // a dash pressed during hit-stop or a dash's last frames still fires
   cornerCorrection: 6, // px: rising into a ceiling corner by <= 6 px slides around it
   ledgeAssist: 12, // px: hitting a lip with the feet <= 12 px below its top steps onto it.
   // 12 < 32 (one tile), so it never creates a climb: 93 + 12 < 128 and 175 + 12 < 192
   // keep every white-only and bounce-only height in the maps out of reach.
+  // Lip rest: the box's edge is on a lip but the feet are over the air. Moving
+  // toward the lip scrambles onto it (at least this fast); otherwise Rubik
+  // slips off (at least this fast). Either way it lasts <= 9 px (4 ticks), so
+  // he never stands on the air beside a ledge.
+  scramble: 300, // px/s
+  slip: 360, // px/s
+  stompGrace: 0.05, // s after the stomp freeze in which a jump press still makes the high bounce
   // Dash: horizontal only (left/right/facing), so gap rules stay exact and readable.
   dashSpeed: 850,
   dashDuration: 0.17, // 145 px burst, gravity-free
@@ -84,10 +98,19 @@ export const WORLD = Object.freeze({
   goalReach: 220, // px above a goal face's floor that still touches it
 });
 
-export const PLAYER = Object.freeze({ w: 40, h: 52 });
+/** Rubik's collider. The box (40 x 52) handles walls, ceilings, cards, cones,
+ * spears and pickups: it sits inside the drawn 56 px cube, so the hurtbox is
+ * never larger than the body. Support (standing, landing, walking off) uses
+ * only the feet: `foot` px either side of the centre. The drawn legs span
+ * -9..+13 px (facing right) in the standing and landing frames, so +-11 px is
+ * within 2 px of the drawn feet (rubric C1; tests read the sprite sheets). */
+export const PLAYER = Object.freeze({ w: 40, h: 52, foot: 11 });
 
-/** Card body at 2x: the drawn card is ~24 px wide and 42 px from its top edge
- * to its feet in the 86x67 source frame. Timings from RESEARCH.md M2. */
+/** Card body: the drawn card is 64 px wide and ~86 px tall at 2x (the sheets
+ * read in tests/movement-audit.test.mjs, C2); the 48 x 84 body sits 8 px
+ * inside each drawn side - a generous shrink, since body contact only ever
+ * knocks Rubik back. The stomp head is 10 px wider each side (68 px: 2 px past
+ * the drawing). Timings from RESEARCH.md M2. */
 export const GUARD = Object.freeze({
   w: 48,
   h: 84,
@@ -102,9 +125,11 @@ export const GUARD = Object.freeze({
   lungeDistance: 128, // 4 tiles
   recover: 0.7, // frames 7-9: stompable opening
   stun: 3,
-  spearReach: 66, // px beyond the body edge (lunge frame spear tip at 2x)
-  spearLow: 30, // spear band, px above the card's floor: jumpable
-  spearHigh: 70,
+  spearReach: 66, // px beyond the body edge: 8-12 px short of the drawn tip (generous)
+  // Spear band, px above the card's floor = the drawn spear head in the lunge
+  // frames (green sheet: 50-68 px, red sheet: 46-64 px). Rubik (52 px tall)
+  // can never pass under it, so only the top edge decides a jump over it.
+  spearBand: Object.freeze({ green: Object.freeze([50, 68]), red: Object.freeze([46, 64]) }),
   lungeRange: 150, // start a windup when Rubik is this close in front
   bumpReaction: 0.6, // s a bumped card stands, "!" up, before it may attack
   notice: 0.45, // s a card stands on "!" before charging: time to back off or go green
@@ -212,6 +237,8 @@ function makePlayer(x, floor, color, direction) {
     dashDirection: direction,
     dashAir: false,
     carry: 0, // 1 while a dash-jump's extra speed is bleeding off
+    corner: 0, // lip rest: side of the lip (-1 left, 1 right) the box sits on, feet over the air
+    bounce: 0, // s left in which a jump press turns a short stomp hop into the high bounce
     // Keys held through a death are ignored after the respawn until they are
     // let go and pressed again (no run straight back into the water).
     heldLock: { left: false, right: false },
@@ -506,15 +533,28 @@ function moveX(g, dx) {
     if (stone && !stone.broken && p.color === "red" && p.dashTime > 0) smash(g, stone);
     if (blocked(g, col, row)) {
       if (row === bottom && ledgeAssist(g, row)) return false;
+      if (row === top && dashCorner(g, row)) return false;
       p.x = dx > 0 ? col * TILE - p.w : (col + 1) * TILE;
       return true;
     }
   }
   return false;
 }
+/** Dash corner correction (the horizontal twin of the ceiling one): a dash
+ * whose head clips the underside of a lip by <= 6 px slides under it instead
+ * of stopping dead. Dashes only: they are gravity-free and committed. */
+function dashCorner(g, row) {
+  const p = g.player,
+    clip = (row + 1) * TILE - p.y;
+  if (p.dashTime <= 0 || clip <= 0 || clip > WORLD.cornerCorrection) return false;
+  if (!boxFree(g, p.x, p.y + clip, p.w, p.h)) return false;
+  p.y += clip;
+  return true;
+}
 /** Ledge assist: airborne (not rising fast) or dashing, Rubik meets a lip
  * with only his feet below its top - by at most 12 px - and room above it:
- * he steps onto it instead of sliding down the face ("visually made it"). */
+ * he steps up onto its corner instead of sliding down the face ("visually
+ * made it"); the lip rest then scrambles his feet onto it (moving toward it). */
 function ledgeAssist(g, row) {
   const p = g.player,
     lift = p.y + p.h - row * TILE;
@@ -543,13 +583,18 @@ function moveY(g, dy, prevBottom) {
   const left = Math.floor(p.x / TILE),
     right = Math.floor((p.x + p.w - 0.001) / TILE);
   if (dy > 0) {
-    const row = Math.floor((p.y + p.h - 0.001) / TILE);
-    for (let col = left; col <= right; col++)
-      if (blocked(g, col, row) || (tileChar(g, col, row) === "=" && prevBottom <= row * TILE + 0.5)) {
-        p.y = row * TILE - p.h;
-        return "floor";
-      }
-    return null;
+    const row = Math.floor((p.y + p.h - 0.001) / TILE),
+      s = support(g, row, (col) => tileChar(g, col, row) === "=" && prevBottom <= row * TILE + 0.5);
+    if (!s.feet && !s.left && !s.right) return null;
+    p.y = row * TILE - p.h;
+    if (s.feet || (s.left && s.right)) return "floor";
+    // Only the box's edge met a solid lip; the feet are over the air. Rest
+    // on it this tick (no sinking into the tile) and scramble or slip next.
+    // Touching the lip ends the jump's arc (no apex float on the way down),
+    // but it is not a landing: nothing is refreshed until the feet stand.
+    p.corner = s.left ? -1 : 1;
+    p.jumps = 0;
+    return "corner";
   }
   const row = Math.floor(p.y / TILE),
     hits = [];
@@ -567,17 +612,32 @@ function moveY(g, dy, prevBottom) {
   return "ceiling";
 }
 
+/** What holds Rubik up in tile row `row`: `feet` = a solid (or `slab(col)`)
+ * tile under the feet's span; `left` / `right` = a solid tile under only the
+ * box's edge on that side. A box spanning a gap narrower than itself on both
+ * sides (a 1-tile hole) stands, as it always did. */
+function support(g, row, slab) {
+  const p = g.player,
+    cx = p.x + p.w / 2,
+    f0 = Math.floor((cx - PLAYER.foot) / TILE),
+    f1 = Math.floor((cx + PLAYER.foot - 0.001) / TILE),
+    out = { feet: false, left: false, right: false };
+  for (let col = Math.floor(p.x / TILE); col <= Math.floor((p.x + p.w - 0.001) / TILE); col++) {
+    if (col >= f0 && col <= f1) out.feet ||= blocked(g, col, row) || slab(col);
+    else if (blocked(g, col, row)) out[col < f0 ? "left" : "right"] = true;
+  }
+  return out;
+}
 function onGround(g) {
   const p = g.player,
     feet = p.y + p.h,
     row = Math.round(feet / TILE);
   if (Math.abs(feet - row * TILE) > 0.5) return false;
-  for (let col = Math.floor(p.x / TILE); col <= Math.floor((p.x + p.w - 0.001) / TILE); col++)
-    // A one-way slab only supports a Rubik who isn't rising: jumping up
-    // through one used to count as "grounded" for a tick whenever the feet
-    // crossed its top exactly, silently refreshing the air jump and dash.
-    if (blocked(g, col, row) || (tileChar(g, col, row) === "=" && p.vy >= 0)) return true;
-  return false;
+  // A one-way slab only supports a Rubik who isn't rising: jumping up
+  // through one used to count as "grounded" for a tick whenever the feet
+  // crossed its top exactly, silently refreshing the air jump and dash.
+  const s = support(g, row, (col) => tileChar(g, col, row) === "=" && p.vy >= 0);
+  return s.feet || (s.left && s.right);
 }
 
 export const guardBox = (guard) => ({
@@ -587,12 +647,13 @@ export const guardBox = (guard) => ({
   h: GUARD.h,
 });
 export function spearBox(guard) {
-  const front = guard.x + guard.dir * (GUARD.w / 2);
+  const front = guard.x + guard.dir * (GUARD.w / 2),
+    [low, high] = GUARD.spearBand[guard.kind] || GUARD.spearBand.green;
   return {
     x: guard.dir > 0 ? front : front - GUARD.spearReach,
-    y: guard.floor - GUARD.spearHigh,
+    y: guard.floor - high,
     w: GUARD.spearReach,
-    h: GUARD.spearHigh - GUARD.spearLow,
+    h: high - low,
   };
 }
 /** World x-range [x0, x0 + 2) of cone column c (2x source column). */
@@ -810,11 +871,13 @@ function updateGuard(g, guard, dt) {
 
 function stomp(g, guard) {
   const p = g.player;
-  // Hold jump (or press it as you land) for the high bounce; otherwise a hop.
+  // Hold jump (or press it as you land: up to 0.12 s before, or during the
+  // freeze and 0.05 s after) for the high bounce; otherwise a hop.
   const high = p.jumpHeld || p.jumpBuffer > 0;
   p.vy = -(high ? WORLD.stompBounce : WORLD.stompBounceLow);
   p.jumpHeld = high;
   p.jumpBuffer = 0;
+  p.bounce = high ? 0 : WORLD.hitstop.stomp + WORLD.stompGrace;
   p.jumps = 1;
   p.airJumped = false; // a bounce refreshes white's air jump
   p.rising = false;
@@ -1165,18 +1228,36 @@ export function update(g, dt, input = {}) {
   const p = g.player;
   // Input edges are latched even during hit-stop so a press is never lost.
   if (input.jump) {
-    p.jumpBuffer = WORLD.jumpBuffer;
-    p.jumpCutQueued = false;
-    p.jumpHeld = true;
+    if (p.bounce > 0 && p.vy < 0) {
+      // Pressed in the stomp freeze or just after it: that IS "pressing as
+      // you land", so it makes the high bounce (and is used up), instead of
+      // spending white's air jump on a lower arc.
+      p.vy -= WORLD.stompBounce - WORLD.stompBounceLow;
+      p.bounce = 0;
+      p.jumpHeld = true;
+    } else {
+      p.jumpBuffer = WORLD.jumpBuffer;
+      p.jumpCutQueued = false;
+      p.jumpHeld = true;
+    }
   }
   if (input.jumpReleased) {
     p.jumpHeld = false;
     if (p.jumpBuffer > 0) p.jumpCutQueued = true;
-    else if (p.vy < 0 && p.rising) p.vy *= WORLD.jumpCut;
+    else if (p.vy < 0 && p.rising) {
+      p.vy *= WORLD.jumpCut;
+      p.rising = false; // one cut per jump: a second release (two jump keys) can't cut again
+    }
   }
   if (input.dash) p.dashBuffer = WORLD.dashBuffer;
   if (g.hitstop > 0) {
     g.hitstop = tick(g.hitstop, dt);
+    // Buffers age in real time through a freeze: a press made in the last
+    // 0.12 s (jump) / 0.1 s (dash) still fires when the world resumes, but
+    // one made at the start of the 1.2 s GET card does not fire long after.
+    p.jumpBuffer = tick(p.jumpBuffer, dt);
+    p.dashBuffer = tick(p.dashBuffer, dt);
+    p.bounce = tick(p.bounce, dt);
     if (input.color) switchColor(g, input.color);
     return;
   }
@@ -1187,6 +1268,7 @@ export function update(g, dt, input = {}) {
   p.dashCooldown = tick(p.dashCooldown, dt);
   if (!(p.dashTime > 0 && p.dashAir)) p.jumpBuffer = tick(p.jumpBuffer, dt);
   p.knock = tick(p.knock, dt);
+  p.bounce = tick(p.bounce, dt);
   g.calm = tick(g.calm, dt);
   p.landed = tick(p.landed, dt);
   if (!p.grounded) p.coyote = tick(p.coyote, dt);
@@ -1222,7 +1304,15 @@ export function update(g, dt, input = {}) {
     p.vy = Math.min(WORLD.maxFall, p.vy + WORLD.gravity * (apex ? 0.5 : p.vy > WORLD.apexBand ? WORLD.fallGravity : 1) * dt);
   }
   if (p.vy >= 0) p.rising = false;
-  if (moveX(g, p.vx * dt)) {
+  let dx = p.vx * dt;
+  if (p.corner && p.dashTime <= 0) {
+    // Lip rest (last tick's moveY): moving toward the lip scrambles onto it,
+    // anything else slips off it; both clear the 9 px in <= 4 ticks.
+    const toward = p.corner;
+    dx = p.vx * toward > 0 ? toward * Math.max(Math.abs(p.vx), WORLD.scramble) * dt : -toward * Math.max(-p.vx * toward, WORLD.slip) * dt;
+  }
+  p.corner = 0;
+  if (moveX(g, dx)) {
     p.vx = 0;
     if (p.dashTime > 0) p.dashTime = 0;
   }

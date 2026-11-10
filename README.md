@@ -89,7 +89,9 @@ declared pair). `LEVEL_DESIGN.md` lists each card's safe and expert line.
    (0.15 s each, with a sound; faint = owned from an earlier run), stamps where the
    level awards them, stacked in one column: "Ghost" (never spotted) on the stealth
    levels 1-3, 1-5 and 1-6, "Takedown" (every card stomped or knocked, with this run's
-   tally and the best saved) on 1-5 and 1-6, "Quick" on 1-6. "1-x is open!" on a first clear. **Continue** (default) or **Retry**; arrow
+   tally and the best saved) on 1-5 and 1-6, "Quick" on 1-6, "Chain" (a stomp chain of
+   at least the level's `chainPar`, with this run's chain and the best saved) on 1-2.
+   The rows also show hearts lost and the best stomp chain. "1-x is open!" on a first clear. **Continue** (default) or **Retry**; arrow
    keys move between them.
 8. **World map:** a 960×540 side view from `bg1-sky` over `bg1`, regaining 12% color
    per cleared level and full color after 1-6. A slab-cell path (atlas row 0, cells
@@ -339,7 +341,9 @@ own kit), `openMap(id?)`, `resetSave()`, `campaign` (the `campaign.mjs` module).
 `settings`, `motion {reduced, source}`, `effects {shake, flash, particles, squash, iris}`, `audio {musicDecoded, musicPlaying, musicRate, context}` and `player {x, y,
 color, jumps, grounded, vy, dashTime, dashCooldown, dashCharge, …}`. New fields:
 `levelId`, `level {id, name, idea, kit, gets, par, cols}`, `dashUnlocked`, `gets`,
-`doorCue` (1-6: the sealed-door cue is drawn),
+`doorCue` (1-6: the sealed-door cue is drawn), `hp`, `maxHp`, `invuln`, `chain`,
+`chainBest`, `hits`, `falls` (combat; each guard also carries `type` and `defeatT`),
+`hud {hearts, heartFx, popups, edge}` (what the hearts row and the hit edge show),
 `bounces`, `dashes`, `calm`, `intro`, `getCard`, `map {cursor, id, walking, revealing,
 menuOpen}`, `campaign {levels, unlocked, stickerTotal, totalStickers, worldClear,
 worldMedals, forestColor}`, `save`, `result` (the last tally), `simClock` (the

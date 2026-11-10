@@ -859,7 +859,9 @@ test("E1-E2: every movement action has a sound and a visual; resources are drawn
   const src = readFileSync(path.join(demo, "game.mjs"), "utf8"),
     sounds = src.slice(src.indexOf("const SOUNDS = {"), src.indexOf("function play(name)")),
     handlers = src.slice(src.indexOf("function handleEvents()"), src.indexOf("function updateFx("));
-  const actions = ["jump", "airjump", "dashjump", "land", "dash", "stomp", "bounce", "spike", "bump", "swap", "refill", "knock", "smash"];
+  // Movement and combat events (the combat redesign retired "spike"; hurt,
+  // heal, fall, the enemy telegraph/strike and the stomp's outcomes joined).
+  const actions = ["jump", "airjump", "dashjump", "land", "dash", "stomp", "bounce", "bump", "swap", "refill", "knock", "smash", "hurt", "heal", "fall", "defeat", "daze", "chain", "windup", "strike", "bonk"];
   for (const type of actions) {
     assert.match(sounds, new RegExp(`\\n  ${type}: \\[\\[`), `${type}: a sound`);
     assert.match(handlers, new RegExp(`case "${type}":`), `${type}: a visual`);
@@ -868,7 +870,7 @@ test("E1-E2: every movement action has a sound and a visual; resources are drawn
   // Flash sheets, white's unspent air jump = two pips under the feet.
   assert.match(src, /key = p\.color \+ "Dim"/);
   assert.match(src, /p\.color === "white" && !p\.grounded && !p\.airJumped/);
-  report(t, "E1/E2", `${actions.length} movement events with a sound and a visual; form, dash and air jump drawn on Rubik`);
+  report(t, "E1/E2", `${actions.length} movement and combat events with a sound and a visual; form, dash and air jump drawn on Rubik`);
 });
 
 // ======================================================= F. CRH specifics

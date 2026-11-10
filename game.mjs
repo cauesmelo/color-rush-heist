@@ -258,7 +258,11 @@ let LV = getLevel(save.last) || LEVELS[0],
 const cam = { x: 0, y: 164, shake: 0, look: 80 };
 /** Canvas px hidden at each side by the portrait play crop (HUD pulls in). */
 let hudInset = 0;
-const fx = { vaultOpen: 0, particles: [], flash: 0, flashColor: "#fff", reverse: -1, iris: 0, irisDir: 0, intro: null, get: null, refill: 0, swirl: null, clear: 0, chipDeal: {}, locked: 0, death: null, goal: 0, goalColor: null, result: null };
+const fx = { vaultOpen: 0, particles: [], flash: 0, flashColor: "#fff", reverse: -1, iris: 0, irisDir: 0, intro: null, get: null, refill: 0, swirl: null, clear: 0, chipDeal: {}, locked: 0, death: null, goal: 0, goalColor: null, result: null, popups: [], hearts: [], hudShake: 0, hurtFlash: 0, edge: 0, shownHp: null };
+/** Dazed cards' ring: the longest daze timer seen since each card was last
+ * dazed (the model starts it at ENEMY.charger.daze or .wallDaze), so the ring
+ * empties from full whichever it was. Keyed by guard id. */
+const dazeMax = new Map();
 /** World-map state: the node Rubik stands on, his walk between nodes, the
  * chalk path that draws in after a new unlock. */
 const map = { cursor: 0, from: 0, walk: 1, reveal: null, prompt: 0 };
@@ -311,10 +315,26 @@ const SOUNDS = {
   sticker: [["square", 988, 988, 0.06, 0.05], ["square", 1319, 1319, 0.14, 0.05, 0.06]],
   suspect: [["sine", 500, 700, 0.12, 0.05]],
   spotted: [["square", 880, 880, 0.06, 0.06], ["square", 1175, 1175, 0.1, 0.06, 0.07]],
+  // Windups by type, so the ear knows what is coming before the eye does: the
+  // walker's rising saw, the charger's lower and longer one (its 0.8 s
+  // telegraph), the sentinel's metallic ticks (it never moves, it jabs).
   windup: [["sawtooth", 220, 330, 0.25, 0.03]],
+  windupCharger: [["sawtooth", 98, 196, 0.6, 0.045], ["noise", 300, 140, 0.5, 0.03, 0.05]],
+  windupSentinel: [["square", 1760, 1760, 0.02, 0.035], ["square", 1760, 1760, 0.02, 0.035, 0.14], ["triangle", 2640, 2093, 0.06, 0.03, 0.28]],
+  strike: [["noise", 2600, 500, 0.14, 0.06]],
+  hurt: [["square", 150, 55, 0.16, 0.1], ["triangle", 660, 165, 0.28, 0.06, 0.04]],
+  heal: [["triangle", 659, 659, 0.08, 0.06], ["triangle", 988, 988, 0.16, 0.06, 0.08]],
+  // The heart a 3-chain pays: the heal pair plus a little run on top.
+  healChain: [["square", 784, 784, 0.07, 0.05], ["square", 988, 988, 0.07, 0.05, 0.07], ["square", 1175, 1175, 0.07, 0.05, 0.14], ["triangle", 1568, 1568, 0.25, 0.06, 0.21]],
+  fall: [["noise", 1500, 180, 0.32, 0.1], ["triangle", 180, 70, 0.3, 0.07, 0.06]],
+  defeat: [["noise", 1300, 260, 0.2, 0.08], ["square", 420, 1260, 0.07, 0.05, 0.03]],
+  daze: [["sine", 620, 420, 0.12, 0.05], ["sine", 500, 740, 0.12, 0.05, 0.12], ["sine", 520, 330, 0.18, 0.05, 0.24]],
+  chain: [["square", 1568, 1568, 0.05, 0.03]],
+  bonk: [["triangle", 110, 60, 0.18, 0.1], ["square", 1400, 1100, 0.04, 0.03, 0.02]],
   bump: [["triangle", 160, 80, 0.12, 0.08]],
   smash: [["noise", 600, 120, 0.25, 0.1]],
-  knock: [["square", 300, 120, 0.12, 0.08]],
+  // Bigger than a stomp: a low punch under a noise crack.
+  knock: [["square", 320, 70, 0.18, 0.1], ["noise", 1000, 200, 0.2, 0.09]],
   theft: [["sawtooth", 196, 392, 0.5, 0.06], ["square", 523, 1046, 0.4, 0.05, 0.05]],
   get: [["square", 392, 392, 0.1, 0.05], ["square", 523, 523, 0.1, 0.05, 0.1], ["square", 659, 659, 0.1, 0.05, 0.2], ["square", 784, 784, 0.12, 0.05, 0.3], ["square", 1046, 1046, 0.35, 0.05, 0.42]],
   goal: [["triangle", 784, 784, 0.08, 0.06], ["triangle", 988, 988, 0.08, 0.06, 0.08], ["triangle", 1175, 1175, 0.22, 0.06, 0.16]],
@@ -325,12 +345,12 @@ const SOUNDS = {
   die: [["square", 440, 110, 0.35, 0.06]],
   win: [["square", 523, 523, 0.1, 0.06], ["square", 659, 659, 0.1, 0.06, 0.1], ["square", 784, 784, 0.1, 0.06, 0.2], ["square", 1046, 1046, 0.3, 0.06, 0.3]],
   locked: [["square", 110, 100, 0.12, 0.05]],
-  spike: [["square", 1400, 900, 0.05, 0.05], ["triangle", 220, 120, 0.12, 0.06, 0.02]],
   dashjump: [["noise", 1100, 400, 0.1, 0.05], ["square", 520, 820, 0.08, 0.04]],
   hint: [["sine", 660, 880, 0.08, 0.03]],
   ui: [["square", 700, 700, 0.03, 0.03]],
 };
-function play(name) {
+/** `pitch` scales every frequency of the cue (the stomp chain climbs). */
+function play(name, pitch = 1) {
   // Paused means silent (user request, rev 4): no new cues while paused, and
   // calling audioContext() here would otherwise resume the suspended context.
   if (!settings.sfx || !SOUNDS[name] || game.phase === "paused") return;
@@ -343,6 +363,8 @@ function play(name) {
     gain.gain.setValueAtTime(vol, t0);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     gain.connect(a.destination);
+    const a0 = f0 * pitch,
+      a1 = f1 * pitch;
     if (type === "noise") {
       const buffer = a.createBuffer(1, Math.ceil(a.sampleRate * dur), a.sampleRate),
         d = buffer.getChannelData(0);
@@ -351,15 +373,15 @@ function play(name) {
         filter = a.createBiquadFilter();
       src.buffer = buffer;
       filter.type = "bandpass";
-      filter.frequency.setValueAtTime(f0, t0);
-      filter.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+      filter.frequency.setValueAtTime(a0, t0);
+      filter.frequency.exponentialRampToValueAtTime(a1, t0 + dur);
       src.connect(filter).connect(gain);
       src.start(t0);
     } else {
       const osc = a.createOscillator();
       osc.type = type;
-      osc.frequency.setValueAtTime(f0, t0);
-      osc.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+      osc.frequency.setValueAtTime(a0, t0);
+      osc.frequency.exponentialRampToValueAtTime(a1, t0 + dur);
       osc.connect(gain);
       osc.start(t0);
       osc.stop(t0 + dur + 0.02);
@@ -518,6 +540,13 @@ function newGame() {
   fx.goal = 0;
   fx.goalColor = null;
   fx.result = null;
+  fx.popups = [];
+  fx.hearts = [];
+  fx.hudShake = 0;
+  fx.hurtFlash = 0;
+  fx.edge = 0;
+  fx.shownHp = game.player.hp;
+  dazeMax.clear();
   colorAmount = C.forestColor(save);
   snapCamera();
 }
@@ -903,7 +932,10 @@ function rememberHints() {
 function retryCheckpoint() {
   if (screen !== "play" || !["playing", "dead"].includes(game.phase)) return;
   // A retry is a respawn: the whole segment snapshot is restored, so it can't
-  // be used to farm anything; it simply isn't counted as a death.
+  // be used to farm anything; it simply isn't counted as a death. Pressed
+  // during a water fall's hop it is still a full retry (checkpoint, full
+  // hearts), not the fall's partial hop back.
+  if (game.deathKind === "fall") game.deathKind = "death";
   M.respawn(game);
   snapCamera();
 }
@@ -1094,7 +1126,7 @@ function recordWin() {
     collected = game.stickers.filter((x) => x.collected).map((x) => x.id),
     stamps = C.levelStamps(id);
   rememberHints();
-  save = C.recordClear(save, id, { time: game.finishTime, stickers: collected, spotted: game.spotted, takedowns: game.takedowns.length, cards: game.guards.length, escapeTime: game.escapeTime, color: game.player.color, assisted: game.assisted });
+  save = C.recordClear(save, id, { time: game.finishTime, stickers: collected, spotted: game.spotted, takedowns: game.takedowns.length, cards: game.guards.length, escapeTime: game.escapeTime, chain: game.medals?.chain ?? game.chainBest, color: game.player.color, assisted: game.assisted });
   persist();
   const after = C.levelRecord(save, id);
   fx.result = {
@@ -1109,6 +1141,9 @@ function recordWin() {
     unseen: stamps.unseen ? !game.assisted && game.spotted === 0 : null, // the Ghost stamp
     takedown: stamps.takedown ? { got: !game.assisted && !!game.medals?.takedown, n: game.takedowns.length, of: game.guards.length, best: after.takedownBest } : null,
     quick: stamps.quick ? !game.assisted && !!game.medals?.quickGetaway : null,
+    hits: game.medals?.hits ?? game.hits + game.falls, // hearts lost (cards and water)
+    chainN: game.medals?.chain ?? game.chainBest,
+    chain: stamps.chain ? { got: !game.assisted && (game.medals?.chain ?? 0) >= LV.chainPar, par: LV.chainPar, best: after.chainBest } : null,
     unlocked: C.unlockedIds(save).find((x) => !wasOpen.includes(x)) || null,
   };
 }
@@ -1117,12 +1152,43 @@ function squash(sx, sy, dur) {
   if (reducedMotion) return;
   fx.squash = { sx, sy, t: dur, dur };
 }
+/** Major pentatonic steps: a chained stomp climbs one per link (5 notes and
+ * the octave), so a long chain is heard as a run, never as a clash. */
+const PENTATONIC = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3, 2];
+const chainPitch = (n) => PENTATONIC[Math.max(0, Math.min(PENTATONIC.length - 1, (n || 1) - 1))];
+/** The cue for an event: most are the event's own name; windups differ by
+ * enemy type, stomps and chain pings climb with the chain, and the heart a
+ * chain pays gets its fanfare. */
+function cue(e) {
+  if (e.type === "windup") return play(e.etype === "charger" ? "windupCharger" : e.etype === "sentinel" ? "windupSentinel" : "windup");
+  if (e.type === "stomp") return play("stomp", chainPitch(e.chain));
+  if (e.type === "chain") return e.n >= 2 ? play("chain", chainPitch(e.n)) : undefined;
+  if (e.type === "heal") return play(e.source === "chain" ? "healChain" : "heal");
+  play(e.type);
+}
+const guardOf = (id) => game.guards.find((c) => c.id === id);
+/** A floating word in the pixel font at a world point ("x3", "+1"). It is
+ * information, so reduced motion keeps it (it only stops rising). */
+function popup(label, x, y, color = "#fbf9f2", opts = {}) {
+  fx.popups.push({ label, x, y, color, age: 0, life: opts.life ?? 0.8, size: opts.size ?? 32, heart: !!opts.heart });
+  if (fx.popups.length > 12) fx.popups.shift();
+}
+/** Paper confetti in a card's colour: small spinning rects (no new art). */
+function confetti(x, y, color, count = 16) {
+  if (reducedMotion) return;
+  for (let i = 0; i < count; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4,
+      sp = 160 + Math.random() * 220;
+    fx.particles.push({ x: x + (Math.random() - 0.5) * 30, y: y + (Math.random() - 0.5) * 40, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.7 + Math.random() * 0.4, age: 0, color: i % 3 === 0 ? "#fbf9f2" : color, size: 9, gravity: 700, spin: (Math.random() - 0.5) * 24, rot: Math.random() * 3 });
+  }
+}
+const heartsWord = (n) => `${n} heart${n === 1 ? "" : "s"}`;
 /** Consume new model events: sounds, particles, transitions. */
 function handleEvents() {
   for (const e of game.events) {
     if (e.id <= lastEventId) continue;
     lastEventId = e.id;
-    play(e.type);
+    cue(e);
     const p = game.player;
     switch (e.type) {
       case "jump":
@@ -1140,19 +1206,89 @@ function handleEvents() {
         dust(e.x, e.y, -game.player.dashDirection, 8);
         squash(1.2, 0.86, 0.12);
         break;
-      case "spike":
-        // The raised spear: a bright clink, Rubik popped away (no damage).
-        burst(e.x, e.y - 6, 8, "#fbf9f2", 140, 0.3, 3, 200);
-        squash(1.15, 0.88, 0.1);
-        break;
       case "dash":
         dust(e.x - e.direction * 16, p.y + p.h, -e.direction, 6);
         break;
-      case "stomp":
+      case "stomp": {
+        // The best feeling in the game: every link of a chain bursts more,
+        // squashes harder and shakes more (capped at a 4-chain, so a long
+        // chain never shakes the screen unreadable).
+        const n = Math.max(1, Math.min(4, e.chain || 1));
+        burst(e.x, e.y, 8 + n * 4, "#fff6c4", 140 + n * 25, 0.45);
+        burst(e.x, e.y, 2 + n * 2, "#1b1420", 110 + n * 20, 0.35, 3);
+        squash(0.86 - n * 0.03, 1.16 + n * 0.05, 0.14 + n * 0.015);
+        cam.shake = reducedMotion ? 0 : Math.max(cam.shake, 1 + n);
+        break;
+      }
       case "bounce":
         burst(e.x, e.y, 10, "#fff6c4", 150, 0.45);
         squash(0.84, 1.2, 0.14);
         cam.shake = reducedMotion ? 0 : Math.max(cam.shake, 1.5);
+        break;
+      case "chain":
+        // The "x2 / x3" beside the card just put down (stomps and knocks),
+        // 40 px aside so Rubik's bounce never rises through it.
+        if (e.n >= 2) popup(`x${e.n}`, e.x + 40, e.y - 24, e.n >= M.WORLD.chainHeal ? "#ffd84a" : "#fbf9f2", { size: 32 + Math.min(3, e.n - 2) * 8 });
+        break;
+      case "hurt":
+        // The hit: Rubik flashes white, the screen edges flash, a shake and a
+        // spray, and the knock pose / blink come from the model's timers.
+        fx.hurtFlash = reducedMotion ? 0 : 0.12;
+        fx.edge = reducedMotion ? 0 : 0.4;
+        cam.shake = reducedMotion ? 0 : Math.max(cam.shake, 5);
+        burst(e.x, e.y, 12, "#ffffff", 190, 0.4, 4, 500);
+        burst(e.x, e.y, 6, "#1b1420", 150, 0.35, 3, 500);
+        announce(e.hp > 0 ? `Hit! ${heartsWord(e.hp)} left.` : "Out of hearts!");
+        break;
+      case "heal":
+        popup("+1", e.x, e.y - 18, "#ffd84a", { heart: true, life: 1 });
+        burst(e.x, e.y, 10, "#ffd84a", 120, 0.5, 3, 80);
+        announce(`Heart back: ${e.hp} of ${M.WORLD.hearts}.`);
+        break;
+      case "fall":
+        // Splash: water spray at the surface Rubik went into.
+        burst(e.x, e.y + M.PLAYER.h, 16, "#cfe8ff", 240, 0.55, 4, 900);
+        burst(e.x, e.y + M.PLAYER.h, 6, "#6fa8d8", 160, 0.45, 5, 900);
+        cam.shake = reducedMotion ? 0 : Math.max(cam.shake, 3);
+        announce(`Splash! ${heartsWord(e.hp)} left.`);
+        break;
+      case "windup": {
+        // The windup is the committed telegraph: the card's own pose, bubble
+        // and strike strip are drawn from its state; this is the kick-off.
+        const c = guardOf(e.guard);
+        if (!c) break;
+        if (e.etype === "charger") dust(c.x - c.dir * 22, c.floor, -c.dir, 10);
+        else if (e.etype === "sentinel") burst(c.x + c.dir * 44, c.floor - 58, 5, "#fbf9f2", 70, 0.25, 3, 0);
+        else dust(c.x - c.dir * 18, c.floor, -c.dir, 4);
+        break;
+      }
+      case "strike": {
+        const c = guardOf(e.guard);
+        if (c) dust(c.x - c.dir * 18, c.floor, -c.dir, e.etype === "charger" ? 12 : 6);
+        break;
+      }
+      case "defeat": {
+        const c = guardOf(e.guard);
+        if (e.pad) {
+          // A springboard card flattens grey and stays.
+          burst(e.x, e.y + 30, 10, "#b9b4bf", 120, 0.4, 4, 300);
+          break;
+        }
+        confetti(e.x, e.y, COLORS[c?.kind] || COLORS.green, e.how === "knock" ? 22 : 16);
+        if (e.how !== "knock") cam.shake = reducedMotion ? 0 : Math.max(cam.shake, 2.5);
+        break;
+      }
+      case "daze":
+        dazeMax.set(e.guard, enemyOf(guardOf(e.guard) || { type: "charger" }).daze ?? M.ENEMY.charger.daze);
+        burst(e.x, e.y, 8, "#ffe066", 120, 0.4, 3, 100);
+        popup("dazed", e.x, e.y - 30, "#ffe066", { size: 16, life: 0.9 });
+        break;
+      case "bonk":
+        // A charge into its bound: the card stops dead and is dazed.
+        dazeMax.set(e.guard, M.ENEMY.charger.wallDaze);
+        dust(e.x, e.y + M.GUARD.h / 2, 0, 8);
+        burst(e.x, e.y, 6, "#ffe066", 110, 0.35, 3, 200);
+        cam.shake = reducedMotion ? 0 : Math.max(cam.shake, 2.5);
         break;
       case "drain":
         fx.swirl = { x: e.x, y: e.y, age: 0 };
@@ -1193,8 +1329,14 @@ function handleEvents() {
             fx.particles.push({ x: e.x + (Math.random() - 0.5) * 50, y: e.y + (Math.random() - 0.5) * 50, vx: (Math.random() - 0.5) * 420 + p.dashDirection * 160, vy: -Math.random() * 360, life: 0.9, age: 0, gravity: 1400, size: 16, debris: [128 + (i % 2) * 8, 32 + (i % 4 < 2 ? 0 : 8)] });
         break;
       case "knock":
-        burst(e.x, e.y, 12, "#ff7a5a", 200, 0.45);
-        cam.shake = reducedMotion ? 0 : 3;
+        // The dash-knock outranks a stomp: a bigger burst in the red dash's
+        // colour, a short red flash and the strongest shake short of the theft.
+        burst(e.x, e.y, 22, "#ff5a4a", 280, 0.5, 5);
+        burst(e.x, e.y, 8, "#ffffff", 200, 0.35, 4);
+        popup("KO!", e.x, e.y - 50, "#ff8a7a", { size: 32 });
+        cam.shake = reducedMotion ? 0 : Math.max(cam.shake, 6);
+        fx.flash = reducedMotion ? 0 : 0.14;
+        fx.flashColor = "#ff3b30";
         break;
       case "bump":
         burst(e.x, e.y, 6, "#ffffff", 100, 0.3);
@@ -1240,6 +1382,7 @@ function handleEvents() {
 function updateFx(dt) {
   for (const q of fx.particles) {
     q.age += dt;
+    if (q.spin) q.rot += q.spin * dt;
     q.vy += q.gravity * dt;
     q.x += q.vx * dt;
     q.y += q.vy * dt;
@@ -1247,6 +1390,23 @@ function updateFx(dt) {
   fx.particles = fx.particles.filter((q) => q.age < q.life);
   fx.flash = Math.max(0, fx.flash - dt);
   fx.refill = Math.max(0, fx.refill - dt);
+  fx.hurtFlash = Math.max(0, fx.hurtFlash - dt);
+  fx.edge = Math.max(0, fx.edge - dt);
+  fx.hudShake = Math.max(0, fx.hudShake - dt);
+  for (const q of fx.popups) q.age += dt;
+  fx.popups = fx.popups.filter((q) => q.age < q.life);
+  // Hearts: diff what the HUD shows against the model, whatever changed it
+  // (a hit, water, a checkpoint, a chain, a death's refill, a retry), so the
+  // row can never disagree with game.player.hp. Each change animates.
+  const hp = game.player.hp;
+  if (fx.shownHp === null) fx.shownHp = hp;
+  if (hp < fx.shownHp) {
+    for (let i = hp; i < fx.shownHp; i++) fx.hearts.push({ i, kind: "loss", age: 0 });
+    fx.hudShake = reducedMotion ? 0 : 0.35;
+  } else if (hp > fx.shownHp) for (let i = fx.shownHp; i < hp; i++) fx.hearts.push({ i, kind: "gain", age: (fx.shownHp - i) * 0.08 });
+  fx.shownHp = hp;
+  for (const h of fx.hearts) h.age += dt;
+  fx.hearts = fx.hearts.filter((h) => h.age < 0.6);
   if (fx.squash) {
     fx.squash.t -= dt;
     if (fx.squash.t <= 0) fx.squash = null;
@@ -1838,7 +1998,7 @@ const SHEETS = {
 function drawCone(guard) {
   // Only active threats get a clear cone: dozing cards show none, and a card
   // that can't see Rubik's current color shows only a faint one.
-  if (["stunned", "drained", "asleep", "away"].includes(guard.state)) return;
+  if (["stunned", "drained", "asleep", "away", "defeated"].includes(guard.state)) return;
   // A card locked on after its "?" keeps a lit cone through any swap.
   const asleep = !M.canSee(guard, game.player.color) && !guard.locked,
     reach = guard.reach,
@@ -1897,17 +2057,26 @@ function coneEdge(dir) {
   path.closePath();
   return (coneEdges[dir] = path);
 }
+const enemyOf = (guard) => M.ENEMY[guard.type] || M.ENEMY.walker;
+/** Sheet frame for a card. Attack row 0: frames 0-3 the windup, 4-6 the
+ * strike, 7+ the recovery, each spread over that type's own timing
+ * (M.ENEMY), so a charger's 0.8 s windup draws as slowly as it plays. */
 function guardFrame(guard, sheet) {
-  const t = guard.anim;
+  const t = guard.anim,
+    e = enemyOf(guard),
+    k = (total) => Math.max(0, Math.min(1, 1 - guard.timer / total));
   switch (guard.state) {
     case "windup":
-      return [0, Math.min(3, Math.floor((1 - guard.timer / M.GUARD.windup) * 4))];
+      return [0, Math.min(3, Math.floor(k(e.windup) * 4))];
     case "lunge":
-      return [0, 4 + Math.min(2, Math.floor((1 - guard.timer / M.GUARD.lunge) * 3))];
+      return [0, 4 + Math.min(2, Math.floor(k(e.strike) * 3))];
     case "recover":
-      return [0, Math.min(sheet.attack[1] - 1, 7 + Math.floor((1 - guard.timer / M.GUARD.recover) * (sheet.attack[1] - 7)))];
+      return [0, Math.min(sheet.attack[1] - 1, 7 + Math.floor(k(e.recover) * (sheet.attack[1] - 7)))];
     case "alert":
-      return [1, Math.floor(t * 14) % sheet.walk[1]];
+      // A sentinel holds its post: aware, it stands ready (idle frames, a
+      // planted lean, drawGuard) and never walks; walkers and chargers chase.
+      if (e.chase === 0) return [2, Math.floor(t * 8) % sheet.idle[1]];
+      return [1, Math.floor(t * (guard.type === "charger" ? 11 : 14)) % sheet.walk[1]];
     case "calm":
       if (guard.mode === "patrol" && guard.turning <= 0) return [1, Math.floor(t * 7) % sheet.walk[1]];
       return [2, Math.floor(t * 5) % sheet.idle[1]];
@@ -1939,12 +2108,212 @@ function bubble(x, y, label, opts = {}) {
   if (label) text(label, 0, -h / 2 + 10, 32, opts.ink || "#1b1420", "center", null);
   ctx.restore();
 }
+/** The windup telegraph: the exact ground the coming strike sweeps
+ * (M.strikeZone: the drawn spear's band, from the card's front to the tip at
+ * the end of its travel). Hazard hatching plus an arrowhead for the sweep's
+ * direction, so it never relies on hue; it fades in over the windup (`k`
+ * 0..1) and the hatch crawls toward the sweep. Reduced motion: steady. */
+function drawStrikeZone(guard, k) {
+  const z = M.strikeZone(guard);
+  if (z.w <= 0) return;
+  const x0 = wx(z.x),
+    y0 = wy(z.y),
+    w = Math.round(z.w),
+    h = Math.round(z.h),
+    a = reducedMotion ? 0.8 : 0.3 + 0.6 * Math.min(1, k * 1.4);
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = "#1b1420";
+  ctx.fillRect(x0 - 2, y0 - 2, w + 4, h + 4);
+  ctx.fillStyle = "#fbe9e2";
+  ctx.fillRect(x0, y0, w, h);
+  ctx.beginPath();
+  ctx.rect(x0, y0, w, h);
+  ctx.clip();
+  ctx.strokeStyle = "#c0281e";
+  ctx.lineWidth = 4;
+  const crawl = reducedMotion ? 0 : ((clock * 48) % 14) * guard.dir;
+  ctx.beginPath();
+  for (let sx = x0 - h - 14; sx < x0 + w + 14; sx += 14) {
+    // Stripes lean the way the strike goes.
+    ctx.moveTo(sx + crawl, y0 + h);
+    ctx.lineTo(sx + crawl + guard.dir * h, y0);
+  }
+  ctx.stroke();
+  ctx.restore();
+  // The far end: an ink arrowhead pointing along the sweep.
+  const tipX = guard.dir > 0 ? x0 + w + 2 : x0 - 2,
+    cy = y0 + h / 2;
+  ctx.globalAlpha = a;
+  ctx.fillStyle = "#1b1420";
+  ctx.beginPath();
+  ctx.moveTo(tipX + guard.dir * 12, cy);
+  ctx.lineTo(tipX, cy - h / 2 - 6);
+  ctx.lineTo(tipX, cy + h / 2 + 6);
+  ctx.closePath();
+  ctx.fill();
+  // A dashed ink line on the floor under the strip: where to not stand.
+  const floor = wy(guard.floor);
+  for (let sx = 0; sx < w; sx += 12) ctx.fillRect(x0 + sx, floor - 3, Math.min(7, w - sx), 3);
+  ctx.globalAlpha = 1;
+}
+/** The recovery's stomp invitation: a bobbing arrow onto the card's head and
+ * a ring around the head (the card is open: no body damage, stompable). */
+function openMarker(x, top) {
+  const b = reducedMotion ? 0 : Math.abs(Math.sin(clock * 7)) * 6,
+    y = top - 26 - b;
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = "#1b1420";
+  ctx.beginPath();
+  ctx.ellipse(x, top + 2, 24, 7, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#ffd84a";
+  ctx.stroke();
+  ctx.fillStyle = "#1b1420";
+  ctx.beginPath();
+  ctx.moveTo(x, y + 14);
+  ctx.lineTo(x - 13, y - 2);
+  ctx.lineTo(x - 5, y - 2);
+  ctx.lineTo(x - 5, y - 14);
+  ctx.lineTo(x + 5, y - 14);
+  ctx.lineTo(x + 5, y - 2);
+  ctx.lineTo(x + 13, y - 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#ffd84a";
+  ctx.beginPath();
+  ctx.moveTo(x, y + 9);
+  ctx.lineTo(x - 8, y);
+  ctx.lineTo(x - 2, y);
+  ctx.lineTo(x - 2, y - 11);
+  ctx.lineTo(x + 2, y - 11);
+  ctx.lineTo(x + 2, y);
+  ctx.lineTo(x + 8, y);
+  ctx.closePath();
+  ctx.fill();
+}
+/** Dazed: stars circling, inside a ring that empties as the daze runs out
+ * (full at the daze's start), so what the state is and when it ends are
+ * both on screen. Under reduced motion the stars stand still; the ring stays. */
+function dazeRing(guard, x, y) {
+  const max = dazeMax.get(guard.id) ?? M.ENEMY.charger.daze,
+    left = Math.max(0, Math.min(1, guard.timer / max)),
+    r = 22;
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = "#1b1420";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#4a3f4e";
+  ctx.stroke();
+  ctx.strokeStyle = "#ffe066";
+  ctx.beginPath();
+  ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + left * Math.PI * 2);
+  ctx.stroke();
+  for (let i = 0; i < 3; i++) {
+    const a = (reducedMotion ? 0 : clock * 4) + (i * Math.PI * 2) / 3;
+    drawStar(x + Math.cos(a) * 12, y + Math.sin(a) * 5);
+  }
+}
+/** The charger's armour, drawn in code over its head (card-local space,
+ * left-facing): an iron cap with a horn, so the heavy type reads by its
+ * silhouette as well as by its pace; its colour badge stays as it is. */
+function chargerHelmet() {
+  // Card-local px: the drawn card's top edge is ~84 px above its feet and
+  // its face centre ~4 px forward of the body centre (measured on the red
+  // sheet's idle and walk frames).
+  const y = -80;
+  ctx.fillStyle = "#1b1420";
+  ctx.beginPath();
+  ctx.ellipse(-2, y, 24, 14, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.fillRect(-30, y - 3, 56, 7);
+  ctx.beginPath();
+  ctx.moveTo(-14, y - 10);
+  ctx.lineTo(-30, y - 32);
+  ctx.lineTo(-2, y - 14);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#8d8796";
+  ctx.beginPath();
+  ctx.ellipse(-2, y - 1, 19, 10, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.fillRect(-27, y - 1, 50, 3);
+  ctx.fillStyle = "#c9c4cf";
+  ctx.fillRect(-12, y - 9, 10, 3);
+  ctx.fillStyle = "#fbf9f2";
+  ctx.beginPath();
+  ctx.moveTo(-13, y - 12);
+  ctx.lineTo(-25, y - 27);
+  ctx.lineTo(-5, y - 14);
+  ctx.closePath();
+  ctx.fill();
+}
+/** A defeated card for M.GUARD.defeatTime (0.5 s), then nothing (it has no
+ * body from the first tick). A stomp flattens it and it bursts into paper
+ * (confetti from handleEvents) inside a ring poof; a dash-knock sends it
+ * spinning off along defeatDir. Reduced motion: it fades in place inside a
+ * still ring (no squash, no spin), so "it is gone" still reads. */
+function drawDefeat(guard, sheet, x, floor) {
+  const t = guard.defeatT,
+    T = M.GUARD.defeatTime;
+  if (!(t < T)) return;
+  const k = t / T,
+    image = guard.kind === "red" ? img.cardRed : img.cardGreen,
+    src = [0, 6 * sheet.cw, 0, sheet.cw, sheet.ch];
+  const card = (alpha) => {
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(image, src[1], src[2], src[3], src[4], -sheet.cx * 2, -sheet.feet * 2, sheet.cw * 2, sheet.ch * 2);
+    ctx.globalAlpha = 1;
+  };
+  ctx.save();
+  if (reducedMotion) {
+    ctx.translate(x, floor);
+    if (guard.dir > 0) ctx.scale(-1, 1);
+    card(1 - k);
+  } else if (guard.defeatHow === "knock") {
+    const d = guard.defeatDir || 1;
+    ctx.translate(x + d * 560 * t, floor - 40 - 420 * t + 1300 * t * t);
+    ctx.rotate(d * t * 16);
+    ctx.translate(0, 40);
+    if (guard.dir > 0) ctx.scale(-1, 1);
+    card(1 - k * 0.6);
+  } else if (t < 0.16) {
+    const f = t / 0.16;
+    ctx.translate(x, floor);
+    if (guard.dir > 0) ctx.scale(-1, 1);
+    ctx.scale(1 + 0.6 * f, 1 - 0.82 * f);
+    card(1);
+  }
+  ctx.restore();
+  if (guard.defeatHow === "knock" && !reducedMotion) return;
+  // The ring poof at the body's centre.
+  const rk = reducedMotion ? 0.5 : Math.min(1, t / (T * 0.8)),
+    r = 24 + rk * 70,
+    cy = floor - 40;
+  ctx.globalAlpha = 1 - k;
+  ctx.lineWidth = 10 * (1 - rk) + 3;
+  ctx.strokeStyle = "#1b1420";
+  ctx.beginPath();
+  ctx.ellipse(x, cy, r, r * 0.6, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = Math.max(1, 6 * (1 - rk) + 1);
+  ctx.strokeStyle = "#fbf9f2";
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
 function drawGuard(guard) {
   if (guard.state === "away") return; // escape-only card, not here yet
   const sheet = SHEETS[guard.kind],
     x = wx(guard.x),
     floor = wy(guard.floor);
   if (x < -200 || x > W + 200) return;
+  if (guard.state === "defeated") return drawDefeat(guard, sheet, x, floor);
+  const e = enemyOf(guard),
+    windK = guard.state === "windup" ? Math.max(0, Math.min(1, 1 - guard.timer / e.windup)) : 0;
+  if (guard.state === "windup") drawStrikeZone(guard, windK);
   const image = guard.state === "drained" ? derived.cardGrey : guard.kind === "red" ? img.cardRed : img.cardGreen,
     [row, col] = guardFrame(guard, sheet),
     dw = sheet.cw * 2,
@@ -1958,13 +2327,20 @@ function drawGuard(guard) {
     ctx.fillStyle = g;
     ctx.fillRect(x - 80, floor - 124, 160, 160);
   }
+  // The windup shake (motion: off under reduced motion; the lean stays).
+  const jitter = guard.state === "windup" && !reducedMotion ? Math.round(Math.sin(clock * 75) * (1 + windK * 1.5)) : 0;
   ctx.save();
-  ctx.translate(x, floor);
+  ctx.translate(x + jitter, floor);
   // Sheets face left; a right-facing card mirrors around its body centre.
+  // In this left-facing space a positive rotation tips the card's top back.
   if (guard.dir > 0) ctx.scale(-1, 1);
+  if (guard.state === "windup") ctx.rotate((guard.type === "charger" ? 0.16 : 0.1) * windK);
+  else if (guard.state === "recover") ctx.rotate(-0.09); // spent: drooped forward
+  else if (guard.type === "sentinel" && ["alert", "suspect"].includes(guard.state)) ctx.rotate(-0.04); // planted, spear ready
   if (guard.state === "stunned" || guard.state === "drained") {
     ctx.translate(0, -6);
-    ctx.rotate(guard.state === "drained" ? 0.22 : -0.18);
+    const wobble = guard.state === "stunned" && !reducedMotion ? Math.sin(clock * 9) * 0.07 : 0;
+    ctx.rotate(guard.state === "drained" ? 0.22 : (guard.type === "charger" ? -0.3 : -0.18) + wobble);
   }
   if (guard.squash > 0 && !reducedMotion) {
     // Stomped: squashed flat for a beat, springing back.
@@ -1972,26 +2348,24 @@ function drawGuard(guard) {
     ctx.scale(1 + 0.28 * k, 1 - 0.36 * k);
   }
   ctx.drawImage(image, col * sheet.cw, row * sheet.ch, sheet.cw, sheet.ch, -sheet.cx * 2, -sheet.feet * 2, dw, dh);
+  if (guard.type === "charger" && guard.state !== "drained") chargerHelmet();
   ctx.restore();
-  spearUp(guard, x, floor);
   // Corner badge: the card's own glyph (it can't see its own color), beside
   // the original suit numeral (green 1, red 3).
   if (guard.state !== "drained") badge(guard.kind, x - guard.dir * 14, floor - 74, 9);
   // Awareness bubbles: every state change has a cue.
-  const head = floor - M.GUARD.h - 14,
+  const head = floor - M.GUARD.h - 14 - (guard.type === "charger" ? 18 : 0),
     bob = reducedMotion ? 0 : Math.sin(clock * 6 + guard.x) * 2;
   // A card whose cone is on Rubik in its own colour hums, even while it is
   // still searching after a stun: a "?" there read as "it suspects me" (the
   // red vault guard beside red Rubik after the theft, user playtest).
   const humming = guard.disguiseSeen && ["calm", "suspect", "search"].includes(guard.state);
   if (["suspect", "search"].includes(guard.state) && !humming) bubble(x, head + bob, "?", { fill: "#ffe3b0" });
-  else if (["alert", "windup", "lunge", "recover"].includes(guard.state)) bubble(x, head + bob, "!", { fill: "#ffb3a6" });
-  else if (guard.state === "stunned") {
-    for (let i = 0; i < 3; i++) {
-      const a = clock * 4 + (i * Math.PI * 2) / 3;
-      drawStar(x + Math.cos(a) * 18, head + 6 + Math.sin(a) * 5);
-    }
-  } else if (humming) {
+  else if (guard.state === "windup") bubble(x + jitter, head - 4, "!!", { fill: "#ff8a7a", w: 46, h: 38 });
+  else if (["alert", "lunge"].includes(guard.state)) bubble(x, head + bob, "!", { fill: "#ffb3a6" });
+  else if (guard.state === "recover") openMarker(x, floor - M.GUARD.h - (guard.type === "charger" ? 14 : 0));
+  else if (guard.state === "stunned") dazeRing(guard, x, head - 8);
+  else if (humming) {
     // Humming: the cone is on Rubik but he wears their color (a drawn note;
     // the pixel font has no music glyph).
     bubble(x, head + bob, "", { w: 30, h: 30 });
@@ -2001,33 +2375,6 @@ function drawGuard(guard) {
     ctx.fillRect(x - 4, head + bob - 14, 8, 6);
   }
   if (guard.state === "calm" && guard.turning > 0 && guard.turning < M.GUARD.lookBack) text("…", x, head + 6, 32, "#fbf9f2", "center");
-}
-/** The spear-up tell: while Rubik is above a card it can't be stomped from
- * (it faces where he came from, or it is aware), its spear tip stands over
- * its head. Drawn, not written: the same art language as the lunge. */
-function spearUp(guard, x, floor) {
-  if (["drained", "stunned", "away"].includes(guard.state) || M.stompable(game, guard)) return;
-  const p = game.player,
-    dx = p.x + p.w / 2 - guard.x,
-    above = p.y + p.h < guard.floor - M.GUARD.h + 6;
-  if (Math.abs(dx) > 110 || !above) return;
-  const tipX = x + guard.dir * 6,
-    tipY = floor - M.GUARD.h - 26;
-  ctx.fillStyle = "#1b1420";
-  ctx.fillRect(tipX - 2, tipY + 8, 4, 22);
-  ctx.beginPath();
-  ctx.moveTo(tipX, tipY - 4);
-  ctx.lineTo(tipX + 8, tipY + 10);
-  ctx.lineTo(tipX - 8, tipY + 10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  ctx.beginPath();
-  ctx.moveTo(tipX, tipY);
-  ctx.lineTo(tipX + 4, tipY + 8);
-  ctx.lineTo(tipX - 4, tipY + 8);
-  ctx.closePath();
-  ctx.fill();
 }
 function drawStar(x, y) {
   ctx.fillStyle = "#ffe066";
@@ -2042,7 +2389,9 @@ function playerFrame(p) {
     return [p.color, 0, 192];
   }
   if (p.dashTime > 0) return [p.color, (Math.floor((1 - p.dashTime / M.WORLD.dashDuration) * 6) % 6) * 32, 32];
-  if (p.knock > 0) return [p.color, 160, 96];
+  // The hit pose: the knock frame for the model's hurt timer (0.35 s), longer
+  // than the 0.2 s of lost steering, so the hit reads even mid-air.
+  if (p.knock > 0 || p.hurt > 0) return [p.color, 160, 96];
   if (!p.grounded) {
     const f = p.vy < -280 ? 0 : p.vy < -80 ? 1 : p.vy < 60 ? 2 + (Math.floor(clock * 8) % 2) : p.vy < 300 ? 4 : 5;
     return [p.color, f * 32, 96];
@@ -2081,13 +2430,15 @@ function drawPlayer() {
   // Dash afterimages: three silhouettes in the form's colour, close behind.
   if (p.dashTime > 0 && sheet !== "storm")
     for (let i = 3; i > 0; i--) drawRubik(p.color + "Ghost", sx, sy, cx - p.dashDirection * i * (reducedMotion ? 26 : 20), feet, p.direction, reducedMotion ? 0.3 : 0.62 - i * 0.14);
-  // Grace blinks (steady half-alpha under reduced motion: a cue, not a flash).
-  const graced = p.grace > 0 || p.bumpGrace > 0,
+  // Respawn grace and the post-hit invulnerability blink (a steady 0.65
+  // alpha under reduced motion: a cue, not a flash).
+  const graced = p.grace > 0 || p.invuln > 0,
     blink = graced && (reducedMotion || Math.floor(clock * 14) % 2 === 0);
   // Dash state lives on Rubik (Celeste's hair): spent charge dims him.
   let key = sheet;
   if (sheet !== "storm") {
-    if (fx.refill > 0) key = p.color + "Flash";
+    if (fx.hurtFlash > 0) key = p.color + "Flash"; // the hit's white flash
+    else if (fx.refill > 0) key = p.color + "Flash";
     else if (p.dashCharge <= 0 && !p.grounded && p.dashTime <= 0) key = p.color + "Dim";
   }
   const sq = fx.squash,
@@ -2133,12 +2484,37 @@ function drawParticles() {
     const a = 1 - q.age / q.life;
     ctx.globalAlpha = Math.max(0, a);
     if (q.debris) ctx.drawImage(img.tiles, q.debris[0], q.debris[1], 8, 8, wx(q.x) - 8, wy(q.y) - 8, 16, 16);
-    else {
+    else if (q.spin) {
+      // Confetti: a paper slip turning over (its width follows the spin).
+      ctx.save();
+      ctx.translate(wx(q.x), wy(q.y));
+      ctx.rotate(q.rot);
+      ctx.fillStyle = "#1b1420";
+      const w = Math.max(2, Math.abs(Math.cos(q.rot * 1.7)) * q.size + 2);
+      ctx.fillRect(-w / 2 - 1, -3, w + 2, 6);
+      ctx.fillStyle = q.color;
+      ctx.fillRect(-w / 2, -2, w, 4);
+      ctx.restore();
+    } else {
       ctx.fillStyle = q.color;
       ctx.fillRect(wx(q.x) - q.size / 2, wy(q.y) - q.size / 2, q.size, q.size);
     }
   }
   ctx.globalAlpha = 1;
+}
+function drawPopups() {
+  for (const q of fx.popups) {
+    const k = q.age / q.life,
+      rise = reducedMotion ? 0 : 34 * Math.min(1, k * 1.6),
+      // A pop on arrival (scale is motion: reduced motion shows it at size).
+      size = reducedMotion ? q.size : Math.round(q.size * (k < 0.12 ? 1 + (0.12 - k) * 3 : 1));
+    ctx.globalAlpha = k > 0.7 ? Math.max(0, 1 - (k - 0.7) / 0.3) : 1;
+    const x = wx(q.x) - (q.heart ? 12 : 0),
+      y = wy(q.y) - rise;
+    text(q.label, x, y, size, q.color, "center");
+    if (q.heart) heartIcon(x + 26, y - 18, 2, "full");
+    ctx.globalAlpha = 1;
+  }
 }
 /** The five contextual bubbles (at most two per level). Each shows device-matched glyphs only:
  * keycaps on a keyboard, the on-screen button's look on touch. */
@@ -2243,6 +2619,101 @@ function drawHint() {
   }
   ctx.restore();
 }
+/** A pixel heart, 7 x 6 cells at `s` px per cell, centred on (cx, cy), with a
+ * one-cell ink outline. Full and empty differ by fill AND shape (colour-blind
+ * safe): a full heart is solid red with a highlight; an empty one is a dark,
+ * cracked heart whose right half is knocked a cell aside along a zigzag. */
+const HEART = [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."];
+const heartCells = HEART.flatMap((row, y) => [...row].map((c, x) => (c === "#" ? [x, y] : null)).filter(Boolean));
+const crackLeft = ([x, y]) => x < 3 || (x === 3 && y % 2 === 0);
+function heartIcon(cx, cy, s, state) {
+  const ox = Math.round(cx - 3.5 * s),
+    oy = Math.round(cy - 3 * s),
+    cells = state === "empty" ? heartCells.map((c) => (crackLeft(c) ? c : [c[0] + 1, c[1] + 1])) : heartCells;
+  ctx.fillStyle = "#1b1420";
+  for (const [x, y] of cells) ctx.fillRect(ox + (x - 1) * s, oy + (y - 1) * s, s * 3, s * 3);
+  for (const [x, y] of cells) {
+    ctx.fillStyle = state === "empty" ? "#3a3040" : x === 1 && y === 1 ? "#ffb3a6" : y >= 3 ? "#b8261c" : COLORS.red;
+    ctx.fillRect(ox + x * s, oy + y * s, s, s);
+  }
+}
+/** Hearts, top left under the form cards (which end at y ~70): 3 px cells,
+ * 26 px apart, so the row ends at x ~95, clear of the dash pad (x >= 80 only
+ * from y 26-62) and its Shift keycap (x >= 106). A lost heart splits and its
+ * halves fall (the row shakes); a regained one pops in with sparkles; the
+ * last heart beats. Reduced motion: the change is instant and the row still. */
+const HUD_HEARTS = { x: 30, y: 92, step: 26, s: 3 };
+function drawHearts(p) {
+  const { x, y, step, s } = HUD_HEARTS,
+    shake = fx.hudShake > 0 && !reducedMotion ? Math.sin(fx.hudShake * 70) * 4 * (fx.hudShake / 0.35) : 0;
+  for (let i = 0; i < M.WORLD.hearts; i++) {
+    const hx = x + i * step + shake,
+      full = i < p.hp,
+      anim = fx.hearts.find((h) => h.i === i && h.age >= 0);
+    if (anim?.kind === "gain" && full && !reducedMotion) {
+      const k = Math.min(1, anim.age / 0.25);
+      ctx.save();
+      ctx.translate(hx, y);
+      ctx.scale(1.6 - 0.6 * k, 1.6 - 0.6 * k);
+      heartIcon(0, 0, s, "full");
+      ctx.restore();
+      for (let j = 0; j < 4; j++) {
+        const a = j * 1.57 + anim.age * 6,
+          r = 12 + anim.age * 30;
+        if (anim.age < 0.45) drawStar(hx + Math.cos(a) * r, y + Math.sin(a) * r);
+      }
+      continue;
+    }
+    const beat = full && p.hp === 1 && !reducedMotion ? 1 + 0.1 * Math.max(0, Math.sin(clock * 7)) : 1;
+    ctx.save();
+    ctx.translate(hx, y);
+    ctx.scale(beat, beat);
+    heartIcon(0, 0, s, full ? "full" : "empty");
+    ctx.restore();
+    if (anim?.kind === "loss" && !reducedMotion) {
+      // The lost heart shatters: its two halves tumble out and fade.
+      const k = anim.age / 0.6;
+      ctx.globalAlpha = 1 - k;
+      for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.translate(hx + side * (4 + k * 16), y + k * k * 40);
+        ctx.rotate(side * k * 1.6);
+        ctx.beginPath();
+        ctx.rect(side < 0 ? -14 : 0, -14, 14, 28);
+        ctx.clip();
+        heartIcon(0, 0, s, "full");
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+  // CHAIN meter while a chain is alive (2+): the count and one pip per link
+  // up to the heart it pays (the 3rd pip is a heart), then gold.
+  if (p.chain >= 2) {
+    const mx = 16,
+      my = y + 22,
+      paid = p.chain >= M.WORLD.chainHeal;
+    ctx.fillStyle = "#1b1420";
+    roundRect(mx - 2, my - 2, 104, 36, 8);
+    ctx.fill();
+    ctx.fillStyle = paid ? "#5a3c08" : "#2b2230";
+    roundRect(mx, my, 100, 32, 7);
+    ctx.fill();
+    text("CHAIN", mx + 8, my + 14, 16, "#cfc6d6", "left", null);
+    text(`x${p.chain}`, mx + 92, my + 25, 32, paid ? "#ffd84a" : "#fbf9f2", "right", null);
+    for (let i = 0; i < M.WORLD.chainHeal; i++) {
+      const px = mx + 12 + i * 15,
+        py = my + 23;
+      if (i === M.WORLD.chainHeal - 1) heartIcon(px + 2, py, 2, i < p.chain ? "full" : "empty");
+      else {
+        ctx.fillStyle = "#1b1420";
+        ctx.fillRect(px - 5, py - 4, 10, 8);
+        ctx.fillStyle = i < p.chain ? "#fbf9f2" : "#4a3f4e";
+        ctx.fillRect(px - 4, py - 3, 8, 6);
+      }
+    }
+  }
+}
 function drawHud() {
   const p = game.player,
     forms = ["white", "green", "red"].filter((c) => game.unlocked[c]);
@@ -2276,6 +2747,7 @@ function drawHud() {
     ctx.globalAlpha = 1;
     if (LV.id === "1-4" && game.dashes < 3 && inputMode !== "touch") keycap("Shift", dx + 18, dy + 52);
   }
+  drawHearts(p);
   ctx.restore();
   ctx.save();
   ctx.translate(-hudInset, 0);
@@ -2580,10 +3052,24 @@ function drawWorld() {
   for (const guard of game.guards) drawGuard(guard);
   drawPlayer();
   drawParticles();
+  drawPopups();
   drawHint();
   ctx.restore();
 }
 function drawFlash() {
+  // The hit's screen-edge flash: a red frame that fades in 0.4 s (an edge,
+  // not the whole screen, so the play stays readable through it).
+  if (fx.edge > 0) {
+    const a = Math.min(1, fx.edge / 0.4) * 0.55,
+      d = 46;
+    for (const [x0, y0, x1, y1, rx, ry, rw, rh] of [[0, 0, 0, d, 0, 0, W, d], [0, H, 0, H - d, 0, H - d, W, d], [0, 0, d, 0, 0, 0, d, H], [W, 0, W - d, 0, W - d, 0, d, H]]) {
+      const g = ctx.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, `rgba(232,56,44,${a})`);
+      g.addColorStop(1, "rgba(232,56,44,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(rx, ry, rw, rh);
+    }
+  }
   if (fx.flash <= 0) return;
   ctx.globalAlpha = Math.min(0.5, fx.flash);
   ctx.fillStyle = fx.flashColor;
@@ -2743,10 +3229,13 @@ function drawResults() {
     ["Best", r.best === null ? "-" : fmtTime(r.best), ""],
   ];
   if (game.escapeTime !== null) rows.push(["Getaway", fmtTime(game.escapeTime), ""]);
+  rows.push(["Hearts lost", String(r.hits ?? 0), r.hits === 0 ? "none!" : ""]);
+  rows.push(["Best chain", r.chainN >= 2 ? `x${r.chainN}` : "-", ""]);
+  // 30 px rows: five (1-6, with the getaway) still end above the stickers.
   rows.forEach(([k, v, note], i) => {
-    text(k, px + 210, py + 138 + i * 36, 32, "#cfc6d6", "left", null);
-    text(v, px + 420, py + 138 + i * 36, 32, "#ffffff", "right", null);
-    if (note) text(note, px + 430, py + 138 + i * 36, 32, "#ffcf2e", "left", null);
+    text(k, px + 210, py + 128 + i * 30, 32, "#cfc6d6", "left", null);
+    text(v, px + 420, py + 128 + i * 30, 32, "#ffffff", "right", null);
+    if (note) text(note, px + 430, py + 128 + i * 30, 32, "#ffcf2e", "left", null);
   });
   // Stickers fly into their slots one by one.
   r.stickers.forEach((st, i) => {
@@ -2786,8 +3275,15 @@ function drawResults() {
     text(`${r.takedown.n}/${r.takedown.of}${r.takedown.best > r.takedown.n ? ` (best ${r.takedown.best})` : ""}`, sx, sy + 48, 16, r.takedown.got ? "#ffcf2e" : "#cfc6d6", "center", null);
     sy += 92;
   }
-  if (r.quick !== null) stamp("Quick", r.quick, sx, sy);
-  if (r.assisted && (r.unseen !== null || r.takedown || r.quick !== null)) text("Slow spotting: no stamps", sx, py + ph - 62, 16, "#cfc6d6", "center", null);
+  if (r.quick !== null) {
+    stamp("Quick", r.quick, sx, sy);
+    sy += 82;
+  }
+  if (r.chain) {
+    stamp("Chain", r.chain.got, sx, sy);
+    text(`${r.chainN}/${r.chain.par}${r.chain.best > r.chainN ? ` (best ${r.chain.best})` : ""}`, sx, sy + 48, 16, r.chain.got ? "#ffcf2e" : "#cfc6d6", "center", null);
+  }
+  if (r.assisted && (r.unseen !== null || r.takedown || r.quick !== null || r.chain)) text("Slow spotting: no stamps", sx, py + ph - 62, 16, "#cfc6d6", "center", null);
   if (r.unlocked) text(`${r.unlocked} is open!`, W / 2, py + ph - 26, 32, "#9be36a", "center", null);
 }
 /** World clear: the old results screen, retitled, with world totals and the
@@ -2958,7 +3454,7 @@ function drawMap() {
       roundRect(x - 23 + k * 16, node.y + 32, 12, 12, 3);
       ctx.fill();
     }
-    if (rec.unseen || rec.takedown || rec.quick) {
+    if (rec.unseen || rec.takedown || rec.quick || rec.chain) {
       ctx.fillStyle = COLORS.red;
       ctx.beginPath();
       ctx.arc(x + 34, y - 26, 8, 0, Math.PI * 2);
@@ -3106,6 +3602,16 @@ function getState() {
     save: structuredClone(save),
     result: fx.result ? structuredClone(fx.result) : null,
     camera: { x: cam.x, y: cam.y },
+    // Combat at a glance (QA): hearts, the blink, the chain and run totals.
+    hp: game.player.hp,
+    maxHp: M.WORLD.hearts,
+    invuln: game.player.invuln,
+    chain: game.player.chain,
+    chainBest: game.chainBest,
+    hits: game.hits,
+    falls: game.falls,
+    guards: s.guards.map((c) => ({ ...c, type: c.type, defeatT: c.defeatT ?? null })),
+    hud: { hearts: fx.shownHp, heartFx: fx.hearts.length, popups: fx.popups.map((q) => q.label), edge: fx.edge },
     // What reduced motion removes (QA: all stay 0 / false under it).
     effects: { shake: cam.shake, flash: fx.flash, particles: fx.particles.length, squash: !!fx.squash, iris: fx.iris },
     settings: { ...settings },

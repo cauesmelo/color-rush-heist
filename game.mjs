@@ -15,6 +15,7 @@ import * as M from "./model.mjs";
 import * as B from "./levels/builder.mjs";
 import { LEVELS, getLevel } from "./levels/index.mjs";
 import * as C from "./campaign.mjs";
+import { FixedStep } from "./loop.mjs";
 
 const W = 960,
   H = 540,
@@ -252,7 +253,6 @@ let LV = getLevel(save.last) || LEVELS[0],
   screenTime = 0,
   manual = false,
   lastFrame = performance.now(),
-  accumulator = 0,
   inputMode = matchMedia("(pointer: coarse)").matches ? "touch" : "keyboard",
   coarsePointer = matchMedia("(pointer: coarse)").matches,
   lastEventId = 0,
@@ -266,8 +266,18 @@ const fx = { vaultOpen: 0, particles: [], flash: 0, flashColor: "#fff", reverse:
  * chalk path that draws in after a new unlock. */
 const map = { cursor: 0, from: 0, walk: 1, reveal: null, prompt: 0 };
 let colorAmount = 0;
+/** Input. `keysDown` is the physical state (every screen, updated at once);
+ * `held` and `pulses` are what the simulation sees. During play every change
+ * goes through `stepper` stamped with its event time and is applied on the tick
+ * that time falls in (loop.mjs), so timing windows are the same at any frame
+ * rate. Rules (tests/movement-audit.test.mjs, A3): a direction held is held
+ * whenever play is live (also through a pause and into a level); presses only
+ * count when made in play, on the level card or on the comic skip; after a
+ * death the model locks directions held since the death until released. */
+const keysDown = new Set();
 const held = new Set();
 const pulses = { jump: false, jumpReleased: false, dash: false, color: undefined };
+const stepper = new FixedStep();
 
 // ----------------------------------------------------------------- audio ---
 let audio = null;
@@ -496,6 +506,7 @@ function startLevel(id, { intro = true, skipIntro = false } = {}) {
 function newGame() {
   game = M.createGame(LV.id, C.gameOptions(save, LV.id));
   M.startGame(game);
+  syncHeld(); // a direction still held from the map counts; no press carries over
   if (derived.bakedFor !== LV.id && assetsReady) bakeTiles(LV);
   lastEventId = game.eventId;
   lastRespawns = 0;
@@ -550,14 +561,17 @@ function togglePause(force) {
     game.phase = "paused";
     held.clear();
     clearPulses();
+    stepper.clear();
     ui.pauseCard.hidden = false;
     showPanel("menu");
     setTimeout(() => ui.resume.focus({ preventScroll: true }), 0);
   } else if (!pausing && game.phase === "paused") {
     game.phase = game.resumePhase || "playing";
     ui.pauseCard.hidden = true;
-    held.clear();
-    clearPulses();
+    // Directions held through the pause apply at once (keysDown kept
+    // tracking them); a jump let go during the pause ends the hold now.
+    syncHeld();
+    if (game.player.jumpHeld && !KEY.jump.some((k) => keysDown.has(k))) pulses.jumpReleased = true;
     focusGame();
   }
   syncMusic();
@@ -612,12 +626,42 @@ function queueKey(key) {
   if (KEY.green.includes(key)) pulses.color = "green";
   if (KEY.red.includes(key)) pulses.color = "red";
 }
+/** Apply one input change to what the simulation sees: a keyboard key
+ * ({key, down, repeat}), a touch pad ({pad, down}) or a pulse ({pulse, value}). */
+function applyChange(c) {
+  if (c.pulse) pulses[c.pulse] = c.value ?? true;
+  else if (c.pad) {
+    if (c.down) held.add(c.pad);
+    else held.delete(c.pad);
+  } else if (c.down) {
+    held.add(c.key);
+    if (!c.repeat) queueKey(c.key);
+  } else {
+    held.delete(c.key);
+    if (KEY.jump.includes(c.key)) pulses.jumpReleased = true;
+  }
+}
+/** During live play a change is stamped and waits for its tick; elsewhere
+ * (menus, pause) it applies at once. */
+function inputChange(time, change) {
+  if (screen === "play" && game.phase !== "paused") stepper.push(time, change);
+  else applyChange(change);
+}
+/** What the simulation holds = what is physically down (a new level, a
+ * resume). Presses are never replayed: only a fresh press is a pulse. */
+function syncHeld() {
+  held.clear();
+  for (const key of keysDown) held.add(key);
+  clearPulses();
+  stepper.clear();
+}
 addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   inputMode = "keyboard";
   syncTouch();
   if (nativeActivation(event, key)) return;
+  if (gameKeys.has(key)) keysDown.add(key); // physical state, on every screen
   if (screen === "boot") return;
   if (screen === "title") {
     if (!event.repeat && key !== "tab") {
@@ -632,10 +676,7 @@ addEventListener("keydown", (event) => {
     // The key that skips the comic also counts as input (it is held), but the
     // "1-1 Home Cliff" card still shows: play goes live at 0.4 s as usual.
     startLevel(C.WORLD1[0]);
-    if (gameKeys.has(key)) {
-      held.add(key);
-      queueKey(key);
-    }
+    if (gameKeys.has(key)) stepper.push(event.timeStamp, { key, down: true });
     return;
   }
   if (screen === "ending") {
@@ -680,8 +721,9 @@ addEventListener("keydown", (event) => {
     }
     return;
   }
-  // The level card: any key skips it (and still counts as input below).
-  if (fx.intro && !fx.intro.skipped && game.phase === "playing") fx.intro.skipped = true;
+  // The level card: any fresh key skips it (and still counts as input below);
+  // the auto-repeat of a key held from the map does not.
+  if (fx.intro && !fx.intro.skipped && game.phase === "playing" && !event.repeat) fx.intro.skipped = true;
   if (game.phase === "paused") {
     if ((key === "escape" || key === "p") && !event.repeat) {
       event.preventDefault();
@@ -704,14 +746,13 @@ addEventListener("keydown", (event) => {
   }
   if (!gameKeys.has(key)) return;
   event.preventDefault();
-  held.add(key);
-  if (!event.repeat) queueKey(key);
+  stepper.push(event.timeStamp, { key, down: true, repeat: event.repeat });
 });
 addEventListener("keyup", (event) => {
   const key = event.key.toLowerCase();
-  if (nativeActivation(event, key) && !held.has(key)) return;
-  held.delete(key);
-  if (KEY.jump.includes(key)) pulses.jumpReleased = true;
+  if (nativeActivation(event, key) && !keysDown.has(key)) return;
+  keysDown.delete(key);
+  inputChange(event.timeStamp, { key, down: false });
 });
 function moveMenuFocus(step) {
   const items = [...ui.pauseCard.querySelectorAll("[data-panel]:not([hidden]) button, [data-panel]:not([hidden]) a")];
@@ -719,8 +760,10 @@ function moveMenuFocus(step) {
   items[(index + step + items.length) % items.length]?.focus({ preventScroll: true });
 }
 addEventListener("blur", () => {
-  held.clear();
-  clearPulses();
+  // Key-ups are invisible while the window is unfocused: forget everything
+  // (the OS key repeat re-adds a key still held on return).
+  keysDown.clear();
+  syncHeld();
   if (screen === "play" && game.phase === "playing") togglePause(true);
 });
 document.addEventListener("visibilitychange", () => {
@@ -873,21 +916,24 @@ for (const button of document.querySelectorAll("[data-input],[data-action],[data
     if (!activate()) return;
     button.setPointerCapture?.(event.pointerId);
     button.classList.add("down");
-    if (button.dataset.input) held.add(button.dataset.input);
-    if (button.dataset.action) pulses[button.dataset.action] = true;
-    if (button.dataset.color) pulses.color = button.dataset.color;
+    const time = event.timeStamp;
+    if (button.dataset.input) inputChange(time, { pad: button.dataset.input, down: true });
+    if (button.dataset.action) inputChange(time, { pulse: button.dataset.action });
+    if (button.dataset.color) inputChange(time, { pulse: "color", value: button.dataset.color });
   });
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
-    button.addEventListener(type, () => {
+    button.addEventListener(type, (event) => {
+      // lostpointercapture follows pointerup: release only once.
+      if (!button.classList.contains("down")) return;
       button.classList.remove("down");
-      if (button.dataset.input) held.delete(button.dataset.input);
-      if (button.dataset.action === "jump") pulses.jumpReleased = true;
+      if (button.dataset.input) inputChange(event.timeStamp, { pad: button.dataset.input, down: false });
+      if (button.dataset.action === "jump") inputChange(event.timeStamp, { pulse: "jumpReleased" });
     });
   button.addEventListener("click", (event) => {
     if (event.detail !== 0 || !activate()) return;
-    if (button.dataset.action) pulses[button.dataset.action] = true;
-    if (button.dataset.color) pulses.color = button.dataset.color;
-    if (button.dataset.action === "jump") setTimeout(() => (pulses.jumpReleased = true), 120);
+    if (button.dataset.action) inputChange(event.timeStamp, { pulse: button.dataset.action });
+    if (button.dataset.color) inputChange(event.timeStamp, { pulse: "color", value: button.dataset.color });
+    if (button.dataset.action === "jump") setTimeout(() => inputChange(performance.now(), { pulse: "jumpReleased" }), 120);
   });
 }
 function getInput() {
@@ -2842,24 +2888,26 @@ function fmtTime(t) {
 }
 
 // ------------------------------------------------------------------- loop --
-function stepPlay(dt) {
-  if (manual) return;
-  // The level card holds the world for its first 0.4 s unless a key skips it.
-  if (fx.intro && !fx.intro.skipped && fx.intro.age < 0.4) return;
-  accumulator += dt;
-  while (accumulator >= M.TICK) {
+function stepPlay(now) {
+  // QA steps and the level card's first 0.4 s (unless a key skips it) hold
+  // the world: the clock follows the frame, queued input waits for play.
+  if (manual || (fx.intro && !fx.intro.skipped && fx.intro.age < 0.4)) return stepper.hold(now);
+  // Fixed 120 Hz ticks; each stamped input change lands on its own tick.
+  stepper.run(now, applyChange, () => {
     M.update(game, M.TICK, getInput());
     clearPulses();
-    accumulator -= M.TICK;
-  }
+  });
 }
 function frame(now) {
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   lastFrame = now;
   clock += dt;
   screenTime += dt;
+  // Off the play screen the simulation clock only follows the frames, so
+  // entering a level never fast-forwards through the time spent in menus.
+  if (screen !== "play") stepper.hold(now);
   if (screen === "play") {
-    stepPlay(dt);
+    stepPlay(now);
     handleEvents();
     if (game.respawns !== lastRespawns) {
       lastRespawns = game.respawns;
@@ -2943,6 +2991,7 @@ function getState() {
 }
 /** Straight into play for QA (no card, no iris): the level's own kit. */
 function qaStart(id) {
+  keysDown.clear(); // QA starts clean: nothing held, nothing queued
   held.clear();
   clearPulses();
   ui.pauseCard.hidden = true;
@@ -2981,7 +3030,7 @@ window.__game = {
   },
   setManual(value) {
     manual = Boolean(value);
-    accumulator = 0;
+    stepper.hold(performance.now());
   },
   step(seconds, input = {}, options = {}) {
     if (screen !== "play") qaStart(LV.id);

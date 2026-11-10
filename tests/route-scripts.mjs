@@ -23,8 +23,9 @@ export const SCRIPTS = {
       doubleAt(pl, tx(68)).land(); // the 4-tile wall: jump, jump
       doubleAt(pl, tx(75)).land(); // the second 4-tile step
       pl.to(tx(92)).land();
-      doubleAt(pl, tx(95)).land(); // the first water, bank 4 tiles up
-      pl.to(tx(114)).check(pl.g.phase === "won", "goal face");
+      jumpAt(pl, tx(101)).land(); // the puddle: the jump he owns
+      doubleAt(pl, tx(109)).land(); // the pool, over the stump, onto the 4-tile bank
+      pl.to(tx(126)).check(pl.g.phase === "won", "goal face");
     },
     mastery(pl) {
       pl.right();
@@ -38,13 +39,17 @@ export const SCRIPTS = {
       doubleAt(pl, tx(68)).land();
       doubleAt(pl, tx(75)).land();
       pl.to(tx(92)).land();
-      doubleAt(pl, tx(95)).land();
+      jumpAt(pl, tx(101)).land();
+      doubleAt(pl, tx(109)).land();
       // Two stacked ledges above the bank: two double jumps (sticker 3).
-      pl.left().to(tx(104) + 16).stop().wait(0.2).jump().airJump().land();
+      (pl.cx < tx(120) + 16 ? pl.right() : pl.left()).to(tx(120) + 16).stop().wait(0.2).jump().airJump().land();
       pl.check(Math.abs(pl.feet - tx(6)) < 1, "on ledge 1");
-      pl.right().to(tx(106) + 20).stop().wait(0.2).jump().airJump().land();
+      pl.right().to(tx(122) + 20).stop().wait(0.2).jump().airJump().land();
       pl.check(Math.abs(pl.feet - tx(2)) < 1, "on ledge 2");
-      pl.right().to(tx(114)).check(pl.g.phase === "won", "goal face");
+      // Off the ledge's end: he drops behind the goal face and steps back to it.
+      pl.right().to(tx(126) + 8).land();
+      if (pl.feet > tx(10) + 1) pl.left().jump(); // into the dip: hop back up its 2-tile step
+      pl.left().until((p) => p.g.phase === "won", { left: true }, 240, "goal face");
     },
   },
   "1-2": {

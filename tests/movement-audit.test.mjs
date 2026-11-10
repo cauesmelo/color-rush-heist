@@ -198,7 +198,7 @@ test("A3: presses at the edges - landing, respawn, freezes, stomps - are honoure
   // a jump pressed in the hop's last 0.12 s fires on arrival, an earlier one doesn't.
   const death = (pressAt) => {
     const g = noCards(fresh("1-1"));
-    place(g, 98 * T, 16 * T, { grounded: false, vy: 400 }); // over the first water
+    place(g, 110 * T + 16, 16 * T, { grounded: false, vy: 400 }); // over the pool's first half
     let n = 0;
     while (g.phase === "playing" && n++ < 120) ticks(g, 1, { right: true });
     assert.equal(g.phase, "dead");
@@ -830,12 +830,12 @@ test("D2: skill gradient - expert lines vs the guided baselines (not required to
   report(t, "D2 expert vs baseline (s)", out);
 });
 test("D3: small mistakes have readable recoveries", (t) => {
-  // A running jump at 1-1's first water that falls short of the 4-tile bank:
-  // the air jump rescues it across a wide window of timings.
+  // A running jump at 1-1's pool (from its edge, over the stump) that falls
+  // short of the 4-tile bank: the air jump rescues it across a wide window.
   let rescues = 0;
   for (let delay = 0; delay < 60; delay++) {
     const g = noCards(fresh("1-1"));
-    place(g, 95 * T, 14 * T, { vx: W.speed });
+    place(g, 109 * T + 8, 14 * T, { vx: W.speed });
     ticks(g, 1, { right: true, jump: true });
     ticks(g, delay, { right: true });
     ticks(g, 1, { right: true, jump: true });

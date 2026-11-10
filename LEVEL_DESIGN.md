@@ -34,6 +34,10 @@ the build differs, this file says so.
   turning on timers, and `fixed` lookouts that hold one facing. A stomp works from
   above or behind; a card facing the side Rubik came from, or an aware one, has its
   spear up (drawn) and pops him away.
+- **Every card has a job** (revision five; see "Every card has a job" below): a
+  declared `job` that the routes prove, never a card the guided line just walks
+  through. Two cards on one floor keep 2+ tiles between their bodies unless they are a
+  declared `pair` (none is needed today).
 
 ## 1-1 Home Cliff — jump → double jump (120 columns)
 
@@ -60,7 +64,7 @@ No Unseen stamp: this is the stomp lesson, not a stealth level.
 | --- | --- | --- | --- |
 | 0–32 | Introduce | A slow patrol (60% pace) in a dry pit 4 tiles below the start cliff; its cone is in the pit, so Rubik watches from above, jumps onto its back while it walks away, and the held bounce clears the far rim. Falling in costs nothing: a double jump climbs out | CP start; ★1 at the first bounce's peak; CP "chain" on the rim |
 | 33–64 | Develop | 30 tiles of water with four 1-tile islands, each with a lookout staring ahead (fixed, facing the way Rubik travels): bounce from back to back | ★3 (mastery) on a slab 8 tiles over the last island: a held bounce + air jump |
-| 65–106 | Twist | A far bank 2 below the islands (under the last cone), a 2-tile block whose riser shields the mid face, then a patrol pacing before a 7-tile wall: drop behind it while it walks to the wall, stomp, air-jump at the peak; an 8-tile ledge off to the left. Then a patrol and a pedestal lookout to bounce over | CP mid (65); ★2 on the 8-tile ledge; CP "wall" on the wall top |
+| 65–106 | Twist | A far bank 2 below the islands (under the last cone), a 2-tile block whose riser shields the mid face, then a patrol pacing before a 7-tile wall: drop behind it while it walks to the wall, stomp, air-jump at the peak; an 8-tile ledge off to the left. Then a short dip, a breather before the finale (its patrol and pedestal lookout were removed in revision five: the guided line double-jumped both) | CP mid (65); ★2 on the 8-tile ledge; CP "wall" on the wall top |
 | 107–133 | Conclude | 2-tile steps up to the old Stage 1 run-up under its rock overhang: every walk, run, jump or double jump off the edge lands on the back of the **green card**, a lookout facing away that always takes the stomp. Green swirls in → **GREEN GET** → the goal face fills green | auto CP "green" |
 
 Hint: "from behind", shown after the first spear-up (a drawn card with an arrow onto
@@ -76,7 +80,7 @@ checkpoints (start, midpoint).
 | Columns | Beat | Content | Stickers / CP |
 | --- | --- | --- | --- |
 | 0–25 | Introduce | An open glade; a patrol walks toward green Rubik, its cone sweeps him, it hums (♪) and walks through him. It turns 392+ px short of the start face | CP start |
-| 26–60 | Develop | The old disguise corridor: a 3-tile canopy, two patrols, a 1-tile step between them | ★1 on the step |
+| 26–60 | Develop | The old disguise corridor: under a 3-tile canopy one patrol walks straight through green Rubik, where he can't jump over or around it (in the glade he could); a 1-tile step. Its twin was removed in revision five | ★1 on the step |
 | 61–83 | Twist | A 4-tile wall green can't climb ("white card + Z" after 2 s of green jumps); a lookout on top facing away: its first "?" at white Rubik gives room to swap ("green card + X") | CP mid (63, the corridor exit) |
 | 21–60 (above) | Off line | White up a slab (21–24) onto the canopy roof, green past the roof lookout, white up to a high slab | ★2 on the high slab |
 | 81–113 | Conclude | A 2-tile step down, green through a floor patrol, white up a 4-tile step, green past the alcove lookout | ★3 in the swap alcove 5 tiles above the lookout (green jump through it, white air jump) |
@@ -116,7 +120,7 @@ Kit: white, green, dash. Dusk tint. Spears on.
 | 0–34 | Introduce | An open arena under the start ledge (its face cuts the cone): one patrol shows the whole ladder in the open — "?" → "!" (0.45 s beat) → charge 240 px/s (Rubik runs 330) → wind-up → a jumpable spear → 0.7 s recovery to stomp | CP start; ★1 high above the arena: a stomp bounce off the teaching card (a double jump falls short) |
 | 35–58 | Develop | 4-tile steps (white) under a patrol and a turning sentry; 2-tile blocks cut their cones; the "…" look-back telegraphs each turn | — |
 | 59–82 | Twist | The old enforcer post: a red sentry (turns every 3 s) sees green; wait it out, stomp it from the perch while it faces away, or hop. Facing Rubik, its spear is up: a run-and-jump at it can't stomp it | CP post (62, shielded by the step); ★2 on the perch behind it |
-| 83–123 | Conclude | A green patrol and a red sentry with crossing cones: stay green for one and time or stomp the other; the goal on a 2-tile block | CP cross (85, on a block whose risers cut both cones); ★3 at the end of a high line of slabs (row 10) far above both cones |
+| 83–123 | Conclude | Each colour is wrong for one card: a red sentry on the floor sees green, so stomp it from behind when it faces the goal (its 3 s stun covers the climb); then the goal stands at the far end of a **4-tile** block (113–120, a white climb) that a green card patrols. White lands in its view and can't walk past its body (bumped back, spotted), so swap to green before landing (P2's lesson), wait for its back, or stomp it from behind as it walks to the goal. Revision five: this card used to pace the red sentry's floor, overlapping it, and no route came within 192 px of it | CP cross (85, on a block whose risers cut both cones); ★3 at the end of a high line of slabs (row 10) far above the floor cones, which ends on the same block (green before landing) |
 
 No hint bubbles. Risk (brief §11): two ideas in one level; watch first plays here.
 
@@ -131,15 +135,24 @@ escape-only card) is reused at an offset of −70 columns.
 | 0–20 | Introduce | The home cliff (the finish line) and its 2-tile steps; the roof gates are already visible | CP start; CP steps (15, the riser shields it) |
 | 21–53 | Develop | A short canopy with one patrol (1-3); a 4-tile white ledge with a lookout and the swap alcove (1-3/1-5) | ★1 in the swap alcove |
 | 54–83 | Develop | A jump down to an island, then 16 tiles with a refill orb (1-4) | CP bank (90, 6 tiles of runway from the water) |
-| 84–132 | Develop | Vault steps (the red guard turns every 2.6 s + 0.4 s look-back; stair 3 is below every chamber cone), a landing patrol, the chamber with two patrols behind the vault (green, so green Rubik walks among them) | CP stairs (98); CP stair 3 (104) |
-| 110–132 | Twist | Touch the vault: hit-stop, **RED GET**, REVERSE. Two stones drop into the chamber door (a 5-row room: no gap left), so the first red smash is forced; the room's patrols turn and chase - after every card has held still through the REVERSE card plus 0.8 s | auto CP "vault" **inside the room by the door**; ★2 in the alcove behind a stone (knock both patrols, smash it) |
-| 132 → 0 | Conclude | Right to left: cards face home; an escape-only card waits on the island facing the incoming Rubik (spear up: land clear of it as green, or knock it with a red dash); green past the lookout and the corridor patrol, or the roof shortcut: from the ledge's edge, jump + red dash through the stacked gate (6 tiles above the ledge, out of a white double jump's reach inbound), run the roof, dash the mid gate | ★3 between the roof gates |
+| 84–109 | Develop | Vault steps: stair 3 is below every chamber cone (the wait is banked); the landing is empty inbound | CP stairs (98); CP stair 3 (104) |
+| 110–132 | Twist: the approach | The vault room is **one readable lock**: a red sentry posted 4 tiles inside the door (red sees green, so the disguise is useless), turning every 2.6 s with a 0.4 s look-back. Wait on stair 3, go when it looks at the vault, stomp its back | — |
+| 110–132 | Twist: the theft | Touch the vault: hit-stop, **RED GET**, REVERSE. Two stones drop into the chamber door (a 5-row room: no gap left), so the first smash is forced, and **safe: nothing left in the room can see red** (the red guard hums at red Rubik). While the door is sealed it pulses, storm streaks run into it and the upper stone carries the dash key (`drawDoorCue`) | auto CP "vault" **inside the room by the door**; ★2 in the alcove behind a stone (smash it) |
+| 109 → 0 | Conclude: the escape | Right to left, one card per beat: the **alarm card** (escape-only) stares at the door from the landing, inside the reach of a dash fired from the doorway, so the forced smash knocks it too (from deeper in the room the dash stops in the doorway: it sees red, and the refunded dash or green answers it); down the stairs; the crossing back (orb), the **island card** (escape-only, spear up: green after the last dash and land through it, or land clear and knock it); green past the lookout and the corridor patrol, or the roof shortcut: from the ledge's edge, jump + red dash through the stacked gate, run the roof, dash the mid gate (stacked three high, so white can't hop it inbound) | ★3 between the roof gates |
 
 Every climb home is ≤ 2 tiles (red jumps once). No fail timer; the "Quick" par (18 s
 = the baseline escape 12.2 s × 1.5) is shown as the seal it awards, struck through at
 zero. A death after the theft respawns inside the sealed room (every card held
-1.25 s), so the forced smash always happens. Carrying the stolen red to the
-home cliff top ends the level and World 1.
+1.25 s), so the forced smash always happens; since nothing in the room can see red,
+that respawn is never a trap (tested: 20 s of standing, pushing, pacing, hopping,
+swapping or dashing the wrong way never kills, and one dash from anywhere then opens
+the door). Carrying the stolen red to the home cliff top ends the level and World 1.
+
+**Revision five (user playtest, 2026-11-10):** the old room stacked a landing patrol,
+the vault guard and two chasers in 26 tiles. After the theft the chasers speared a
+hesitant Rubik inside the sealed room, the landing card bumped him back in after the
+smash, and each death respawned him in the same trap (probes: standing still, speared
+twice in 8 s). The chasers and the inbound landing patrol are gone.
 
 ## Routes (`tests/routes.mjs`)
 
@@ -151,20 +164,70 @@ that passes. Only the ordinary inputs are recorded; tests replay them from scrat
 
 | Level | Baseline | Mastery |
 | --- | --- | --- |
-| 1-1 | 11.6 s, ★1 | 15.9 s, 3/3 |
-| 1-2 | 21.0 s, ★1, GREEN GET (spotted once: a stomp level) | 26.2 s, 3/3 |
+| 1-1 | 11.5 s, ★1 | 15.7 s, 3/3 |
+| 1-2 | 20.9 s, ★1, GREEN GET (unseen, though 1-2 awards no stamp) | 24.6 s, 3/3 |
 | 1-3 | 20.1 s, ★1, unseen | 25.3 s, 3/3, unseen |
-| 1-4 | 15.8 s, ★1, DASH GET (as green) | 15.2 s, 3/3 |
-| 1-5 | 18.2 s, ★2, unseen | 20.5 s, 3/3, unseen |
-| 1-6 | 35.1 s, escape 12.2 s, unseen | 36.8 s, 3/3, escape 13.9 s, 5 smashes |
+| 1-4 | 14.7 s, ★1, DASH GET (as green) | 15.1 s, 3/3 |
+| 1-5 | 19.4 s, ★2, unseen (white up the goal block, green before landing) | 20.2 s, 3/3, unseen |
+| 1-6 | 35.0 s, escape 12.2 s, unseen (smash + knock in one dash) | 36.7 s, 3/3, escape 13.9 s, 5 smashes |
 
 All zero deaths. These are QA reachability times; first plays should be several times
 longer (the brief targets 60–120 s, 120–150 s for 1-6).
+
+## Every card has a job (revision five)
+
+Each card in `levels/*.mjs` declares a `job`. `tests/model.test.mjs` ("every card has a
+job") replays both routes and proves it:
+
+- `gate`: the guided line stomps it.
+- `refill`: stomped mid-gap for the dash.
+- `knock`: a red dash knocks it.
+- `watch`: a route spends time in its cone, or in its cone turned around, in a colour it
+  sees, so its facing is what the line times.
+- `swap`: the guided line swaps to its colour < 2 s before entering its cone.
+- `teach`: the idea's first card, at most one per level.
+- `disguise`: it walks through Rubik where he can't go around it; only 1-3 and 1-4.
+
+Safe line = the guided route; expert line = what rewards skill.
+
+| Card | Job | Safe line | Expert line / reward |
+| --- | --- | --- | --- |
+| 1-2 pit | gate | drop on its back as it walks away; the held bounce clears the rim | ★1 at the bounce's peak |
+| 1-2 isle-a..d | gate | bounce back to back over 30 tiles of water | held bounce + air jump off isle-d to ★3's slab |
+| 1-2 wall | gate | stomp it from behind at the wall, air jump at the peak | drift left to ★2 on the 8-tile ledge, stomp it again |
+| 1-2 glow | gate | every way off the run-up lands on its back: GREEN GET | — |
+| 1-3 glade | teach | it walks at green Rubik and hums through him | — |
+| 1-3 corridor-b | disguise | it walks through him under a canopy he can't jump | — |
+| 1-3 roof | watch | (off the line) | white up, green past it, white again: ★2 |
+| 1-3 lookout | watch | its "?" at white Rubik after the 4-tile wall says "go green" | swap in the air before landing |
+| 1-3 floor | watch | time the white climb up the 4-tile step to its back | mid-air swap |
+| 1-3 alcove | watch | white lands in its view: green before landing | green jump through it, white air jump: ★3 |
+| 1-3 pillar-a/b, platform | watch | hop while the next card faces away, wait as green | — |
+| 1-4 pillar | refill | stomp its back mid-gap, dash on | low dash off its refill + air jump: ★2 |
+| 1-4 chain | refill | orb, its back, orb | the high line skips it: ★3 |
+| 1-4 island | disguise | land green through it | — |
+| 1-5 teacher | teach | the ladder in the open (green skips it) | stomp it on its recovery, ride the bounce: ★1 |
+| 1-5 p1 | watch | time the white climb to P2 to its back | — |
+| 1-5 p2 | swap | swap back to green before landing beside it | — |
+| 1-5 enforcer | gate | wait on the perch, stomp it when it faces away | perch to perch over its cone (no wait); ★2 on the far perch |
+| 1-5 cross-red | gate | stomp it from behind when it faces the goal block | a held bounce off it reaches the high line |
+| 1-5 cross-green | swap | white up the goal block, green before landing, walk through it | stomp its back as it walks to the goal; the high line (★3) ends on its block |
+| 1-6 corridor | watch | inbound: the white climb at its end, green again in the air | escape: the roof gates above it: ★3 |
+| 1-6 lookout | watch | green past it, both ways | swap alcove inbound: ★1; the stacked gate on the escape |
+| 1-6 vault-guard | gate | wait on stair 3, go when it looks at the vault, stomp its back | — |
+| 1-6 landing | knock | the forced smash from the doorway carries into it | — (from deeper in: a second dash, or green) |
+| 1-6 ambush | swap | green after the last dash, land through it | land clear as red and knock it with a ground dash |
+
+Removed because no route needed them: 1-2 `chain-a`/`chain-b`, 1-3 `corridor-a`, 1-6
+`burst-a`/`burst-b`, and the inbound landing patrol (now an escape-only alarm card). 30 cards remain (was 35).
 
 ## Known design limits
 
 - Cards follow fixed timers, so a human's arrival time decides a patrol's facing; the
   "?" stage, riser cover and the spear-up tell exist for that reason.
+- Disguise still passes green cards for free where green is all the next beat needs;
+  the job test allows that only as 1-3/1-4's lesson. Whether the new jobs are *fun* is
+  not measured: it needs the user's playtest.
 - 1-1's QA route is short (~12 s): the level is as long as its idea needs.
 - 1-5's perch-to-perch jump passes the enforcer without a stomp; ★2 there is an easy
   off-line reward, and 1-5's baseline collects it.

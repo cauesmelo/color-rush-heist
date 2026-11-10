@@ -7,19 +7,21 @@ hide among green cards, catch a storm swirl that lets him dash, and read lookout
 Then he steals his red back from the vault and runs the same forest in REVERSE,
 smashing sealed stones on the way home.
 
-This build answers three rounds of feedback: *"show mechanics slowly over several
+This build answers four rounds of feedback: *"show mechanics slowly over several
 levels, like Mario"* (World 1 as six levels, `RESEARCH_PROGRESSION.md`); *"no
 sleeping enemies, redo level 2; I like the head stomp and the dash"* (every card is
 awake, 1-2 rebuilt around the stomp); and *"crispy, precise movement on Celeste's
-principles, with room for player expression"* (the movement pass below). A
-playtester's fix list is folded in. **World 2 "Blue Mountains" is not built** (its
+principles, with room for player expression"* (the movement pass below); and *"I get
+stuck in the final room; the cards exist just to exist, several on top of each other"*
+(the vault room rebuild and "every card has a job", below). A playtester's fix list is
+folded in. **World 2 "Blue Mountains" is not built** (its
 plan is in the brief, §8). `LEVEL_DESIGN.md` covers each level beat by beat.
 
 ## Run
 
 ```sh
 npm run dev          # http://127.0.0.1:4174 (this folder only, loopback)
-npm test             # 92 tests: 59 model/level + 22 movement audit + 11 campaign (node:test)
+npm test             # 97 tests: 64 model/level + 22 movement audit + 11 campaign (node:test)
 npm run routes       # regenerate tests/routes.mjs after a level edit
 npm run build:itch   # dist/color-rush-heist-itch.zip
 ```
@@ -57,7 +59,10 @@ line, off the line, mastery: 18 in total) and at most two hint bubbles. **Kits a
 fixed per level, also on replays.** The HUD shows only what is owned: no dash glyph
 or DASH pad before 1-4, no red card before the theft, no key glyph while white is the
 only form. **Every card is awake** (patrols, sentries turning on timers, lookouts that
-hold one facing); a test asserts no card is ever asleep in any route.
+hold one facing); a test asserts no card is ever asleep in any route. **Every card has
+a job** (gate, refill, knock, watch, swap, teach, disguise): each declares one and a
+test proves it on the routes; two cards on a floor never stack (2+ tiles apart unless a
+declared pair). `LEVEL_DESIGN.md` lists each card's safe and expert line.
 
 ## Front end (original art, original order)
 
@@ -186,13 +191,19 @@ before and after the audit's tuning; every level gate test re-passes.
 - **Dash charge:** one air dash; ground, stomps, refill orbs, smashed stones and
   knocked cards refill it. Before DASH GET, Shift does nothing at all.
 - **Theft → REVERSE (1-6):** RED GET, the chamber door slams (two stones), every card
-  turns to face the route home, the room's two patrols turn and chase, an escape-only
-  card arrives on the island, the music speeds up, a home arrow and the Quick seal
-  appear. **Fairness:** once the GET card closes, every card holds still through the
-  REVERSE card plus 0.8 s and Rubik is untouchable; the REVERSE card and "Run home!"
-  take the half of the screen Rubik isn't in. A death after the theft respawns him
-  inside the sealed room next to the door (cards held 1.25 s), so the forced first
-  smash always happens. Respawns elsewhere hold every card for 0.75 s.
+  turns to face the incoming Rubik, two escape-only cards arrive (the alarm card on the
+  landing, staring at the door, and the island card), the music speeds up, a home
+  arrow and the Quick seal appear. The room's only card is the red vault guard, which
+  can't see red: the forced first smash is safe, and the same dash from the doorway
+  carries into the alarm card (the first knock). While the door is sealed it pulses,
+  storm streaks run into it and its upper stone carries the dash key. **Fairness:**
+  once the GET card closes, every card holds still through the REVERSE card plus 0.8 s
+  and Rubik is untouchable; the REVERSE card and "Run home!" take the half of the
+  screen Rubik isn't in. A death after the theft respawns him inside the sealed room
+  next to the door (cards held 1.25 s), so the forced first smash always happens;
+  nothing in there can hurt red, so it is never a trap. Respawns elsewhere hold every
+  card for 0.75 s. A card whose cone is on Rubik in its own colour hums (♪), also
+  while searching after a stun.
 - **Checkpoints:** whole-segment restore; markers only advance in the direction of
   travel; signs stand beside the respawn spot; no respawn point lies inside any
   possible cone (the theft's in-room point is covered by its own test). The longest
@@ -266,6 +277,7 @@ own kit), `openMap(id?)`, `resetSave()`, `campaign` (the `campaign.mjs` module).
 `settings`, `audio {musicDecoded, musicPlaying, musicRate, context}` and `player {x, y,
 color, jumps, grounded, vy, dashTime, dashCooldown, dashCharge, …}`. New fields:
 `levelId`, `level {id, name, idea, kit, gets, par, cols}`, `dashUnlocked`, `gets`,
+`doorCue` (1-6: the sealed-door cue is drawn),
 `bounces`, `dashes`, `calm`, `intro`, `getCard`, `map {cursor, id, walking, revealing,
 menuOpen}`, `campaign {levels, unlocked, stickerTotal, totalStickers, worldClear,
 worldMedals, forestColor}`, `save`, `result` (the last tally), `simClock` (the
@@ -278,6 +290,29 @@ starts from `startLevel(id)` / `createGame(id)`. `BASELINE_ROUTE` / `MASTERY_ROU
 remain as aliases for 1-6's routes.
 
 ## Validation (actual results)
+
+**Revision five, 2026-11-10** (vault room rebuild, "every card has a job"; movement
+physics unchanged):
+
+- `npm test`: **97/97 pass** (64 model/level, 22 movement audit, 11 campaign). New: every
+  card's job proved on the routes (30 cards); no stacked cards; the vault room never
+  strands Rubik (six kinds of 20 s dawdling after the theft never kill, then one dash
+  opens the door; a dash from deep in the room stops in the doorway and a second one
+  knocks the alarm card); sticker 3 stays sealed inbound (a sweep of white jumps from
+  the roof's left end: 0 reach it, against 1543 of 2460 with the old 2-tile gate); 1-5's
+  goal block needs white and its green card stops white (swap to green before landing).
+- Routes, baseline / mastery: 1-1 11.5 / 15.7 s, 1-2 20.9 / 24.6, 1-3 20.1 / 25.3, 1-4
+  14.7 / 15.1, 1-5 19.4 / 20.2, 1-6 35.0 / 36.7 (escape 12.2 / 13.9; the Quick par stays
+  18 s). All win with 0 deaths, mastery 3/3, every route unseen.
+- Movement audit unchanged at 27 PASS / 2 WARN / 0 FAIL; D2 now 1-4 2.3%, 1-5 11.2% (was
+  4.8%), 1-6 escape 8.0% (was 8.4%).
+- Real Chrome: `tests/browser-movement.mjs` against `node serve.mjs --port 4420`: every
+  check passes, all 12 routes win. Real-key playtest of the escape (Playwright keyboard,
+  real-time loop from the theft): walking to the door and pressing Shift smashes and
+  knocks with 0 deaths; 12 s of a "lost" player pacing and jumping in the room: 0
+  deaths, the cue still drawn; a dash from deep in the room plus a second dash: out, 0
+  deaths. Root QA on the packaged ZIP (`ONLY=CTS npm run test:browser`): 12/12, with a
+  new vault-room check (10 s lost in the room, cue on, one dash out, cue off).
 
 **Movement audit, 2026-11-10** (`MOVEMENT_AUDIT.md`: 29 rubric items, before 19 PASS /
 4 WARN / 6 FAIL, after 27 PASS / 2 WARN / 0 FAIL):

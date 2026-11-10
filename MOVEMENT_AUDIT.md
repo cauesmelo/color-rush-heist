@@ -47,14 +47,14 @@ WARN band, and it counts as WARN only as a reasoned exception (see below).
 | B10 | Jump buffer | 117 ms | 117 ms | 100-150 ms | PASS → PASS | B9-B10 |
 | B11 | Corner correction | 6 px rising; a dash clipping a lip's underside stopped dead | 6 px rising; 6 px for dashes | 4-8 px | PASS → PASS | B11 |
 | B12 | Ledge assist / lip contact | 1755-approach sweep (wall faces at 51 heights × 3 speeds × 5 vy; edges from both sides × 55 offsets × 3 holds × 3 speeds; walk-offs): 0 "looked landed but fell", **301 landings with the drawn feet > 2 px short**, 15 ticks standing with the feet past the edge | 0 / **0** / 0; a lip rest lasts ≤ 4 ticks | zero false falls, never lands clearly short | FAIL → PASS | B12 |
-| B13 | Air resources | no exploit | Fuzz (6 levels × 3 seeds × 20 s of random input) + all 12 routes: 337 airtimes, never 2 air jumps or 2 air dashes without a documented refill | refresh only by rule | PASS → PASS | B13 |
+| B13 | Air resources | no exploit | Fuzz (6 levels × 3 seeds × 20 s of random input) + all 12 routes: 337 airtimes (352 on the revision-five routes), never 2 air jumps or 2 air dashes without a documented refill | refresh only by rule | PASS → PASS | B13 |
 | B14 | Dash | 144.4 px, spread 0, 0.17 s + 4-tick (33 ms) freeze; Dim/Flash on Rubik | same | fixed, short freeze, state on Rubik | PASS → PASS | B14 |
 | C1 | Collider vs sprite | Support = the 40 px box: 9-13 px off the drawn feet in every frame | Support = the feet (±11 px): ≤ 2 px in all standing, landing, falling and storm frames (canvas diff in Chrome: drawn feet −9..+13, feet line exactly on the floor); exceptions listed below | ±2 px every frame; hurtbox ≤ body | FAIL → WARN | C1; browser "C1 canvas" |
 | C2 | Hazard colliders | Spear band 30-70 px for both sheets: the red card's killed 6 px above its drawn spear | Band = the drawn spear head per sheet (green 50-68, red 46-64 px, measured from the PNGs); documented generous shrinks: spear tip 8-12 px short of the drawing, card body 8 px inside each drawn side (bumps only), water kills 10 px under its drawn surface; cone = PNG (existing test) | match, shrinks documented | FAIL → PASS | C2 |
-| C3 | No tunnelling | none found | 114,759 ticks (every route + 3000 fuzzed starts at dash 850 / fall 760 / bounce 520 / knock 440 px/s): the box never inside a solid | swept/sub-stepped safe | PASS → PASS | C3 |
+| C3 | No tunnelling | none found | 114,759 ticks (114,397 on the revision-five routes) (every route + 3000 fuzzed starts at dash 850 / fall 760 / bounce 520 / knock 440 px/s): the box never inside a solid | swept/sub-stepped safe | PASS → PASS | C3 |
 | C4 | Contact rules | spear + water only | `die()` sources are exactly spear (lunge frames) and water; the spear-up tell is drawn from `M.stompable` | consistent, visible | PASS → PASS | C4 |
 | D1 | Optional techniques | dash-jump, held stomp, saved air jump | dash-jump +26 px of flight; held stomp 198 vs 150 px; air jump saved for the fall +80 px; (new) a freeze press keeps the air jump | ≥ 2 that change outcomes | PASS → PASS | D1 |
-| D2 | Skill gradient | expert vs baseline: 1-4 9.1%, 1-6 escape 8.1% | 1-4 2.3%, 1-5 4.8%, 1-6 escape 8.4% (the 1-4 baseline itself got 1.1 s faster) | ≥ 15%, not required | WARN (exception) → WARN (exception) | D2 |
+| D2 | Skill gradient | expert vs baseline: 1-4 9.1%, 1-6 escape 8.1% | 1-4 2.3%, 1-5 4.8%, 1-6 escape 8.4% (the 1-4 baseline itself got 1.1 s faster). Revision five (cards' jobs, same physics): 1-4 2.3%, 1-5 11.2%, 1-6 escape 8.0% | ≥ 15%, not required | WARN (exception) → WARN (exception) | D2 |
 | D3 | Recovery | — | air-jump rescue window over 1-1's first water: 425 ms of timings; landing on a raised spear pops (0 deaths); body contact knocks back | readable recovery | PASS → PASS | D3 |
 | E1 | Action feedback | sound + visual for 13 movement events | same, checked in source | same frame | PASS → PASS | E1-E2 |
 | E2 | Resource state on Rubik | form (sheet), dash (Dim/Flash); **white's air jump not shown anywhere** | + two puffs under the feet while the air jump is unspent | readable without the HUD | FAIL → PASS | E1-E2; screenshots |
@@ -107,6 +107,23 @@ WARN band, and it counts as WARN only as a reasoned exception (see below).
   (40 px) also sits inside the drawn 56 px cube, so pressing against a wall the cube's edge
   overlaps the wall art by 7-9 px; widening the box would change every wall contact, cone
   exposure and level fit, and the rubric's hurtbox rule (never larger than the body) holds.
+
+## Revision five (2026-11-10): level changes, no physics changes
+
+The vault room rebuild and the "every card has a job" pass (`LEVEL_DESIGN.md`) changed
+levels and routes, not `WORLD`. The audit file re-passes unchanged: 22/22, scorecard
+still 27 PASS / 2 WARN / 0 FAIL, the gap lab identical (10 / 15 / 17 / 20 tiles), and the
+real-Chrome checks pass on the new routes. D2 moved because the guided lines changed:
+
+- 1-5 went from 4.8% to 11.2%. Its guided line now lands on the floor after the red sentry's
+  stomp, climbs the goal block as white and swaps to green before its card. The expert's held
+  bounce off the same sentry reaches the high line.
+- 1-6 escape went from 8.4% to 8.0%: the guided line's smash and knock are one dash, so it
+  lost its old knock wait.
+
+Guard design alone does not reach 15%. The expert lines (dash-jumps, perch to perch, the roof
+gates) gain most of their time over gaps the F rule gates by airtime, so the guided line and
+the expert line move across them at the same speed.
 
 ## Not verified
 

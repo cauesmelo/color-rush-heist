@@ -368,3 +368,97 @@ whether the map's color and pips read without explanation; whether stickers pull
 - Checkpoint complaints: [Itorah review](https://www.playstationcountry.com/?p=21924)
 - Jam game length: [itch.io forum](https://itch.io/jam/brackeys-5/topic/1215687/how-long-is-the-average-play-time-of-a-jam-game)
 - Original project facts: `../refs/color-theft-story/scenes/level_blue.tscn` (help texts, soldier mix, flip times), `scripts/soldier.gd`, `scripts/world.gd`
+
+## 14. Every card has a job (2026-11-10, revision five playtest)
+
+The user's playtest, translated: *"In CRH I get stuck here, not knowing what to do next. The movement is
+good and the levels are on the right track, but the enemies exist just to exist: it is very easy to walk
+between them. And this final room isn't fun at all, several of them on top of each other; there's no fun
+for the player."* The screenshot is 1-6's vault chamber just after the theft: red Rubik at the sealed door,
+the red vault guard behind him, the landing card outside, a chaser off-screen, the Quick seal already
+struck through.
+
+### 14.1 What was measured (before)
+
+A route audit stepped both QA routes of every level and recorded, per card: stomps/bounces/knocks, time
+inside its drawn cone in a colour it sees, time inside its cone turned around (its facing is what let Rubik
+pass), time inside its cone disguised (a hum), how soon before entering that cone Rubik had swapped to its
+colour, and the closest approach.
+
+- **Walk-throughs:** most engagements were hums with no swap in the previous 2 s. Rubik was already
+  green and simply walked through. Examples: 1-3's corridor pair, 1-4's island card.
+- **Never engaged by the guided line:** 1-2 `chain-a`/`chain-b`, which the baseline double-jumps; only the
+  mastery stomped them, for no reward. 1-5 `cross-green` never came within 192 px on either route.
+- **The vault room:** inbound, green Rubik walked among the landing patrol and both "burst" cards; only the
+  red sentry mattered. After the theft, model probes from the theft state found:
+  - Standing still for 8 s: speared twice.
+  - Pushing against the sealed door: speared after about 5 s.
+  - Smashing once, then walking: bumped back by the landing card, then speared.
+  - Each death respawned Rubik inside the sealed room with the chasers reset.
+
+  That is a death loop with no in-world cue for the smash-then-knock sequence. It is why the player was
+  stuck.
+- **A sequence break:** inbound, white can double-jump from the home cliff onto the canopy roof, and from
+  the roof's left end 63% of a jump-timing sweep hopped the 2-tile mid gate onto sticker 3 (probably how
+  the screenshot's run already held ★3).
+
+### 14.2 What the references say
+
+| Source | Technique | Applied here |
+|---|---|---|
+| Koncewicz, [SMB3 level design lessons, part 1](https://www.gamedeveloper.com/design/super-mario-bros-3-level-design-lessons-part-1) (Game Developer, 2011) | A threat first appears where it is low-risk, then returns combined with others, layering complexity gradually | One card per beat in the escape, each with a different verb; pairs only where their colours interlock |
+| Kerr, [How Miyamoto built World 1-1](https://www.gamedeveloper.com/design/how-miyamoto-built-i-super-mario-bros-i-legendary-world-1-1) (Game Developer, 2015); [World 1-1](https://en.wikipedia.org/wiki/World_1-1) | The first Goomba walks at Mario on flat ground, cheap to lose to: the enemy teaches without text | The alarm card stands where the forced first smash carries into it, so the first knock is taught by the same press |
+| Nutt, [The secret to Mario level design](https://www.gamedeveloper.com/design/the-secret-to-i-mario-i-level-design) (Game Developer, 2012); GMTK, [Super Mario 3D World's 4 Step Level Design](https://www.youtube.com/watch?v=dBmIkEvEBtA) (2015) | Introduce, develop, twist, conclude; drop an idea once it has done its work | Cards that repeated an earlier beat with no new decision were removed (1-2's pair, 1-3's twin) |
+| Kumar, [Mark of the Ninja's five stealth design rules](https://gamedeveloper.com/design/-i-mark-of-the-ninja-i-s-five-stealth-design-rules) (Game Developer, 2012); Alexander, [Reinventing stealth in 2D](https://gamedeveloper.com/design/reinventing-stealth-in-2d-with-i-mark-of-the-ninja-i-) (2012) | Show the player exactly what guards perceive and why they react (clarity over mystery), with a checkpoint between encounters | The cone already is the detection area; now the hum also overrides "?" when a card can't see Rubik's colour, and the sealed door carries its own cue |
+| GMTK, [How Stealth Game Guards See and Hear](https://www.youtube.com/watch?v=Ay-5g36oFfc) (School of Stealth, 2020) | Perception rules decide what kind of stealth the player gets | Disguise alone is not a decision; a card earns its place where the colour that passes it is wrong for the next thing (a white climb, a red smash) |
+| Thompson, [The AI of DOOM (2016)](https://www.gamedeveloper.com/design/cyber-demons-the-ai-of-doom-2016-) (Game Developer, 2018) | Readable enemy roles, plus an attack-token cap on how many enemies attack at once | No stacked cards (tested); after the theft, nothing in the sealed room can attack red |
+| The Level Design Book, [Encounter](https://book.leveldesignbook.com/process/combat/encounter) and [Enemy](https://book.leveldesignbook.com/process/combat/enemy) | Use only a few enemy types at once; two types make a readable relationship; visible-but-unreachable enemies let players plan | The vault room is one card inbound; 1-5's red/green pair stands side by side; the alarm card is visible through the door before the smash |
+| Keren, [Boss battle design fundamentals](https://www.gamedeveloper.com/design/video-boss-battle-design-fundamentals) (GDC 2018 summary, Game Developer) | A climax tests skills the player already has | The vault room recombines the red sentry (1-5), stair cover, the stomp from behind (1-2), then the new red verbs, one at a time |
+
+GDC Vault's Anderson talk ("Of Choice and Breaking New Ground", 2013) was seen only as a session page,
+and Eurogamer's Goomba-vs-Koopa video only in search snippets. Neither is used for a claim.
+
+### 14.3 The rule adopted
+
+Every card declares a job, and `tests/model.test.mjs` proves each job on the routes:
+
+| Job | Proof on the routes |
+|---|---|
+| `gate` | The guided line must stomp it |
+| `refill` | Stomped mid-gap for the dash |
+| `knock` | A red dash knocks it |
+| `watch` | A route spends time in its cone, or its turned cone, in a colour it sees: its facing is what the line times |
+| `swap` | The guided line swaps to its colour less than 2 s before entering its cone |
+| `teach` | One per level: the idea's first card |
+| `disguise` | It walks through Rubik where he can't go around it. Allowed only in 1-3 and 1-4, where hiding in plain sight is the lesson |
+
+Two cards on one floor keep at least 2 tiles between their bodies unless they are a declared pair.
+
+### 14.4 What changed
+
+The per-card table is in `LEVEL_DESIGN.md`.
+
+- **1-6:** the vault room is one red sentry inbound. After the theft:
+  - Nothing in the sealed room can see red.
+  - An escape-only alarm card stares at the door, inside the reach of a dash fired from the doorway, so the
+    smash knocks it too. Fired from deeper in the room, the dash stops in the doorway; the refunded dash
+    or green answers the card's "?".
+  - The door pulses, storm streaks run into it, and the dash key sits on the upper stone until the doorway
+    opens.
+  - The chasers are gone, and the mid roof gate is stacked three high.
+- **1-5:** the green crossing card left the red sentry's floor (it overlapped it) and now patrols a 4-tile
+  goal block. White can climb it but can't walk past the card's body, so the player swaps to green before
+  landing (P2's lesson), waits for its back, or stomps it. A first version had the card watching the climb
+  from the floor; a real-key test showed an impatient white climb left the cone in about 0.2 s, earned only
+  a "?" and still won unseen, so that version was dropped.
+- **1-3:** one corridor patrol, not two.
+- **1-2:** the pair after the wall is gone, leaving a breather before the finale.
+- **1-4:** unchanged; its cards already worked as refills and a disguise landing.
+
+Skill gradient (D2, expert vs guided): 1-4 2.3% (unchanged), 1-5 11.2% (was 4.8%: the guided line lands
+after the red sentry's stomp and climbs the goal block, while the expert's held bounce reaches the high
+line), 1-6 escape 8.0% (was 8.4%). Only 1-5 moved meaningfully. All three are still below the rubric's 15%.
+Raising them further would mean stronger dash carry, which is a level-design call (see `MOVEMENT_AUDIT.md`).
+
+**Not verified:** whether players now find the cards fun. That needs the user's playtest. Watch first:
+whether the knock reads as Rubik's doing rather than an accident, and whether 1-5's last climb feels fair.

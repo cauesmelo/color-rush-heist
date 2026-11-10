@@ -199,14 +199,17 @@ export const SCRIPTS = {
       pl.until((p) => p.guard("cross-red").dir === 1 && p.guard("cross-red").turning <= 0, {}, 900, "red away");
       pl.right().to(pl.guard("cross-red").x - 230).jump().steerTo((p) => p.guard("cross-red").x - 10);
       pl.check(pl.guard("cross-red").state === "stunned", "red sentry stomped");
-      pl.until((p) => p.p.grounded, (p) => (p.cx < tx(110) ? { right: true } : {}), 240, "past the red sentry");
-      // Green through the green patrol to the goal block; its cone covers
-      // the white climb whenever it faces right, so wait for its back.
-      pl.right().to(tx(116) + 8).stop();
-      const back = (p) => p.guard("cross-green").dir === -1 && p.guard("cross-green").turning <= 0;
-      pl.until(back, {}, 900, "cross-green away");
-      pl.right().press({ color: "white", jump: true }).airJump().land();
-      pl.to(tx(120)).check(pl.g.phase === "won", "goal face");
+      // Down from the bounce between slabs 2 and 3 (a held bounce would reach
+      // the high line: that is the mastery's way).
+      pl.landAt(tx(103) + 16);
+      pl.check(Math.abs(pl.feet - tx(16)) < 1, "past the red sentry, on the floor");
+      // The goal block: white up its 4-tile face, green again before
+      // landing in the block card's view, then walk through it to the goal.
+      pl.right().to(tx(111) + 16).stop().wait(0.1).right();
+      pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
+      pl.check(pl.p.color === "green", "green through the block's card");
+      if (pl.g.phase !== "won") pl.to(tx(120));
+      pl.check(pl.g.phase === "won", "goal face");
     },
     mastery(pl) {
       // Sticker 1: green (unseen) in the arena; let the teaching card walk
@@ -247,7 +250,9 @@ export const SCRIPTS = {
       jumpAt(pl, tx(100) + 8).land();
       pl.to(tx(109) + 4).stop().wait(0.1).jump().land();
       pl.check(pl.g.stickers[2].collected, "high sticker");
-      pl.right().jump().apex().dash().land();
+      // Off slab 3 onto the goal block, green before landing in its card's view.
+      pl.right().jump().apex().dash();
+      pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").color("green").land();
       pl.to(tx(120)).check(pl.g.phase === "won", "goal face");
     },
   },
@@ -551,7 +556,8 @@ export const EXPERT = {
     pl.check(Math.abs(pl.feet - tx(10)) < 1, "high line");
     jumpAt(pl, tx(91) + 8).land();
     jumpAt(pl, tx(100) + 8).land();
-    pl.to(tx(109) + 4).jump().apex().dash().land();
+    pl.to(tx(109) + 4).jump().apex().dash();
+    pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").color("green").land();
     pl.right().to(tx(120)).check(pl.g.phase === "won", "goal face");
   },
   "1-6"(pl) {

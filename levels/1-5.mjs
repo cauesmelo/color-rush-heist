@@ -9,15 +9,17 @@
  *            blocks cut their cones; the "..." look-back telegraphs each turn.
  * twist:     the old enforcer post: the red card's cone is bright on green
  *            Rubik. Wait out its 3 s turns, stomp it from the perch, or hop.
- * conclude:  a red sentry and a green patrol, side by side (never stacked):
- *            green walks through the green card but the red one sees green,
- *            so time or stomp it; then the goal stands on a 4-tile block, a
- *            white climb inside the green patrol's view, so wait as green for
- *            its back. Each colour is wrong for one card. A high line of
- *            slabs, reached by a white double jump from the checkpoint block,
- *            stays far above both cones (a cone reaches 90 px over its floor).
- *            (Revision five: the green patrol used to share the red sentry's
- *            floor and no route ever came near it; it now guards the climb.)
+ * conclude:  each colour is wrong for one card. A red sentry on the floor
+ *            sees green: time it or stomp it from behind. Then the goal stands
+ *            at the far end of a 4-tile block (a white climb) that a green card
+ *            patrols: white lands in its view and can't walk past its body, so
+ *            swap to green before landing (1-5's P2 lesson), or wait for its
+ *            back, or stomp it from behind as it walks to the goal. A high line
+ *            of slabs, reached by a white double jump from the checkpoint
+ *            block, stays far above the floor cones (a cone reaches 90 px over
+ *            its floor) and ends on the same block.
+ *            (Revision five: the green card used to pace the red sentry's
+ *            floor, overlapping it, and no route ever came near it.)
  */
 import { defineLevel, px } from "./builder.mjs";
 
@@ -46,12 +48,12 @@ export default defineLevel({
     ledge(66, 69, 12); // perch above the enforcer's cone
     ledge(76, 79, 12); // perch behind it (sticker 2)
     // --- Conclude (83-123): crossing cones -----------------------------------
-    ground(83, 117, 16);
+    ground(83, 112, 16);
     fill(83, 86, 14, 15); // a 2-tile block: both risers cut the cones (CP 2 on top)
     ledge(88, 91, 10); // the never-seen line: 6 tiles over the floor, 4 over
     ledge(97, 100, 10); // the block (a white double jump), far above both cones
     ledge(106, 109, 10);
-    ground(118, 120, 12); // the goal block: 4 tiles, white (in the green patrol's view)
+    ground(113, 120, 12); // the goal block: 4 tiles (white), patrolled by a green card
     fill(121, 123, 0, 21); // end wall
   },
   spawn: { x: 204, floor: px(14) },
@@ -80,13 +82,12 @@ export default defineLevel({
     { id: "p2", job: "swap", kind: "green", mode: "sentry", x: px(57), floor: px(8), dir: -1, min: px(56) + 16, max: px(57) + 16, turnEvery: 2.5 },
     // The enforcer post: stationary red sentry turning every 3 s.
     { id: "enforcer", job: "gate", kind: "red", mode: "sentry", x: px(72) + 16, floor: px(16), dir: -1, min: px(68) + 16, max: px(76) + 16, turnEvery: 3 },
-    // The crossing pair (side by side, 2 tiles apart at their closest): the
-    // red sentry sees the green that passes the green patrol; stomp it from
-    // behind when it faces the goal.
-    { id: "cross-red", job: "gate", pair: "cross-green", kind: "red", mode: "sentry", x: px(101) + 16, floor: px(16), dir: -1, min: px(99) + 16, max: px(103) + 16, turnEvery: 2.5 },
-    // Paces 106-111: facing right, its cone covers the white climb onto the
-    // goal block (cols 117-120) from anywhere in its patrol.
-    { id: "cross-green", job: "watch", pair: "cross-red", kind: "green", mode: "patrol", x: px(108) + 16, floor: px(16), dir: 1, min: px(106) + 16, max: px(111) + 16 },
+    // The floor's red sentry sees green: stomp it from behind when it faces
+    // the goal block (its 3 s stun covers the walk and the climb).
+    { id: "cross-red", job: "gate", kind: "red", mode: "sentry", x: px(101) + 16, floor: px(16), dir: -1, min: px(99) + 16, max: px(103) + 16, turnEvery: 2.5 },
+    // Paces the goal block (113.5-117.5; the goal face stands past its far
+    // bound): its body stops white, its cone sees white, green walks through.
+    { id: "cross-green", job: "swap", kind: "green", mode: "patrol", x: px(115) + 16, floor: px(12), dir: -1, min: px(113) + 16, max: px(117) + 16 },
   ],
   goal: { x: px(119) + 16, floor: px(12) },
 });

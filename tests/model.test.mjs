@@ -840,20 +840,29 @@ test("no stacked cards: two cards on one floor keep 2+ tiles between their bodie
   assert.deepEqual(room.filter((c) => !c.escapeOnly).map((c) => c.id), ["vault-guard"]);
   assert.deepEqual(room.filter((c) => c.escapeOnly).map((c) => c.id), ["landing"]);
 });
-test("1-5: the goal block needs white, and the green patrol's cone covers that climb when it faces it", () => {
-  const level = getLevel("1-5"),
-    c = level.guards.find((x) => x.id === "cross-green");
-  const climb = { x: 117 * T - M.PLAYER.w / 2, y: 16 * T - M.PLAYER.h, w: M.PLAYER.w, h: M.PLAYER.h };
-  const g = fresh("1-5");
-  for (let x = c.min; x <= c.max; x += 8) {
-    const probe = { ...c, x, dir: 1 };
-    assert.ok(M.boxInCone(probe, climb, M.coneReach(g, probe)), `facing the goal from ${x}: the climb is in view`);
-    assert.equal(M.boxInCone({ ...probe, dir: -1 }, climb, M.coneReach(g, { ...probe, dir: -1 })), false, "its back is the window");
-  }
-  const goalStep = { start: { x: 112 * T, feet: 16 * T }, top: 12 * T, past: 118 * T + 8 };
-  assert.equal(anyReaches("1-5", { ...goalStep, form: "green" }, jumpFamily({ maxTakeoff: 60 })), false, "green can't climb it");
+test("1-5: the goal block needs white, and its green card stops white: swap to green before landing", () => {
+  const goalStep = { start: { x: 108 * T, feet: 16 * T }, top: 12 * T, past: 113 * T + 8 };
+  assert.equal(anyReaches("1-5", { ...goalStep, form: "green" }, jumpFamily({ maxTakeoff: 60 })), false, "green can't climb the block");
   assert.equal(anyReaches("1-5", { ...goalStep, form: "white" }, jumpFamily({ maxTakeoff: 60, air: true })), true, "white can");
+  // On the block, the card faces the arrival point: white is seen and bumped
+  // back by its body (it can't be walked past); green walks through to the goal.
+  const walk = (color) => {
+    const g = fresh("1-5"),
+      c = only(g, "cross-green");
+    Object.assign(c, { x: c.min + 32, dir: -1, state: "calm", turning: 0 });
+    g.unlocked.green = true;
+    place(g, 113 * T + 24, 12 * T, { color });
+    for (let i = 0; i < seconds(2) && g.phase === "playing"; i++) ticks(g, 1, { right: true });
+    return g;
+  };
+  const white = walk("white"),
+    green = walk("green");
+  assert.notEqual(white.phase, "won", "white can't walk past it");
+  assert.ok(events(white, "bump").length + events(white, "suspect").length > 0, "it noticed white");
+  assert.equal(green.phase, "won", "green walks through to the goal");
+  assert.equal(green.spotted, 0);
 });
+
 
 // --------------------------------------------- rules over every level -----
 test("no level asks for a 3-tile climb (93 px apex vs 96 px: the broken-feeling height)", () => {

@@ -2,24 +2,24 @@
 
 A standalone 2D action-stealth platformer built from **Color Theft Story's original
 art**. Rubik starts colorless on his home cliff. Over six short levels he learns to
-jump twice, bounce on dozing Uno cards, absorb green from a glowing one, hide among
-green cards, catch a storm swirl that lets him dash, and read lookouts. Then he
-steals his red back from the vault and runs the same forest in REVERSE, smashing
-sealed stones on the way home.
+jump twice, stomp awake Uno cards from behind, steal green from a card that holds it,
+hide among green cards, catch a storm swirl that lets him dash, and read lookouts.
+Then he steals his red back from the vault and runs the same forest in REVERSE,
+smashing sealed stones on the way home.
 
-This revision answers the feedback *"develop it further with more game-design
-technique, like Mario: show mechanics slowly over several levels so the player
-feels progress and learning"*. It implements the approved brief
-`RESEARCH_PROGRESSION.md`: World 1 as six levels, GET moments, a world map built
-from the original art, level intro cards and tallies, a world clear and a local
-save. **World 2 "Blue Mountains" is not built** (its plan is in the brief, §8).
-`LEVEL_DESIGN.md` covers each level beat by beat.
+This build answers three rounds of feedback: *"show mechanics slowly over several
+levels, like Mario"* (World 1 as six levels, `RESEARCH_PROGRESSION.md`); *"no
+sleeping enemies, redo level 2; I like the head stomp and the dash"* (every card is
+awake, 1-2 rebuilt around the stomp); and *"crispy, precise movement on Celeste's
+principles, with room for player expression"* (the movement pass below). A
+playtester's fix list is folded in. **World 2 "Blue Mountains" is not built** (its
+plan is in the brief, §8). `LEVEL_DESIGN.md` covers each level beat by beat.
 
 ## Run
 
 ```sh
 npm run dev          # http://127.0.0.1:4174 (this folder only, loopback)
-npm test             # 53 tests: 42 model/level + 11 campaign (node:test)
+npm test             # 70 tests: 59 model/level/movement + 11 campaign (node:test)
 npm run routes       # regenerate tests/routes.mjs after a level edit
 npm run build:itch   # dist/color-rush-heist-itch.zip
 ```
@@ -32,7 +32,7 @@ No CDN, account, backend or parent server. HTTP is needed for ES modules.
 | --- | --- | --- |
 | Move / choose a level on the map | ← → or A D | ◀ ▶ pads (88+ CSS px) |
 | Jump (hold for height; white jumps twice) / enter a level | Space, W, ↑ (Enter on the map) | JUMP (or tap the node twice) |
-| Dash (from 1-4 on; once in the air) | Shift, K, J | DASH (shown only once owned) |
+| Dash (from 1-4 on; once in the air; jump during a ground dash to dash-jump) | Shift, K, J | DASH (shown only once owned) |
 | White / green / red | Z / X / C (or 1 2 3) | form cards (only owned ones) |
 | Back to checkpoint | R | pause menu |
 | Pause (in a level) / menu (on the map) | P, Esc, ❚❚ button | ❚❚ button |
@@ -45,18 +45,19 @@ as your first input. Leaving the tab pauses.
 | Lv | Name | New idea | Twist | Kit at start | GET |
 | --- | --- | --- | --- | --- | --- |
 | 1-1 | Home Cliff | Jump | Double jump (4-tile wall on dry ground) | white | — |
-| 1-2 | Sleeping Cards | Bounce on dozing cards | Bounce + air jump reaches 7–8-tile walls | white | GREEN, at the end |
-| 1-3 | Hide in Green | Disguise | White/green trade-off | white, green (spawns green) | — |
-| 1-4 | Storm Dash | Dash | Refills chain dashes (orb, card) | white, green | DASH, in the first seconds |
+| 1-2 | Stomping Ground | Stomp a card's head | Stomp from behind, then air-jump (7-8-tile heights) | white | GREEN, at the end |
+| 1-3 | Hide in Green | Disguise | White/green trade-off; a timed-turn pillar finale | white, green (spawns green) | — |
+| 1-4 | Storm Dash | Dash | Refills chain dashes (orb, lookout) | white, green (starts green) | DASH, in the first seconds |
 | 1-5 | Lookouts | The awareness ladder and the spear | A red card sees green | white, green, dash | — |
 | 1-6 | The Vault | Every earlier verb, compressed | Theft → REVERSE run home | white, green, dash | RED, at the theft |
 
-Each level is 120–154 columns with one new idea in introduce → develop → twist →
-conclude order, a midpoint checkpoint just before its twist (two in 1-5 and 1-6),
-three stickers (main line, off the line, mastery: 18 in total) and at most two hint
-bubbles. **Kits are fixed per level, also on replays**, so sticker gates and QA routes
-stay valid. The HUD shows only what is owned: no dash glyph or DASH pad before 1-4,
-no red card before the theft, and no key glyph while white is the only form.
+Each level is 120–168 columns with one new idea in introduce → develop → twist →
+conclude order, a midpoint checkpoint just before its twist, three stickers (main
+line, off the line, mastery: 18 in total) and at most two hint bubbles. **Kits are
+fixed per level, also on replays.** The HUD shows only what is owned: no dash glyph
+or DASH pad before 1-4, no red card before the theft, no key glyph while white is the
+only form. **Every card is awake** (patrols, sentries turning on timers, lookouts that
+hold one facing); a test asserts no card is ever asleep in any route.
 
 ## Front end (original art, original order)
 
@@ -64,7 +65,8 @@ no red card before the theft, and no key glyph while white is the only form.
 2. **Title:** full-frame `title_screen.png` (touch: a "Tap to start" pill). Music on
    by default, nothing requested before the first key or tap.
 3. **First visit:** title → the comic (`bg1` drain, `bg_black`, the four panels in
-   their `story.tscn` layout, the `cutout.png` iris) → 1-1. **Returning players:**
+   their `story.tscn` layout, the `cutout.png` iris) → 1-1 (skipping the comic still
+   shows the "1-1 Home Cliff" card). **Returning players:**
    title → world map, Rubik on the next level; the comic is skipped.
 4. **Level intro card:** an Uno-style card ("1-3" at 64 px, the name at 32 px, the
    three sticker slots) over the opening iris for 1 s (0.5 s once cleared). The world
@@ -72,14 +74,16 @@ no red card before the theft, and no key glyph while white is the only form.
 5. **GET moments:** hit-stop, then a 1.2 s card: Rubik at 4× in the new color (the
    storm frames for dash), the form card and its key, one caption ("Green cards can't
    see green.", "Dash once per jump.", "Red dash smashes stones."). The card is then
-   dealt into the HUD. The freeze is part of the simulation (routes include it), and
-   each GET saves a checkpoint, so a death can't take an ability away.
+   dealt into the HUD. The caption has its own band below the portrait. The freeze is
+   part of the simulation (routes include it), and each GET saves a checkpoint, so a
+   death can't take an ability away.
 6. **Goal face:** a 2× chalk cube face on a stick (the checkpoint language, no new
    art). Touching it flips it and fills it with Rubik's color; the iris closes on him.
 7. **Level clear tally:** time and best, the three stickers flying into their slots
    (0.15 s each, with a sound; faint = owned from an earlier run), stamps where the
-   level awards them ("Unseen" from 1-3 on, "Quick" on 1-6), "1-x is open!" on a
-   first clear. **Continue** (default) or **Retry**.
+   level awards them ("Unseen" on the stealth levels 1-3, 1-5 and 1-6, "Quick" on
+   1-6), "1-x is open!" on a first clear. **Continue** (default) or **Retry**; arrow
+   keys move between them.
 8. **World map:** a 960×540 side view from `bg1-sky` over `bg1`, regaining 12% color
    per cleared level and full color after 1-6. A slab-cell path (atlas row 0, cells
    12–17) links six chalk-face nodes 140 px apart; 1-6 is `cofre.png` under the red
@@ -93,7 +97,9 @@ no red card before the theft, and no key glyph while white is the only form.
    levels, getaway), six little faces for per-level stickers, three world medals
    (Full face 18/18, Ghost = Unseen on 1-3 to 1-6, Quick getaway = 1-6 par) and one
    caption in the comic's style: "Green and red are back. Blue is up in the mountains."
-   → `end_game.png` → title.
+   → the ending: `end_game.png` framed on the colored forest with red and green Rubik,
+   its baked "That's it by now." covered by a plate reading "That's it for now." (the
+   file is untouched) and "World 2: Blue Mountains - coming soon" → title.
 
 **Pause (in a level):** Resume, Back to checkpoint, Restart level, World map, Sound /
 Music / Timer, Controls, Art ("Art by Vitor Farias"), Credits. **Map menu (P/Esc on
@@ -110,57 +116,81 @@ numbers, non-finite times and unknown hint states are dropped). Every storage ca
 wrapped in `try`: with blocked storage (private window, sandboxed iframe) progress
 lasts for the visit. Settings keep their old keys.
 
+## Movement (crisp, readable, expressive)
+
+All numbers are in `model.mjs` `WORLD` with comments and pinned by tests (120 Hz
+fixed ticks, px/s; deterministic, so routes replay identically in Node and Chrome).
+
+| Feel | Value | Why |
+| --- | --- | --- |
+| Run / start / stop | 330 px/s; 0→330 in 0.13 s; 330→0 in 0.10 s | snappy, no ice |
+| Turnaround (ground) | momentum gone in 0.055 s (6000 px/s²), full speed back in 0.18 s | reversing never feels heavy |
+| Air control | full acceleration; reversing 4200 px/s²; letting go drifts ~18 px | precision first, a little carry |
+| Jump | 470 px/s → 93 px held (2 tiles safe, 3 never); a tap (release halves vy) ≈ 25–45 px | variable height |
+| Apex hang | half gravity while jump is held and \|vy\| < 60 | a readable peak to aim from |
+| Fall | 1.15× gravity past the apex band, capped at 760 px/s | landings read firm and quick |
+| White air jump | ×0.94 (+83 px, 175 px total) | 4-tile ledges |
+| Coyote / buffer | 11 ticks (~92 ms) / 0.12 s, the buffer kept alive through an air dash | no lost inputs |
+| Corner correction | rising into a ceiling corner by ≤ 6 px slides past it | no unfair bonks |
+| Ledge assist | meeting a lip with the feet ≤ 12 px below its top steps onto it | no "visually made it but didn't"; 12 < 32 so it never creates a climb (93+12 < 128, 175+12 < 192) |
+| Dash | horizontal only (left/right/facing), 850 px/s × 0.17 s = 145 px, gravity-free, one in the air, 4-tick freeze-frame | horizontal keeps the gap rules exact and readable |
+| Dash-jump | jump during a ground dash keeps 560 px/s, bleeding to run speed at 900 px/s² (~+2 tiles of gap) | player expression; never required |
+| Stomp | hold jump (or press it as you land) for the high bounce (195 px over the card's floor), else a hop (~150) | bounce-height variety |
+| Respawn | 0.45 s hop; keys held since the death stay locked until released; a jump pressed in its last 0.12 s fires | no running straight back into the water, no lost input |
+| Hitbox | Rubik 40×52 inside his 56×60 drawn art, feet on the ground line; card body 48×84 | tested against the PNG alpha |
+
+Juice supports precision rather than hiding it: squash/stretch on jump, landing, air
+jump, dash-jump and stomps, the stomped card squashed flat, dust on landings and
+sharp turnarounds, dash afterimages as solid silhouettes in the form's color, a dash
+refill flash and a light spent-dash shade on Rubik, freeze-frames on dash (4 ticks),
+stomp (0.08 s), smash, knock and theft, and a small shake only on stomps and big
+impacts. Reduced motion turns off shake, flashes, particles and squash.
+
+**Measured envelope** (a 1-tick sweep of takeoff, air-jump and dash timing on the real
+model, re-checked in tests): green jump crosses 11 water tiles, green dash-jump 13,
+green jump + dash 17, white double jump **19** (an air jump saved for the fall resets
+the falling speed; the brief estimated 15), white dash-jump + double jump 22. So 1-4's
+orb twist gap is **20 tiles** (white needs the dash) and 1-2's stomp-only heights are
+7–8 tiles (the double jump's 175 px never reaches them).
+
 ## Mechanics (what is implemented)
 
-Physics (`model.mjs`, 120 Hz whole ticks, px/s): run 330, acceleration 2600, braking
-3300, jump 470 with half gravity near the apex while held (93 px: 2 tiles safe, 3
-never), white air jump ×0.94 (+83 px, 175 px in all: 4-tile ledges), 100 ms coyote,
-120 ms buffer, variable height, ≤6 px ceiling-corner correction, max fall 760.
-
-**Measured envelope** (a 1-tick sweep of takeoff and air-jump/dash timing on the
-real model, re-checked in tests): green jump crosses 11 water tiles, green jump + dash
-17, white double jump **19** (an air jump saved for the fall resets the falling speed,
-so the brief's estimate of 15 was low), bounce apex 195 px over a card's floor, 277
-with a white air jump. So 1-4's twist gaps are **20 tiles** (white needs the dash) and
-1-2's bounce-only walls and ledges are 7–8 tiles (the double jump's 175 px never
-reaches them).
-
 - **A card can't see its own color.** Green cards see white and red; red enforcers
-  (the unused `inimigo3` sheet) see white and green. The sight area *is*
-  `cone_de_visao.png` (per-column alpha silhouette at 2×, compared pixel for pixel in
-  tests); walls cut the cone and its drawing at the same distance.
+  see white and green. The sight area *is* `cone_de_visao.png` (per-column alpha
+  silhouette at 2×, tested pixel for pixel); walls cut the cone and its drawing at the
+  same distance. Cones that can see Rubik's current color get a crisp edge.
+- **Stomps:** land on a card's head from above or behind and it is stunned for 3 s.
+  A card that faces the side Rubik came from (the last side he was on while clear of
+  its head), or any aware card ("!", wind-up, lunge), raises its spear (drawn over its
+  head): landing on it pops Rubik up and away, no damage. So a run-and-jump at a
+  lookout's face can't skip it. The 0.7 s recovery after a lunge is always stompable,
+  and so is the card holding Rubik's green in 1-2.
 - **Awareness ladder:** in sight 0.25 s → "?"; 0.6 s → "!" (a 0.45 s beat, then a
-  240 px/s charge, slower than Rubik); in range → wind-up → spear lunge (30–70 px up,
-  jumpable in the open) → 0.7 s stompable recovery. Body contact only knocks Rubik
-  back; only spears and water kill. **Before 1-5 there are no spears**
-  (`level.spears: false`): a spotted Rubik is charged and bumped, never killed.
-- **Dozing cards** (1-2's trampolines, `trampoline: true`) never wake or see and only
-  bounce Rubik (a bounce, not a stun). The glowing card in 1-2 (`absorb`) holds green:
-  the overhang drop from the old Stage 1 opening makes it unmissable (tested with 48
-  jump and double-jump takeoffs and four slow nudges off the edge).
+  240 px/s charge); in range → wind-up → spear lunge (30–70 px up, jumpable in the
+  open) → recovery. Body contact only knocks Rubik back; brushing a calm card's back
+  doesn't alert it; only spears and water kill. A card pinned at its patrol bound with
+  Rubik out of the spear's reach turns back after 0.8 s instead of winding up forever.
+  **Before 1-5 there are no spears** (`spears: false`).
 - **Mid-air swap** with a 0.15 s cooldown; a green jump keeps white's unspent air jump.
-- **Dash charge:** 145 px gravity-free burst, one air dash; ground, stomps, bounces,
-  refill orbs, smashed stones and knocked cards refill it. Before DASH GET, Shift does
-  nothing at all.
-- **Theft → REVERSE (1-6):** touching the vault gives hit-stop, RED GET and REVERSE:
-  the chamber door slams (two `sealOnTheft` stones drop into it, so the first red smash
-  is forced and safe), every card turns to face the route home, the burst cards wake
-  and charge, green cards hunt faster, an escape-only card arrives on the island, the
-  music speeds up ×1.12, a home arrow and the "Quick" par clock (18 s, no fail timer)
-  appear. Reaching the start cliff top while carrying red ends the level and World 1.
-- **Checkpoints:** whole-segment restore (cards, stones, orbs, pickups, unlocks and
-  counters rewind; stickers stay; time, deaths and "spotted" are cumulative); markers
-  only advance in the direction of travel; no respawn point lies inside any possible
-  cone (tested over every card's patrol range in both facings). Longest gap: 9.4 s of
-  baseline route time.
-- **Hints:** five bubbles in all, at most two per level, each taught in one level
-  only, saved in the player's hint budget: ◀▶ after 4 s idle (1-1), "jump, jump" at
-  the 4-tile wall (1-1), "white card + Z" and "green card + X" (1-3), "Shift/DASH"
-  after two slow landings on Gap A's rock (1-4). Three deaths at a checkpoint re-offer
-  its bubble once if it was never completed.
-- **Slab fix:** rising through a one-way slab used to count as standing on it for a
-  tick, silently refreshing the air jump; slabs now support only a Rubik who isn't
-  rising.
+- **Dash charge:** one air dash; ground, stomps, refill orbs, smashed stones and
+  knocked cards refill it. Before DASH GET, Shift does nothing at all.
+- **Theft → REVERSE (1-6):** RED GET, the chamber door slams (two stones), every card
+  turns to face the route home, the room's two patrols turn and chase, an escape-only
+  card arrives on the island, the music speeds up, a home arrow and the Quick seal
+  appear. **Fairness:** once the GET card closes, every card holds still through the
+  REVERSE card plus 0.8 s and Rubik is untouchable; the REVERSE card and "Run home!"
+  take the half of the screen Rubik isn't in. A death after the theft respawns him
+  inside the sealed room next to the door (cards held 1.25 s), so the forced first
+  smash always happens. Respawns elsewhere hold every card for 0.75 s.
+- **Checkpoints:** whole-segment restore; markers only advance in the direction of
+  travel; signs stand beside the respawn spot; no respawn point lies inside any
+  possible cone (the theft's in-room point is covered by its own test). The longest
+  gap is ≤ 12 s of baseline route time wherever Rubik can die (1-3 has no water and
+  no spears, so it keeps just two).
+- **Hints:** six bubbles in all, at most two per level, each taught in one level and
+  saved in the player's hint budget: ◀▶ and "jump, jump" (1-1), "from behind" after
+  the first spear-up (1-2, drawn: a card and an arrow onto its back), "white card + Z"
+  and "green card + X" (1-3), "Shift/DASH" (1-4).
 
 ## Original art: on screen vs archive
 
@@ -214,7 +244,7 @@ the Pause → Art panel; `#again` is now labelled Retry.
 New: `startLevel(id)` (any of `"1-1"…"1-6"`, straight into play, no card, the level's
 own kit), `openMap(id?)`, `resetSave()`, `campaign` (the `campaign.mjs` module).
 
-`getState()` keeps `screen` (now `boot|title|story|play|results|map|world|ending`),
+`getState()` keeps `screen` (`boot|title|story|play|results|map|world|ending`),
 `phase`, `stickers` (0–3, this run), `stickerIds`, `stickerList`, `smashes`, `stolen`,
 `stomps`, `spotted`, `knockouts`, `medals` (after a win: `fullFace` = 3/3 this run,
 `neverSpotted`, `quickGetaway` = 1-6 par or `null` elsewhere), `escapeTime`,
@@ -222,7 +252,7 @@ own kit), `openMap(id?)`, `resetSave()`, `campaign` (the `campaign.mjs` module).
 `settings`, `audio {musicDecoded, musicPlaying, musicRate, context}` and `player {x, y,
 color, jumps, grounded, vy, dashTime, dashCooldown, dashCharge, …}`. New fields:
 `levelId`, `level {id, name, idea, kit, gets, par, cols}`, `dashUnlocked`, `gets`,
-`bounces`, `dashes`, `intro`, `getCard`, `map {cursor, id, walking, revealing,
+`bounces`, `dashes`, `calm`, `intro`, `getCard`, `map {cursor, id, walking, revealing,
 menuOpen}`, `campaign {levels, unlocked, stickerTotal, totalStickers, worldClear,
 worldMedals, forestColor}`, `save`, `result` (the last tally).
 
@@ -233,36 +263,45 @@ remain as aliases for 1-6's routes.
 
 ## Validation (actual results, 2026-11-09)
 
-- `npm test`: **53/53 pass** (42 model/level, 11 campaign). They cover: the six
-  levels' shape, kits (later abilities absent, also on replays) and GET order with
-  their checkpoints; each level's taught mechanic as a reachability sweep on the real
-  model (1-1 wall needs the double jump; 1-2's 7–8-tile targets need a bounce; 1-3's
-  wall stops green; 1-4's 12/14-tile gaps stop green without the dash and its 20-tile
-  gaps stop white's double jump at any air-jump timing); the 1-2 unskippable glowing
-  card; no spears before 1-5; the 1-5 ladder and red-sees-green; the 1-6 theft, sealed
-  door (white, green and walking red all stay inside), no fail timer and roof gate
-  height; no 3-tile climb in any level; no checkpoint in any cone; the hint budget;
-  sticker permanence and whole-segment restore; cone = PNG; awareness, contact, swap,
-  dash, smash/knock, slab, pause and input forgiveness; every level's baseline and
-  mastery route wins with zero deaths (mastery 3/3); checkpoint gaps ≤ 12 s; campaign
-  unlock order, forest color, sticker union, stamps, medals, hint budget, save
-  round-trip, throwing storage and sanitizing corrupt saves; 103 byte-identical images.
-- Routes (QA reachability, not human times): 1-1 11.6 s / 16.1 s, 1-2 18.8 / 24.2,
-  1-3 11.9 / 18.5, 1-4 14.1 / 13.6, 1-5 18.2 / 23.2, 1-6 27.8 / 33.3 (baseline /
-  mastery). Baselines are never spotted; 1-5's mastery is spotted once. 1-6 baseline
-  escape 11.96 s, so the Quick par is 18 s.
+- `npm test`: **70/70 pass** (59 model/level/movement, 11 campaign). They cover the six
+  levels' shape and kits; **no sleeping card in any level or route**; GET order and
+  checkpoints; each taught mechanic as a reachability sweep on the real model (1-1's
+  wall needs the double jump; 1-2's 7–8-tile targets need a stomp; stomps from
+  above/behind vs the spear-up from the front or when aware; held vs tap bounces;
+  the unskippable green card; 1-3's wall stops green and its 12-tile pillar hops need
+  white and expose him long enough to be spotted; 1-4's 12/14-tile gaps stop green
+  without the dash and its 20-tile orb gap stops white's double jump at any timing; a
+  run-and-jump can't stomp 1-5's facing red guard; the 1-6 theft hold, the sealed
+  door and the in-room respawn); no 3-tile climb anywhere; no checkpoint in a cone;
+  the hint budget; sticker permanence and segment restore; cone = PNG; awareness,
+  contact, the edge-pin give-up, swap, smash/knock; the movement feel (start/stop/
+  turn timings, air drift, variable jump, apex hang, firmer fall and the cap, coyote
+  and buffer windows to the tick, corner correction, ledge assist, dash-jump carry,
+  dash freeze, no third jump); hitboxes against the sprite art; every level's
+  baseline and mastery route winning with zero deaths (mastery 3/3); campaign unlock
+  order, color, stamps (Unseen on 1-3/1-5/1-6), medals, save round-trip, throwing
+  storage and corrupt saves; 103 byte-identical images.
+- Routes (QA reachability, not human times), baseline / mastery: 1-1 11.6 / 15.9 s,
+  1-2 21.0 / 26.2, 1-3 20.1 / 25.3, 1-4 15.8 / 15.2, 1-5 18.2 / 20.5, 1-6 35.1 /
+  36.8 (escape 12.2 / 13.9; the Quick par stays 18 s = 12.2 × 1.5). Baselines on the
+  stealth levels and every mastery route are unseen; 1-6 mastery has 5 smashes.
 - `npm run build:itch`: 131 files, a 7.0 MiB ZIP (exact size and SHA-256 in
   `dist/build-report.json`).
 - Real Chrome (Playwright scratch scripts outside the repo, `node serve.mjs --port
-  4394` and the built `dist/itch` folder): title → comic → key skip into 1-1 with the
-  card; Shift does nothing and X stays white in 1-1; a 1-1 win → goal face → tally →
-  Continue → map reveal and walk to 1-2; reload → title → map on 1-2; Enter → 1-2 card;
-  pause suspends audio; Art panel; GREEN, DASH and RED GET cards; REVERSE; the roof
-  smash line; world clear → ending; all 12 routes win in the browser on the built
-  folder; a sandboxed 960×640 iframe starts and plays; a page whose `localStorage`
-  throws still plays and keeps progress for the visit; 390×844 touch portrait (deck on
-  the map, no DASH pad before DASH GET, no overflow). No console errors or failed
-  requests.
+  4394` and the built `dist/itch` folder): all 12 routes win in the browser on the
+  built folder; a sandboxed 960×640 iframe plays; throwing `localStorage` keeps
+  progress for the visit; title → comic → key → the 1-1 card → play; 1-1 win → tally
+  → map reveal; reload → map; pause suspends audio; the pit stomp, island chain,
+  wall stomp and GREEN GET of 1-2; the 1-3 pillar finale; DASH GET and the storm
+  wisps; the 1-5 enforcer with cone edges; RED GET, REVERSE kept off Rubik, the
+  escape and the roof line; world clear; the new ending; 390×844 portrait (a taller
+  level view with the HUD pulled in, the deck on the map, no DASH pad before DASH
+  GET, the touch title plate, no overflow). No console errors or failed requests.
+
+Known limits: white can double-jump 1-4's develop gaps (the level starts green, so the
+dash is the guided way); 1-4's pillar gap can also be crossed by stomping its
+lookout and air-jumping (an intended alternative); 1-5's perch-to-perch jump passes
+the enforcer; guards follow fixed timers.
 
 Not verified: physical phones, Safari/Firefox, subjective audio, first-play times and
 whether players find it fun. Those need the user's playtest (RESEARCH_PROGRESSION.md

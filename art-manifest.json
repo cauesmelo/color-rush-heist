@@ -68,7 +68,7 @@
  {
   "file": "inimigo_verde.png",
   "use": "screen",
-  "where": "Green cards: walk, idle, sleep (1-2 trampolines), spear attack frames; grey copy for the drained glowing card",
+  "where": "Green cards: walk, idle and spear attack frames (lunge, recovery); grey copy for the drained green card in 1-2",
   "sha256": "2dec30a545c57d7b2a2742a6bb5e50c4c02c5acf485d691e5fc2b0c0c56f697e"
  },
  {
@@ -236,7 +236,7 @@
  {
   "file": "rubik_white.png",
   "use": "screen",
-  "where": "Player, white form (all rows: idle, dash, run, jump, landing, storm); world-map walker (run row)",
+  "where": "Player, white form (all rows: idle, dash, run, jump, landing, storm); dash afterimages (runtime silhouettes); world-map walker (run row)",
   "sha256": "0fde0cc322c1c269de1fef0a43afc6ba8054025f95518903db01e83cf51983a5"
  },
  {

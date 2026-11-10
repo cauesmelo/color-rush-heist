@@ -39,6 +39,7 @@ export default defineLevel({
   idea: "Every trick, then run home with red",
   cols: 136,
   kit: { forms: ["white", "green"], start: "white", dash: true },
+  takedown: true, // the Takedown stamp: every card stomped or knocked
   hints: [],
   beacon: 1,
   tint: "night",

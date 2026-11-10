@@ -1082,7 +1082,7 @@ function recordWin() {
     collected = game.stickers.filter((x) => x.collected).map((x) => x.id),
     stamps = C.levelStamps(id);
   rememberHints();
-  save = C.recordClear(save, id, { time: game.finishTime, stickers: collected, spotted: game.spotted, escapeTime: game.escapeTime, color: game.player.color });
+  save = C.recordClear(save, id, { time: game.finishTime, stickers: collected, spotted: game.spotted, takedowns: game.takedowns.length, cards: game.guards.length, escapeTime: game.escapeTime, color: game.player.color });
   persist();
   const after = C.levelRecord(save, id);
   fx.result = {
@@ -1092,7 +1092,8 @@ function recordWin() {
     newBest: before.best === null || game.finishTime < before.best,
     firstClear: !before.clear,
     stickers: game.stickers.map((x) => ({ id: x.id, got: x.collected, owned: x.owned })), // owned = in the save before this run
-    unseen: stamps.unseen ? game.spotted === 0 : null,
+    unseen: stamps.unseen ? game.spotted === 0 : null, // the Ghost stamp
+    takedown: stamps.takedown ? { got: !!game.medals?.takedown, n: game.takedowns.length, of: game.guards.length, best: after.takedownBest } : null,
     quick: stamps.quick ? !!game.medals?.quickGetaway : null,
     unlocked: C.unlockedIds(save).find((x) => !wasOpen.includes(x)) || null,
   };
@@ -2680,7 +2681,7 @@ function drawResults() {
   ctx.drawImage(colorAmount > 0.01 ? derived.forestColor : img.forest, 0, 0, W, H);
   ctx.fillStyle = "rgba(14,10,20,0.55)";
   ctx.fillRect(0, 0, W, H);
-  const r = fx.result || { time: game.finishTime ?? game.time, best: null, stickers: game.stickers.map((x) => ({ id: x.id, got: x.collected, owned: x.owned })), unseen: null, quick: null };
+  const r = fx.result || { time: game.finishTime ?? game.time, best: null, stickers: game.stickers.map((x) => ({ id: x.id, got: x.collected, owned: x.owned })), unseen: null, takedown: null, quick: null };
   const px = 170,
     py = 52,
     pw = 620,
@@ -2727,13 +2728,21 @@ function drawResults() {
   });
   const got = r.stickers.filter((x) => x.got || x.owned).length;
   text(`${got}/3`, px + 452, py + 296, 32, "#ffcf2e", "left", null);
-  // Stamps where this level can award them.
-  let sx = px + 530;
+  // Stamps where this level can award them, in one column: Ghost (never
+  // spotted) and Takedown (every card put down) compete; Quick is 1-6's par.
+  const sx = px + 530;
+  let sy = py + 130;
   if (r.unseen !== null) {
-    stamp("Unseen", r.unseen, sx, py + 150);
-    sx -= 0;
+    stamp("Ghost", r.unseen, sx, sy);
+    sy += 82;
   }
-  if (r.quick !== null) stamp("Quick", r.quick, sx, py + 230);
+  if (r.takedown) {
+    stamp("Takedown", r.takedown.got, sx, sy);
+    // The tally under it: this run, and the best one saved.
+    text(`${r.takedown.n}/${r.takedown.of}${r.takedown.best > r.takedown.n ? ` (best ${r.takedown.best})` : ""}`, sx, sy + 48, 16, r.takedown.got ? "#ffcf2e" : "#cfc6d6", "center", null);
+    sy += 92;
+  }
+  if (r.quick !== null) stamp("Quick", r.quick, sx, sy);
   if (r.unlocked) text(`${r.unlocked} is open!`, W / 2, py + ph - 26, 32, "#9be36a", "center", null);
 }
 /** World clear: the old results screen, retitled, with world totals and the
@@ -2771,7 +2780,7 @@ function drawWorldClear() {
   const medals = C.worldMedals(save),
     list = [
       ["Full face", medals.fullFace, `all ${C.TOTAL_STICKERS} stickers`],
-      ["Ghost", medals.ghost, "Unseen 1-3 to 1-6"],
+      ["Ghost", medals.ghost, "Ghost on 1-3, 1-5, 1-6"],
       ["Quick getaway", medals.quickGetaway, `home in ${getLevel("1-6").par} s`],
     ];
   list.forEach(([name, got, how], i) => {
@@ -2904,7 +2913,7 @@ function drawMap() {
       roundRect(x - 23 + k * 16, node.y + 32, 12, 12, 3);
       ctx.fill();
     }
-    if (rec.unseen || rec.quick) {
+    if (rec.unseen || rec.takedown || rec.quick) {
       ctx.fillStyle = COLORS.red;
       ctx.beginPath();
       ctx.arc(x + 34, y - 26, 8, 0, Math.PI * 2);

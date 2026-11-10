@@ -237,6 +237,49 @@ export const SCRIPTS = {
       pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").color("green").land();
       pl.to(tx(120)).check(pl.g.phase === "won", "goal face");
     },
+    // Takedown: every card put down. The teacher on its recovery walk (the
+    // mastery's sticker-1 drop), P1 from behind right after the timed climb,
+    // P2, the enforcer and the red sentry as on the guided line, and the goal
+    // block's card from behind as it walks to the goal.
+    takedown(pl) {
+      const teacher = (p) => p.guard("teacher");
+      pl.color("green").right().to(tx(27) + 16).stop();
+      pl.until((p) => teacher(p).dir < 0 && teacher(p).x < p.cx - 50 && teacher(p).x > tx(24), {}, 1200, "teacher passed");
+      pl.jump().steerTo((p) => teacher(p).x + 8);
+      pl.check(teacher(pl).state === "stunned", "teacher stomped");
+      pl.landAt(tx(27));
+      // P1: the timed climb, then wait behind it in green (it can't see
+      // green) for its next look-away, and jump onto its back.
+      const p1 = (p) => p.guard("p1");
+      pl.right().color("green");
+      p1Climb(pl);
+      pl.landAt((p) => p1(p).x - 72);
+      pl.stop().until((p) => p1(p).dir === 1 && p1(p).turning <= 0 && p1(p).turnClock < 0.3, {}, 1200, "p1 looks away again");
+      pl.right().jump().steerTo((p) => p1(p).x - 6);
+      pl.check(p1(pl).state === "stunned", "p1 stomped from behind");
+      pl.land();
+      p2Climb(pl);
+      enforcerStomp(pl);
+      pl.until((p) => p.p.grounded, (p) => (p.cx < tx(80) ? { right: true } : {}), 240, "past the enforcer");
+      pl.right().to(tx(82) + 4).jump().landAt(tx(85));
+      pl.to(tx(85)).stop();
+      pl.until((p) => p.guard("cross-red").dir === 1 && p.guard("cross-red").turning <= 0, {}, 900, "red away");
+      pl.right().to(pl.guard("cross-red").x - 230).jump().steerTo((p) => p.guard("cross-red").x - 10);
+      pl.check(pl.guard("cross-red").state === "stunned", "red sentry stomped");
+      pl.landAt(tx(103) + 16);
+      const block = (p) => p.guard("cross-green");
+      pl.right().to(tx(111) + 16).stop();
+      pl.until((p) => block(p).dir === 1 && block(p).turning <= 0 && block(p).x < tx(115), {}, 1200, "block card walks to the goal");
+      pl.right().press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
+      pl.landAt(tx(113) + 16);
+      // Green on the block: it can't see him; follow it and jump onto its back.
+      pl.stop().until((p) => block(p).dir === 1 && block(p).turning <= 0 && block(p).x > p.cx + 60 && block(p).x < p.cx + 110, {}, 1200, "block card ahead, walking away");
+      pl.right().jump().steerTo((p) => block(p).x - 6);
+      pl.check(block(pl).state === "stunned", "block card stomped from behind");
+      pl.landAt(tx(118));
+      if (pl.g.phase !== "won") pl.right().to(tx(120));
+      pl.check(pl.g.phase === "won", "goal face");
+    },
   },
   "1-6": {
     baseline(pl) {
@@ -246,6 +289,14 @@ export const SCRIPTS = {
     mastery(pl) {
       heistInbound(pl, { alcove: true });
       heistEscape(pl, { roof: true, alcove: true });
+    },
+    // Takedown: the guided heist (the ledge sentry and the vault guard are
+    // stomped inbound, the lookout is knocked on the way home), plus the
+    // mastery's knock of the alarm card in the room, and a red dash through
+    // the island card and through the corridor patrol instead of going green.
+    takedown(pl) {
+      heistInbound(pl);
+      heistEscape(pl, { knockAll: true });
     },
   },
 };
@@ -360,8 +411,8 @@ function heistInbound(pl, { alcove = false } = {}) {
 /** 1-6 escape: smash the door (the same dash knocks the alarm card outside
  * it), the crossing back, home by the corridor (green) or the roof gates
  * (red smashes). */
-function heistEscape(pl, { roof = false, alcove = false } = {}) {
-  if (alcove) {
+function heistEscape(pl, { roof = false, alcove = false, knockAll = false } = {}) {
+  if (alcove || knockAll) {
     // Sticker 2: the alarm card stands between Rubik and the alcove: knock
     // it aside with a red dash (the knock refunds the dash), smash the
     // alcove stone, then turn for home before it gets up (3 s).
@@ -392,7 +443,7 @@ function heistEscape(pl, { roof = false, alcove = false } = {}) {
   spotted = pl.g.spotted;
   const island = tx(67); // the island's right edge
   pl.choose(
-    [0, 0.3, 0.6, 0.9, 1.2, 1.5].flatMap((wait) => [0, 120, 240].flatMap((vy) => [true, false].map((green) => [wait, vy, green]))).map(([wait, vy, green]) => (f) => {
+    [0, 0.3, 0.6, 0.9, 1.2, 1.5].flatMap((wait) => [0, 120, 240].flatMap((vy) => (knockAll ? [false] : [true, false]).map((green) => [wait, vy, green]))).map(([wait, vy, green]) => (f) => {
       f.stop().wait(wait).left().to(tx(85) + 8).jump().apex().dash();
       f.until((p) => p.p.dashCharge > 0 && p.p.dashTime <= 0 && p.p.vy >= vy, f.dir, 160, "orb").dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash");
@@ -405,7 +456,7 @@ function heistEscape(pl, { roof = false, alcove = false } = {}) {
       f.left().to(tx(64) + 8).jump().apex().dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash").landAt(tx(50));
     }),
-    (f) => f.g.deaths === deaths && f.g.spotted === spotted && Math.abs(f.feet - tx(12)) < 1 && f.g.phase === "playing",
+    (f) => f.g.deaths === deaths && (knockAll ? f.guard("ambush").state === "stunned" : f.g.spotted === spotted) && Math.abs(f.feet - tx(12)) < 1 && f.g.phase === "playing",
     "island crossing",
   );
   // The ledge pair on the way home: red walks past the red sentry; the green
@@ -425,6 +476,14 @@ function heistEscape(pl, { roof = false, alcove = false } = {}) {
     pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "mid gate");
     pl.check(pl.g.stickers[2].collected, "roof sticker");
     pl.to(tx(21)).land();
+  } else if (knockAll) {
+    // Red into the corridor and a dash through its patrol (it sees red: go
+    // before its wind-up ends).
+    pl.to(tx(43)).land();
+    pl.until((p) => Math.abs(p.guard("corridor").x - p.cx) < 130 || p.guard("corridor").state === "stunned", { left: true }, 600, "near the corridor card");
+    if (pl.guard("corridor").state !== "stunned") pl.dash().until((p) => p.p.dashTime <= 0, pl.dir, 60, "knock the corridor card");
+    pl.check(pl.guard("corridor").state === "stunned", "corridor card knocked");
+    pl.left().to(tx(21) + 8).land();
   } else {
     pl.color("green").to(tx(43)).land(); // drop into the corridor, green past the patrol
     pl.to(tx(21) + 8).land();

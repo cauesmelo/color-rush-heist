@@ -8,7 +8,10 @@
  *   { v: 1, last: "1-3", comicSeen: true,
  *     hints: { move: "done", airjump: "shown", ... },
  *     levels: { "1-1": { clear: true, best: 52.4, stickers: [1, 3],
- *                        unseen: false, quick: false, color: "white" } } }
+ *                        unseen: false, takedown: false, takedownBest: 0,
+ *                        quick: false, color: "white" } } }
+ * `unseen` is the Ghost stamp (its old name, kept so older saves load);
+ * `takedownBest` is the most cards put down in one clear of that level.
  * A sticker is saved the moment it is touched and never removed; a clear is
  * saved at the goal. Mid-level positions are never saved.
  */
@@ -26,17 +29,22 @@ export const COLOR_PER_CLEAR = 0.12;
 export function newSave() {
   return { v: SAVE_VERSION, last: WORLD1[0], comicSeen: false, hints: {}, levels: {} };
 }
-const emptyRecord = () => ({ clear: false, best: null, stickers: [], unseen: false, quick: false, color: null });
+const emptyRecord = () => ({ clear: false, best: null, stickers: [], unseen: false, takedown: false, takedownBest: 0, quick: false, color: null });
 export const levelRecord = (save, id) => ({ ...emptyRecord(), ...(save.levels[id] || {}) });
 
-/** Which stamps a level can award. "Unseen" only where staying unseen is a
- * real choice: the stealth levels 1-3, 1-5 and 1-6 (1-1 has no cards, 1-2 is
- * the stomp lesson and 1-4 a traversal level, where it would come free or
- * mean nothing: `unseen: false`). "Quick" only where there is a par (1-6). */
+/** Which stamps a level can award. "Ghost" (never spotted; saved as
+ * `unseen`) only where staying unseen is a real choice: the stealth levels
+ * 1-3, 1-5 and 1-6 (1-1 has no cards, 1-2 is the stomp lesson and 1-4 a
+ * traversal level, where it would come free or mean nothing: `unseen:
+ * false`). "Takedown" (every card stomped or knocked) only where putting a
+ * card down is a choice, not the way through: 1-5 and 1-6 (`takedown: true`;
+ * every 1-2/1-4 card is a gate or a springboard, and 1-3's corridor card
+ * can't be reached from above). "Quick" only where there is a par (1-6). */
 export function levelStamps(id) {
   const level = getLevel(id);
   return {
     unseen: !!level && level.unseen !== false && level.guards.length > 0,
+    takedown: !!level && level.takedown === true && level.guards.length > 0,
     quick: !!level && level.par !== null,
   };
 }
@@ -76,8 +84,10 @@ export function collectSticker(save, id, n) {
 }
 
 /** A level was finished. `result` comes from the model at the win:
- * { time, stickers: [ids collected this run], spotted, escapeTime, color }.
- * Best time only improves; stickers and stamps only accumulate. */
+ * { time, stickers: [ids collected this run], spotted, takedowns, cards,
+ *   escapeTime, color }.
+ * Best time and the best takedown tally only improve; stickers and stamps
+ * only accumulate. */
 export function recordClear(save, id, result) {
   if (!getLevel(id)) return save;
   let next = clone(save);
@@ -88,6 +98,11 @@ export function recordClear(save, id, result) {
   record.clear = true;
   if (Number.isFinite(result.time)) record.best = record.best === null ? result.time : Math.min(record.best, result.time);
   if (stamps.unseen && result.spotted === 0) record.unseen = true;
+  if (stamps.takedown && Number.isInteger(result.takedowns)) {
+    const n = Math.max(0, Math.min(level.guards.length, result.takedowns));
+    record.takedownBest = Math.max(record.takedownBest, n);
+    if (n === level.guards.length) record.takedown = true;
+  }
   if (stamps.quick && Number.isFinite(result.escapeTime) && result.escapeTime <= level.par) record.quick = true;
   if (result.color) record.color = result.color;
   next.levels[id] = record;
@@ -145,6 +160,8 @@ export function sanitize(raw) {
         best: Number.isFinite(r.best) && r.best > 0 ? r.best : null,
         stickers: [...new Set(Array.isArray(r.stickers) ? r.stickers.filter((n) => valid.includes(n)) : [])].sort((a, b) => a - b),
         unseen: r.unseen === true,
+        takedown: r.takedown === true,
+        takedownBest: Number.isInteger(r.takedownBest) ? Math.max(0, Math.min(getLevel(id).guards.length, r.takedownBest)) : 0,
         quick: r.quick === true,
         color: ["white", "green", "red"].includes(r.color) ? r.color : null,
       };

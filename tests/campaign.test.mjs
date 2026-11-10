@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as C from "../campaign.mjs";
 import * as M from "../model.mjs";
 import { ROUTES } from "./routes.mjs";
+import { getLevel } from "../levels/index.mjs";
 
 /** In-memory localStorage stand-in, plus one that throws on every call
  * (private windows / sandboxed iframes). */
@@ -99,16 +100,16 @@ test("full mastery of World 1 = 18/18 stickers, all three world medals", () => {
   const partial = clearWith(clearWith(C.newSave(), "1-3"), "1-5");
   assert.equal(C.worldMedals(partial).ghost, false, "1-6 not yet unseen");
 });
-test("stamps: Unseen only on the stealth levels (1-3, 1-5, 1-6); Quick only on 1-6; best time only improves", () => {
+test("stamps: Ghost (saved as unseen) on 1-3, 1-5, 1-6; Takedown on 1-5, 1-6; Quick only on 1-6; best time only improves", () => {
   assert.deepEqual(
     C.WORLD1.map((id) => C.levelStamps(id)),
     [
-      { unseen: false, quick: false },
-      { unseen: false, quick: false },
-      { unseen: true, quick: false },
-      { unseen: false, quick: false },
-      { unseen: true, quick: false },
-      { unseen: true, quick: true },
+      { unseen: false, takedown: false, quick: false },
+      { unseen: false, takedown: false, quick: false },
+      { unseen: true, takedown: false, quick: false },
+      { unseen: false, takedown: false, quick: false },
+      { unseen: true, takedown: true, quick: false },
+      { unseen: true, takedown: true, quick: true },
     ],
   );
   let save = C.recordClear(C.newSave(), "1-3", { time: 50, stickers: [], spotted: 2, escapeTime: null });
@@ -123,6 +124,20 @@ test("stamps: Unseen only on the stealth levels (1-3, 1-5, 1-6); Quick only on 1
   const slow = C.recordClear(C.newSave(), "1-6", { time: 30, stickers: [], spotted: 0, escapeTime: 40 });
   assert.equal(C.levelRecord(fast, "1-6").quick, true);
   assert.equal(C.levelRecord(slow, "1-6").quick, false);
+});
+test("Takedown: the best tally is saved and only improves; the stamp needs every card, and a hostile tally is clamped", () => {
+  const cards = getLevel("1-5").guards.length;
+  let save = C.recordClear(C.newSave(), "1-5", { time: 30, stickers: [], spotted: 1, takedowns: 4, cards, escapeTime: null });
+  assert.deepEqual([C.levelRecord(save, "1-5").takedownBest, C.levelRecord(save, "1-5").takedown], [4, false]);
+  save = C.recordClear(save, "1-5", { time: 30, stickers: [], spotted: 0, takedowns: 2, cards, escapeTime: null });
+  assert.equal(C.levelRecord(save, "1-5").takedownBest, 4, "a lower tally keeps the best");
+  save = C.recordClear(save, "1-5", { time: 30, stickers: [], spotted: 3, takedowns: cards, cards, escapeTime: null });
+  assert.deepEqual([C.levelRecord(save, "1-5").takedownBest, C.levelRecord(save, "1-5").takedown], [cards, true]);
+  // 1-3 awards no Takedown (its corridor card can't be reached from above).
+  const three = C.recordClear(C.newSave(), "1-3", { time: 30, stickers: [], spotted: 0, takedowns: 9, cards: 9, escapeTime: null });
+  assert.deepEqual([C.levelRecord(three, "1-3").takedown, C.levelRecord(three, "1-3").takedownBest], [false, 0]);
+  const hostile = C.sanitize({ v: 1, levels: { "1-5": { clear: true, takedown: "yes", takedownBest: 99 }, "1-6": { takedownBest: 2.5 } } });
+  assert.deepEqual([hostile.levels["1-5"].takedown, hostile.levels["1-5"].takedownBest, hostile.levels["1-6"].takedownBest], [false, cards, 0]);
 });
 test("GET moments by level and the fixed kits the map hands to each level", () => {
   assert.deepEqual(C.WORLD1.map((id) => C.getsIn(id)), [[], ["green"], [], ["dash"], [], ["red"]]);
@@ -185,5 +200,5 @@ test("corrupt or hostile saves are sanitized, never trusted", () => {
   assert.equal(save.comicSeen, false);
   assert.deepEqual(save.hints, { move: "done" });
   assert.deepEqual(Object.keys(save.levels), ["1-1"]);
-  assert.deepEqual(save.levels["1-1"], { clear: true, best: null, stickers: [1, 3], unseen: false, quick: true, color: null });
+  assert.deepEqual(save.levels["1-1"], { clear: true, best: null, stickers: [1, 3], unseen: false, takedown: false, takedownBest: 0, quick: true, color: null });
 });

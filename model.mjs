@@ -313,6 +313,7 @@ export function createGame(level = "1-1", options = {}) {
     bounces: 0,
     smashes: 0,
     knockouts: 0,
+    takedowns: [], // ids of the cards stomped or knocked in this run (the Takedown stamp)
     respawns: 0,
     dashes: 0,
     stolen: false,
@@ -392,6 +393,7 @@ function saveCheckpoint(g, index) {
     bounces: g.bounces,
     smashes: g.smashes,
     knockouts: g.knockouts,
+    takedowns: g.takedowns,
     color: g.player.color,
   });
   if (g.phase === "playing" && g.time > 0) event(g, "checkpoint", cp.x, cp.floor, { id2: cp.id });
@@ -399,7 +401,7 @@ function saveCheckpoint(g, index) {
 
 /** Rewind to the last checkpoint snapshot. Rubik faces the way the level
  * continues (home, i.e. left, during the getaway). */
-const RESTORED = ["guards", "stones", "orbs", "pickups", "unlocked", "dashUnlocked", "stolen", "theftTime", "stomps", "bounces", "smashes", "knockouts"];
+const RESTORED = ["guards", "stones", "orbs", "pickups", "unlocked", "dashUnlocked", "stolen", "theftTime", "stomps", "bounces", "smashes", "knockouts", "takedowns"];
 export function respawn(g) {
   const s = structuredClone(g.snapshot),
     cp = g.level.checkpoints[g.checkpointIndex];
@@ -899,6 +901,10 @@ function updateGuard(g, guard, dt) {
   }
 }
 
+/** The Takedown stamp counts each card once, however it was put down. */
+function takedown(g, guard) {
+  if (!g.takedowns.includes(guard.id)) g.takedowns.push(guard.id);
+}
 function stomp(g, guard) {
   const p = g.player;
   // Hold jump (or press it as you land: up to 0.12 s before, or during the
@@ -927,9 +933,11 @@ function stomp(g, guard) {
     // absorbs it at the bounce apex so the stomp keeps white's full height.
     guard.state = "drained";
     g.pendingAbsorb = 0.6;
+    takedown(g, guard);
     event(g, "drain", guard.x, guard.floor - GUARD.h / 2, { guard: guard.id });
     return;
   }
+  takedown(g, guard);
   guard.state = "stunned";
   guard.timer = GUARD.stun;
   guard.sight = 0;
@@ -1048,6 +1056,7 @@ function guardContacts(g, prevBottom) {
       guard.bumps = 0;
       guard.x = Math.max(guard.min, Math.min(guard.max, guard.x + p.dashDirection * 40));
       g.knockouts++;
+      takedown(g, guard);
       g.hitstop = Math.max(g.hitstop, WORLD.hitstop.knock);
       refill(g, "knock");
       event(g, "knock", guard.x, guard.floor - GUARD.h / 2, { guard: guard.id });
@@ -1398,9 +1407,12 @@ export function update(g, dt, input = {}) {
 
 /** The level is over: a goal face was touched, or (1-6) red Rubik is home.
  * Level medals keep the old keys: fullFace = all of this level's stickers in
- * this run, neverSpotted = no "!" (the campaign's "Unseen" stamp, counted only
- * in levels with awake cards), quickGetaway = the escape beat the par (1-6
- * only; null elsewhere). */
+ * this run, neverSpotted = no "!" and no catch (the campaign's "Ghost" stamp,
+ * once called "Unseen", counted only in levels with awake cards), takedown =
+ * every card of the level stomped or knocked at least once in this run (the
+ * "Takedown" stamp; `takedowns` / `cards` is the tally), quickGetaway = the
+ * escape beat the par (1-6 only; null elsewhere). Ghost and Takedown compete:
+ * one rewards slipping past every card, the other putting each one down. */
 function win(g) {
   if (g.phase !== "playing") return;
   g.phase = "won";
@@ -1410,6 +1422,9 @@ function win(g) {
   g.medals = {
     fullFace: stickers === g.stickers.length,
     neverSpotted: g.spotted === 0,
+    takedown: g.guards.length > 0 && g.guards.every((c) => g.takedowns.includes(c.id)),
+    takedowns: g.takedowns.length,
+    cards: g.guards.length,
     quickGetaway: g.level.par === null ? null : g.escapeTime !== null && g.escapeTime <= g.level.par,
   };
   event(g, "win", g.player.x, g.player.y, { color: g.player.color });

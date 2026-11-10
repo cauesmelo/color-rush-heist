@@ -35,6 +35,7 @@ export default defineLevel({
   idea: "Read the cones; red sees green",
   cols: 124,
   kit: { forms: ["white", "green"], start: "white", dash: true },
+  takedown: true, // the Takedown stamp: every card stomped or knocked
   hints: [],
   beacon: 0.7,
   tint: "dusk",

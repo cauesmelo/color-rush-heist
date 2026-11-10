@@ -207,6 +207,36 @@ for (const id of LEVEL_IDS)
     // QA routes are short; first plays are several times longer.
     assert.ok(base.time < 40, `${id} baseline ${base.time.toFixed(1)} s`);
   });
+// ------------------------------------------- Ghost and Takedown stamps ---
+test("Ghost and Takedown compete, and each is earned on a scripted route", () => {
+  const C = { stamps: (id) => ({ ghost: getLevel(id).unseen !== false && getLevel(id).guards.length > 0, takedown: getLevel(id).takedown === true }) };
+  // Ghost (never spotted): the guided line earns it wherever it is awarded.
+  for (const id of ["1-3", "1-5", "1-6"]) {
+    assert.ok(C.stamps(id).ghost, `${id} awards Ghost`);
+    const g = replay(id, ROUTES[id].baseline);
+    assert.equal(g.medals.neverSpotted, true, `${id}: Ghost on the baseline`);
+    assert.equal(g.medals.takedown, false, `${id}: the guided line is not a Takedown, so the stamp asks for more`);
+  }
+  // Takedown (every card stomped or knocked): only where putting a card down
+  // is a choice; its route wins with every card in the tally.
+  assert.deepEqual(LEVELS.filter((l) => l.takedown).map((l) => l.id), ["1-5", "1-6"]);
+  for (const id of ["1-5", "1-6"]) {
+    const g = replay(id, ROUTES[id].takedown);
+    assert.equal(g.phase, "won", `${id} takedown route wins`);
+    assert.equal(g.deaths, 0);
+    assert.deepEqual([...g.takedowns].sort(), g.guards.map((c) => c.id).sort(), `${id}: every card put down`);
+    assert.deepEqual([g.medals.takedown, g.medals.takedowns, g.medals.cards], [true, g.guards.length, g.guards.length]);
+  }
+  // They compete for the player's attention, not exclusively: the scripted
+  // Takedown routes happen to stay unseen too (both stamps in one run is the
+  // expert's double), while the guided line earns only Ghost.
+  // A takedown counts once per card and is restored with its checkpoint (no farming).
+  const g = replayTo("1-5", ROUTES["1-5"].takedown, (x) => x.takedowns.includes("p2"));
+  const before = [...g.takedowns];
+  M.die(g, "spear");
+  M.advance(g, 1);
+  assert.ok(g.takedowns.length <= before.length && g.takedowns.every((id) => before.includes(id)));
+});
 test("routes are plain JSON [seconds, input] arrays of ordinary actions; legacy names point at 1-6", () => {
   const allowed = new Set(["left", "right", "jump", "jumpReleased", "dash", "color"]);
   for (const id of LEVEL_IDS)

@@ -24,7 +24,7 @@ for (const id of levels) {
     for (let seed = 1; seed <= runs; seed++) results.push(runModel(M, id, persona, seed));
     const s = summarize(results);
     out[id][persona] = { ...s, results: results.map(({ seed, won, time, deaths, deathList }) => ({ seed, won, time, deaths, cols: deathList.map((d) => `${d.col}${d.reason[0]}`).join(" ") })) };
-    console.log(`${id} ${PERSONAS[persona].label.padEnd(11)} clear ${s.cleared}/${s.runs}  deaths med ${s.deathsMedian} p90 ${s.deathsP90}  time med ${s.timeMedian}s p90 ${s.timeP90}s  heat ${JSON.stringify(s.heat)}  quit ${JSON.stringify(s.quitRisk)}  (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+    console.log(`${id} ${PERSONAS[persona].label.padEnd(11)} clear ${s.cleared}/${s.runs}  deaths med ${s.deathsMedian} p90 ${s.deathsP90}  hearts lost med ${s.damageMedian} p90 ${s.damageP90} (cards ${s.hitsMedian})  chain max ${s.chainMax}  time med ${s.timeMedian}s p90 ${s.timeP90}s  heat ${JSON.stringify(s.heat)}  quit ${JSON.stringify(s.quitRisk)}  (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
   }
 }
 if (jsonAt > 0) writeFileSync(process.argv[jsonAt + 1], JSON.stringify(out, null, 1));

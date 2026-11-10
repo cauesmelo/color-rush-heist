@@ -106,7 +106,7 @@ const dirOf = (g) => (g.stolen ? -1 : 1);
 const cxOf = (g) => g.player.x + g.player.w / 2;
 const feetOf = (g) => g.player.y + g.player.h;
 const progOf = (g) => dirOf(g) * cxOf(g);
-const active = (c) => !["away", "stunned", "drained"].includes(c.state);
+const active = (c) => !["away", "stunned", "drained", "defeated"].includes(c.state);
 function solidAt(g, M, tx, ty) {
   return ty >= 0 && M.blocked(g, tx, ty);
 }
@@ -853,7 +853,10 @@ export function runModel(M, levelId, personaId, seed, { maxTime = 300, maxDeaths
     seed,
     won: g.phase === "won",
     time: +g.time.toFixed(1),
-    deaths: g.deaths,
+    deaths: g.deaths, // real deaths (a checkpoint restore); before hearts every fall counted here
+    hits: g.hits ?? 0, // hearts lost to cards
+    falls: g.falls ?? 0, // hearts lost to water
+    chainBest: g.chainBest ?? 0,
     spotted: g.spotted,
     stickers: M.stickerCount(g),
     deathList: deaths,
@@ -884,6 +887,11 @@ export function summarize(runs) {
     cleared: runs.filter((r) => r.won).length,
     deathsMedian: q(runs.map((r) => r.deaths), 0.5),
     deathsP90: q(runs.map((r) => r.deaths), 0.9),
+    // Hearts lost per run (cards + water), the damage the combat model adds.
+    damageMedian: q(runs.map((r) => (r.hits ?? 0) + (r.falls ?? 0)), 0.5),
+    damageP90: q(runs.map((r) => (r.hits ?? 0) + (r.falls ?? 0)), 0.9),
+    hitsMedian: q(runs.map((r) => r.hits ?? 0), 0.5),
+    chainMax: Math.max(0, ...runs.map((r) => r.chainBest ?? 0)),
     timeMedian: q(runs.filter((r) => r.won).map((r) => r.time), 0.5),
     timeP90: q(runs.filter((r) => r.won).map((r) => r.time), 0.9),
     heat: Object.fromEntries(Object.entries(heat).sort((a, b) => b[1] - a[1])),

@@ -42,12 +42,13 @@ export const WORLD = Object.freeze({
   speed: 330, // px/s run speed
   acceleration: 2600, // 0 -> 330 in 0.13 s
   braking: 3300, // no input on the ground: 330 -> 0 in 0.10 s
-  turn: 6000, // input against motion on the ground: 330 -> -330 in 0.11 s
+  turn: 6000, // input against motion on the ground: momentum gone in 0.055 s, so a
+  // full 330 -> -330 turnaround takes 0.18 s (then the normal 0.13 s start)
   airAcceleration: 2600, // same as the ground: the arc is the player's to steer
   airTurn: 4200, // reversing mid-air: 0.16 s
   airBraking: 3000, // letting go mid-air drifts ~18 px before stopping (precise stomps)
   // Forgiveness windows.
-  coyote: 0.1, // s after leaving a ledge that a ground jump still works
+  coyote: 0.1, // s: a ground jump still works for 11 ticks (~92 ms) after leaving a ledge
   jumpBuffer: 0.12, // s a jump press waits for the ground (kept alive through an air dash)
   dashBuffer: 0.1, // a dash pressed during hit-stop or a dash's last frames still fires
   cornerCorrection: 6, // px: rising into a ceiling corner by <= 6 px slides around it
@@ -60,7 +61,8 @@ export const WORLD = Object.freeze({
   dashFreeze: 0.033, // a 4-tick freeze-frame as the dash fires (impact, not lag)
   groundDashDelay: 0.25, // ground re-dash; air dashes need the single charge
   // Dash-jump: jumping during a ground dash keeps 560 px/s of it, bleeding back
-  // to run speed at 900 px/s^2 (about +2 tiles of reach: player expression).
+  // to run speed at 900 px/s^2: ~+30 px in the air, +2 tiles of gap with the
+  // dash's run-up (green 11 -> 13 tiles). Player expression, never required.
   dashJumpSpeed: 560,
   carryDecay: 900,
   // Stomp: hold jump (or press it as you land) for the high bounce.

@@ -974,6 +974,229 @@ test("forgiving input: coyote time, buffered landing jump, variable height, same
   assert.ok(tap.player.vy < 0 && tap.player.vy > -(M.WORLD.jump * 0.5 + 1));
 });
 
+// ------------------------------------------------------ movement feel ----
+/** A flat, card-free strip for movement measurements (level 1-1 col 60-70). */
+const flat = () => {
+  const g = noCards(fresh("1-1"));
+  place(g, 64 * T, 14 * T);
+  return g;
+};
+test("movement: snappy start/stop/turn on the ground; full air control with a short drift", () => {
+  const timeTo = (g, input, pred) => {
+    let n = 0;
+    while (!pred(g) && n++ < 240) ticks(g, 1, input);
+    return n / 120;
+  };
+  const a = flat();
+  assert.ok(timeTo(a, { right: true }, (g) => g.player.vx >= M.WORLD.speed) <= 0.135, "0 -> run in ~0.13 s");
+  assert.ok(timeTo(a, {}, (g) => g.player.vx === 0) <= 0.105, "run -> stop in 0.1 s");
+  ticks(a, seconds(0.3), { right: true });
+  assert.ok(timeTo(a, { left: true }, (g) => g.player.vx <= 0) <= 0.06, "momentum cancelled in 0.055 s");
+  assert.ok(timeTo(a, { left: true }, (g) => g.player.vx <= -M.WORLD.speed) <= 0.135, "then full speed the other way");
+  // In the air: letting go drifts ~18 px, then stops.
+  const d = flat();
+  ticks(d, seconds(0.3), { right: true });
+  ticks(d, 1, { right: true, jump: true });
+  const x0 = d.player.x;
+  ticks(d, seconds(0.2));
+  assert.ok(d.player.x - x0 < 26 && d.player.vx === 0, `air drift ${(d.player.x - x0).toFixed(1)} px`);
+});
+test("movement: variable jump - a tap hops ~1 tile, a hold reaches 93 px; the apex hangs only while held", () => {
+  const peak = (release) => {
+    const g = flat();
+    ticks(g, 1, { jump: true });
+    if (release !== null) ticks(g, release, {}), ticks(g, 1, { jumpReleased: true });
+    let top = Infinity;
+    for (let i = 0; i < 120; i++) {
+      ticks(g, 1);
+      top = Math.min(top, feet(g));
+    }
+    return 14 * T - top;
+  };
+  const tap = peak(2),
+    held = peak(null);
+  assert.ok(held > 2 * T + 20 && held < 3 * T, `held ${held.toFixed(1)} px`);
+  assert.ok(tap > 20 && tap < T + 16, `tap ${tap.toFixed(1)} px`);
+  // Apex hang: the same jump spends longer near its peak when jump is held.
+  const nearPeak = (hold) => {
+    const g = flat();
+    ticks(g, 1, { jump: true });
+    if (!hold) g.player.jumpHeld = false; // released after the takeoff (no cut: vy already low later)
+    let n = 0;
+    for (let i = 0; i < 120; i++) {
+      ticks(g, 1);
+      if (Math.abs(g.player.vy) < M.WORLD.apexBand && !g.player.grounded) n++;
+    }
+    return n;
+  };
+  assert.ok(nearPeak(true) > nearPeak(false) * 1.6, `hang ${nearPeak(true)} vs ${nearPeak(false)} ticks`);
+});
+test("movement: falls are firmer than rises (x1.15 gravity past the apex), capped at 760 px/s", () => {
+  const g = flat();
+  ticks(g, 1, { jump: true });
+  let rise = 0,
+    fall = 0,
+    peaked = false;
+  for (let i = 0; i < 200 && !(peaked && g.player.grounded); i++) {
+    ticks(g, 1);
+    if (g.player.vy < 0) rise++;
+    else if (g.player.vy > M.WORLD.apexBand) (peaked = true), fall++;
+  }
+  assert.ok(fall < rise, `fall ${fall} ticks < rise ${rise} ticks`);
+  const drop = noCards(fresh("1-1"));
+  place(drop, 98 * T, 0, { vx: 0 }); // from the top of the sky, over the first water's pit
+  drop.player.grounded = false;
+  let fastest = 0;
+  for (let i = 0; i < 120 && drop.phase === "playing"; i++) {
+    ticks(drop, 1);
+    fastest = Math.max(fastest, drop.player.vy);
+  }
+  assert.equal(fastest, M.WORLD.maxFall);
+});
+test("movement: coyote time is 0.1 s and the jump buffer 0.12 s, to the tick", () => {
+  const coyote = (late) => {
+    const g = noCards(fresh("1-1"));
+    place(g, 12 * T - 30, 12 * T, { vx: 330 }); // running off the home cliff's edge
+    for (let i = 0; i < 120 && g.player.grounded; i++) ticks(g, 1, { right: true });
+    g.player.airJumped = true; // only the ground (coyote) jump is under test
+    ticks(g, late, { right: true });
+    ticks(g, 1, { right: true, jump: true });
+    return g.player.vy < -400;
+  };
+  assert.equal(coyote(Math.round(0.08 * 120)), true, "a jump 0.08 s after the edge still works");
+  assert.equal(coyote(Math.round(0.11 * 120)), false, "0.11 s is too late");
+  const buffer = (early) => {
+    const g = flat();
+    g.player.y -= 120;
+    g.player.grounded = false;
+    g.player.airJumped = true;
+    g.player.vy = 300;
+    // Press `early` seconds before touching down.
+    let ticksToLand = 0;
+    const probe = structuredClone(g);
+    Object.defineProperty(probe, "level", { value: g.level, enumerable: false });
+    while (!probe.player.grounded && ticksToLand < 200) ticks(probe, 1), ticksToLand++;
+    ticks(g, ticksToLand - Math.round(early * 120));
+    ticks(g, 1, { jump: true });
+    ticks(g, Math.round(early * 120) + 2);
+    return g.player.vy < 0 && g.player.jumps === 1;
+  };
+  assert.equal(buffer(0.1), true, "pressed 0.1 s before landing: jumps on landing");
+  assert.equal(buffer(0.15), false, "0.15 s early is outside the buffer");
+});
+test("movement: corner correction slides around a ceiling edge clipped by <= 6 px", () => {
+  // The 1-3 corridor canopy's left corner: its underside is y = 416 and it
+  // starts at x = 832. Rubik rises into it overlapping by `overlap` px.
+  const rise = (overlap) => {
+    const g = noCards(fresh("1-3"));
+    Object.assign(g.player, { x: 26 * T + overlap - M.PLAYER.w, y: 13 * T + 1, vx: 0, vy: -300, grounded: false, rising: true, jumps: 1, grace: 0 });
+    ticks(g, 2);
+    return g.player;
+  };
+  const slide = rise(4);
+  assert.ok(slide.vy < -200 && slide.y < 13 * T, "4 px: nudged past the corner, still rising");
+  assert.ok(slide.x + slide.w <= 26 * T + 0.01);
+  const bonk = rise(10);
+  assert.ok(bonk.vy >= 0 && bonk.y >= 13 * T - 0.01, "10 px: a real bonk");
+});
+test("movement: ledge assist - a lip met with the feet <= 12 px below its top is climbed onto", () => {
+  const meet = (below) => {
+    const g = noCards(fresh("1-1"));
+    // The 4-tile wall's face at col 71 (top row 10, y = 320); Rubik falling
+    // toward it with his feet `below` px under its top.
+    Object.assign(g.player, { x: 71 * T - M.PLAYER.w - 2, y: 10 * T + below - M.PLAYER.h, vx: 330, vy: 40, grounded: false, jumps: 1, grace: 0 });
+    ticks(g, 12, { right: true });
+    return g.player.grounded && Math.abs(feet(g) - 10 * T) < 1;
+  };
+  assert.equal(meet(10), true, "10 px short: lands on top");
+  assert.equal(meet(18), false, "18 px short: slides down the face");
+  assert.ok(M.WORLD.ledgeAssist < T && 93 + M.WORLD.ledgeAssist < 4 * T && 175 + M.WORLD.ledgeAssist < 6 * T, "never creates a climb");
+});
+test("movement: a ground dash-jump keeps 560 px/s and bleeds back to run speed; it goes further", () => {
+  const run = (dashJump) => {
+    const g = noCards(fresh("1-3")); // the glade: 700 px of flat, open ground
+    place(g, 5 * T, 16 * T);
+    g.dashUnlocked = true;
+    ticks(g, seconds(0.2), { right: true });
+    if (dashJump) {
+      ticks(g, 1, { right: true, dash: true });
+      ticks(g, seconds(0.08), { right: true });
+    }
+    ticks(g, 1, { right: true, jump: true });
+    const x0 = g.player.x,
+      v0 = g.player.vx;
+    for (let i = 0; i < 240 && !(g.player.grounded && i > 5); i++) ticks(g, 1, { right: true });
+    return { dist: g.player.x - x0, v0, vEnd: g.player.vx };
+  };
+  const plain = run(false),
+    dj = run(true);
+  assert.ok(dj.v0 > M.WORLD.dashJumpSpeed - 10, `kept ${dj.v0} px/s`);
+  assert.ok(dj.dist > plain.dist + 20, `dash-jump ${dj.dist.toFixed(0)} px vs ${plain.dist.toFixed(0)} px in the air`);
+  assert.ok(dj.vEnd <= M.WORLD.speed + 1, "back to run speed by landing");
+  // An air dash finishes; a jump pressed during it fires when it ends (white).
+  const a = flat();
+  a.dashUnlocked = true;
+  ticks(a, 1, { jump: true });
+  ticks(a, seconds(0.2));
+  ticks(a, 1, { dash: true, right: true });
+  ticks(a, seconds(0.05), { right: true });
+  ticks(a, 1, { jump: true, right: true }); // during the air dash
+  ticks(a, seconds(0.2), { right: true });
+  assert.equal(events(a, "airjump").length, 1, "the buffered air jump was not lost");
+});
+test("movement: every dash fires with a 4-tick freeze-frame; stomps freeze 0.08 s", () => {
+  const g = flat();
+  g.dashUnlocked = true;
+  ticks(g, 1, { dash: true, right: true });
+  assert.ok(g.hitstop > 0 && g.hitstop <= M.WORLD.dashFreeze);
+  const x = g.player.x;
+  ticks(g, 3, { right: true });
+  assert.equal(g.player.x, x, "frozen");
+  ticks(g, 3, { right: true });
+  assert.ok(g.player.x > x + 10, "then the burst");
+  assert.equal(M.WORLD.hitstop.stomp, 0.08);
+});
+test("no double-jump refresh exploits: slabs, swaps and the coyote window never grant a third jump", () => {
+  // Swap away and back mid-air: still one air jump (tested above); coyote
+  // jump then air jump: two jumps total; jumping through a slab: no refresh.
+  const g = noCards(fresh("1-1"));
+  place(g, 12 * T - 21, 12 * T);
+  for (let i = 0; i < 30 && g.player.grounded; i++) ticks(g, 1, { right: true });
+  ticks(g, 4, { right: true });
+  ticks(g, 1, { right: true, jump: true }); // coyote jump
+  ticks(g, seconds(0.2), { right: true });
+  ticks(g, 1, { jump: true }); // air jump
+  ticks(g, seconds(0.1));
+  const before = g.player.vy;
+  ticks(g, 1, { jump: true }); // a third press does nothing
+  assert.ok(g.player.vy >= before);
+  assert.equal(events(g, "airjump").length, 1);
+});
+test("collision matches the drawn sprites: hitboxes sit inside the opaque art, feet on the ground line", () => {
+  const box = (file, cx, cy, w, h) => {
+    const png = readPng(path.join(demo, "assets", file));
+    let x0 = Infinity, x1 = -1, y0 = Infinity, y1 = -1;
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++)
+        if (png.alpha(cx + x, cy + y) > 0) (x0 = Math.min(x0, x)), (x1 = Math.max(x1, x)), (y0 = Math.min(y0, y)), (y1 = Math.max(y1, y));
+    return { x0, x1, y0, y1 };
+  };
+  // Rubik: 32 px frames drawn at 2x from (centre - 33, feet - 64). Hitbox 40 x 52.
+  const r = box("rubik_white.png", 0, 0, 32, 32),
+    left = -33 + 2 * r.x0,
+    right = -33 + 2 * (r.x1 + 1),
+    top = -64 + 2 * r.y0,
+    bottom = -64 + 2 * (r.y1 + 1);
+  assert.equal(bottom, 0, "feet on the sprite's bottom row");
+  assert.ok(left <= -M.PLAYER.w / 2 && right >= M.PLAYER.w / 2, `hitbox inside the art horizontally (${left}..${right})`);
+  assert.ok(top <= -M.PLAYER.h && -M.PLAYER.h - top <= 10, `head within 10 px of the art's top (${top})`);
+  assert.ok(M.PLAYER.w >= (right - left) * 0.7, "the hitbox covers >= 70% of the art's width (no phantom misses)");
+  // Green card: 86 x 67 frames drawn at 2x, feet at source row 64. Body 48 x 84.
+  const c = box("inimigo_verde.png", 0, 134, 86, 67);
+  assert.ok(Math.abs(-128 + 2 * (c.y1 + 1)) <= 6, "card feet on the ground line");
+  assert.ok(-128 + 2 * c.y0 <= -M.GUARD.h, "the card's art reaches above its body (spear tip)");
+});
+
 // ------------------------------------------------------------------- art ----
 test("all 103 original images are byte-identical and recorded as on-screen or archive", () => {
   const manifest = JSON.parse(readFileSync(path.join(demo, "art-manifest.json"), "utf8"));

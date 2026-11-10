@@ -82,6 +82,7 @@ export const WORLD = Object.freeze({
   // Stomp: hold jump (or press it as you land) for the high bounce.
   stompBounce: 520, // held: 195 px over the card's floor at the peak (111 over its head)
   stompBounceLow: 400, // not held: a short hop off the head
+  spikePop: 150, // px/s up when landing on a raised spear: a stumble, not a bounce
   colorCooldown: 0.15, // generous: swapping is a skill tool, never blocked long
   storm: 0.18, // transformation animation (rubik_storm.png)
   respawnDelay: 0.45,
@@ -961,14 +962,18 @@ export function stompable(g, guard) {
   if (guard.sideX * guard.dir > 0) return false;
   return aheadOf(g, guard) <= 12; // up to half the head ahead of centre still counts as "above"
 }
-/** Landing on a raised spear: Rubik is popped up and away (no damage) and the
- * card turns on him. */
+/** Landing on a raised spear: a failed stomp. Rubik is knocked aside off its
+ * head (no damage) and the card turns on him. The pop is a hit reaction, not
+ * a springboard: -150 px/s lifts him ~10 px (the old -360 lifted ~55 px and a
+ * cone-blind player chained it with white's air jump over 1-2's wall and
+ * 1-5's P2 card). The sideways push (440 px/s, 0.22 s of no control) clears
+ * the 68 px head from any landing point, so there is no spike-spike loop. */
 function spike(g, guard) {
   const p = g.player,
     away = Math.sign(p.x + p.w / 2 - guard.x) || guard.dir;
-  p.vy = -360;
+  p.vy = -WORLD.spikePop;
   p.vx = away * GUARD.awareKnock;
-  p.knock = 0.22; // long enough to clear the head: no spike-spike loop
+  p.knock = 0.22;
   p.jumps = 1;
   p.grounded = false;
   p.bumpGrace = WORLD.bumpGrace;

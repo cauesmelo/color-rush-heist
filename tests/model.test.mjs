@@ -658,8 +658,11 @@ test("1-6 vault room: no state strands Rubik - dawdling is safe, the door always
     for (let i = 0; i < seconds(6) && cx(g) > door + 30; i++) ticks(g, 1, { left: true });
     ticks(g, 1, { left: true, dash: true });
     ticks(g, seconds(0.4), { left: true });
-    assert.equal(g.stones.find((s) => s.id === "seal-low").broken, true, `${name}: the door opens`);
+    // On the ground the dash breaks the low stone; mid-hop, the stone in his
+    // rows (the upper one) - either opens a doorway he flies through.
+    assert.ok(g.stones.some((s) => s.sealOnTheft && s.broken), `${name}: the door opens`);
     assert.ok(cx(g) < door, `${name}: and he is out`);
+    assert.equal(g.deaths, 0, `${name}: alive`);
   }
   // A dash fired from deeper in the room stops in the doorway: the alarm
   // card sees red, and the refunded dash (or green) answers it before its
@@ -680,7 +683,7 @@ test("1-6 vault room: no state strands Rubik - dawdling is safe, the door always
   // stone in Rubik's rows breaks (the upper one stays as a lintel), and the
   // renderer's door cue (game.mjs drawDoorCue) ends with that same stone.
   const src = readFileSync(path.join(demo, "game.mjs"), "utf8");
-  assert.match(src, /function drawDoorCue\(\)[\s\S]*?seal\.some\(\(s\) => s\.broken\)/);
+  assert.match(src, /function doorSealed\(\)[\s\S]*?!seal\.some\(\(s\) => s\.broken\)[\s\S]*?function drawDoorCue\(\) \{\n  if \(!doorSealed\(\)\) return;/);
   assert.match(src, /drawStones\(\);\n  drawDoorCue\(\);/);
 });
 test("1-6: sticker 3 stays sealed between the roof gates until red comes home", () => {

@@ -1525,13 +1525,17 @@ function drawStones() {
  * seal pulses, storm streaks (1-4's dash marks) run from Rubik's side into
  * it, and once the caption has gone the upper stone carries the dash key.
  * Added after the user's playtest stalled in this room (2026-11-10). */
-function drawDoorCue() {
-  if (!game.stolen || game.phase === "won") return;
+function doorSealed() {
+  if (!game.stolen || game.phase === "won") return false;
   // Breaking the low stone opens the doorway (the upper one stays as a
   // lintel), so the cue ends with the first broken seal stone.
   const seal = game.stones.filter((s) => s.sealOnTheft);
-  if (!seal.length || seal.some((s) => s.broken)) return;
-  const x0 = Math.min(...seal.map((s) => s.x)) * T,
+  return seal.length > 0 && !seal.some((s) => s.broken);
+}
+function drawDoorCue() {
+  if (!doorSealed()) return;
+  const seal = game.stones.filter((s) => s.sealOnTheft),
+    x0 = Math.min(...seal.map((s) => s.x)) * T,
     y0 = Math.min(...seal.map((s) => s.y)) * T,
     y1 = (Math.max(...seal.map((s) => s.y)) + 2) * T,
     sx = wx(x0),
@@ -1935,14 +1939,18 @@ function drawGuard(guard) {
   // Awareness bubbles: every state change has a cue.
   const head = floor - M.GUARD.h - 14,
     bob = reducedMotion ? 0 : Math.sin(clock * 6 + guard.x) * 2;
-  if (["suspect", "search"].includes(guard.state)) bubble(x, head + bob, "?", { fill: "#ffe3b0" });
+  // A card whose cone is on Rubik in its own colour hums, even while it is
+  // still searching after a stun: a "?" there read as "it suspects me" (the
+  // red vault guard beside red Rubik after the theft, user playtest).
+  const humming = guard.disguiseSeen && ["calm", "suspect", "search"].includes(guard.state);
+  if (["suspect", "search"].includes(guard.state) && !humming) bubble(x, head + bob, "?", { fill: "#ffe3b0" });
   else if (["alert", "windup", "lunge", "recover"].includes(guard.state)) bubble(x, head + bob, "!", { fill: "#ffb3a6" });
   else if (guard.state === "stunned") {
     for (let i = 0; i < 3; i++) {
       const a = clock * 4 + (i * Math.PI * 2) / 3;
       drawStar(x + Math.cos(a) * 18, head + 6 + Math.sin(a) * 5);
     }
-  } else if (guard.state === "calm" && guard.disguiseSeen) {
+  } else if (humming) {
     // Humming: the cone is on Rubik but he wears their color (a drawn note;
     // the pixel font has no music glyph).
     bubble(x, head + bob, "", { w: 30, h: 30 });
@@ -3042,6 +3050,8 @@ function getState() {
     camera: { x: cam.x, y: cam.y },
     settings: { ...settings },
     audio: { musicDecoded: !!track.buffer, musicPlaying: !!track.source, musicRate: track.rate, context: audio?.state ?? "none" },
+    // 1-6: the sealed-door cue is drawn (drawDoorCue) while this is true.
+    doorCue: doorSealed(),
     // QA: the performance.now() moment the simulation state corresponds to
     // (loop.mjs), so a browser test can map a key's timeStamp to its tick.
     simClock: stepper.time,

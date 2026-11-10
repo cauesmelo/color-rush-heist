@@ -123,7 +123,9 @@ export default defineLevel({
     { id: "lookout", job: "watch", kind: "green", mode: "patrol", x: px(47) + 16, floor: px(12), dir: 1, min: px(47) + 16, max: px(52) },
     // The vault's only guard. Turns every 2.6 s (+0.4 s look-back): wait on
     // stair 3 (below its cone), go when it looks at the vault, stomp its back.
-    { id: "vault-guard", job: "gate", kind: "red", mode: "sentry", x: px(113) + 16, floor: px(8), dir: -1, min: px(113), max: px(116) + 16, turnEvery: 2.6 },
+    // Posted 4 tiles inside the door (not against it), so the doorway reads
+    // clear after the theft: door, then the alarm card beyond it.
+    { id: "vault-guard", job: "gate", kind: "red", mode: "sentry", x: px(115) + 16, floor: px(8), dir: -1, min: px(114), max: px(116) + 16, turnEvery: 2.6 },
     // Escape only: the alarm brings it to the landing, staring at the sealed
     // door. Its body (3416-3464 px) lies inside a red dash fired from the
     // door (Rubik's box reaches 3436 px), so the forced smash carries straight

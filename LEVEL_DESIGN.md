@@ -146,7 +146,7 @@ No hint bubbles. Risk (brief §11): two ideas in one level; watch first plays he
 
 ## 1-6 The Vault — recombination → theft → REVERSE (136 columns)
 
-Kit: white, green, dash; red at the theft. Night tint. The beacon rises from the vault.
+Kit: white, green, dash; red at the theft. Night tint. (The red beacon behind the forest was removed at the owner's request; the `beacon` keys left in levels/*.mjs are unused.)
 Old Stage 1 geometry (vault steps, chamber, the room's two cards, alcove, roof gates,
 escape-only card) is reused at an offset of −70 columns.
 

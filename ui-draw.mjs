@@ -711,28 +711,6 @@ export function createUiDraw(env) {
     }
   }
 
-  /** The red light pillar rising from behind the forest (the vault's beacon), as
-   * three nested columns and a glow pool of dithered red: the density thins
-   * upward and outward (no gradient, no screen blend). `strength` 0..1.1 scales
-   * it (the pulse and how near the vault is); (cx, base) are art px. */
-  function beacon(cx, base, strength, half = [20, 9, 4]) {
-    const height = 150;
-    [2, 4, 6].forEach((level, k) => {
-      for (let j = 0; j < height; j++) {
-        const lvl = Math.round(level * strength * (1 - j / height) ** 1.5 * 1.2);
-        if (lvl <= 0) continue;
-        for (let i = -half[k]; i <= half[k]; i++) if (ditherOn(cx + i, base - j, lvl)) g.px(cx + i, base - j, PAL.red);
-      }
-    });
-    // The glow pooled on the canopy where the light emerges: a flat ellipse.
-    const rx = 45,
-      ry = 14;
-    for (let j = -ry; j <= ry; j++)
-      for (let i = -rx; i <= rx; i++) {
-        const d = Math.hypot(i / rx, j / ry);
-        if (d <= 1 && ditherOn(cx + i, base + j, Math.round(4 * strength * (1 - d)))) g.px(cx + i, base + j, PAL.red);
-      }
-  }
   // ------------------------------------------------ world effects, in pixels --
   /** A radial glow as a Bayer dither (replaces the radial gradients): art-px
    * centre and radii, `peak` the density (0..16) at the centre falling to 0. */
@@ -835,10 +813,7 @@ export function createUiDraw(env) {
     if (level) ditherDraw(derived.forestColor, level, 0, 0, 480, 270, 0, 40, 960, 540);
     ctx.fillStyle = derived.groundFill;
     ctx.fillRect(0, 40 + 540 - 2, 960, 4);
-    // The red beacon rises behind the vault node until World 1 is clear: three
-    // nested columns of dithered red that thin out upward (no gradient).
-    const vault = MAP_NODES[MAP_NODES.length - 1];
-    if (!C.worldClear(save)) beacon(vault.x / A, NODE_Y - 10, live() ? 0.8 + Math.sin(env.clock * 2) * 0.2 : 0.85, [20, 9, 4]);
+    // (No red beacon behind the vault node: removed at the owner's request.)
     T("World 1", AW / 2, 24, { color: PAL.cream, align: "center", shadow: PAL.void });
     T("Green Forest", AW / 2, 46, { s: 2, color: PAL.white, align: "center", shadow: PAL.void });
     // Path: slab cells (atlas row 0, cells 12-17, top 12 source px) at 2x, one
@@ -928,6 +903,6 @@ export function createUiDraw(env) {
   return {
     A, bubble, note, strikeZone, openMarker, dazeRing, drawPopups, drawHint, drawHud, drawIntro, drawGetCard, drawReverse, drawFlash,
     iris, drawBoot, drawTitle, drawStorySkip, drawEnding, drawResults, drawWorldClear, drawMap, badge, keycap, sticker, star, text: T,
-    formCard, dashPill, keycapCentered, stickerOutline, ditherDraw, beacon, glow, ring, crack, helmet, dimWash, scrimPx,
+    formCard, dashPill, keycapCentered, stickerOutline, ditherDraw, glow, ring, crack, helmet, dimWash, scrimPx,
   };
 }

@@ -64,7 +64,7 @@ and a heart that is empty is cracked as well as dark.
    pixel in `void`**; text has a 1 font-pixel ink outline.
 3. **No gradients.** A gradient is an ordered (Bayer 4x4) dither of palette pixels:
    dimmed backdrops, the title-to-grey drain, the forest regaining colour (on the
-   map and in play), the hit flash, the vault glow, the beacon, goal halo, pickups.
+   map and in play), the hit flash, the vault glow, goal halo, pickups.
 4. **No translucency, no blends.** `globalAlpha` and `rgba()` are not used by the UI.
    A fade is a dither or a blink of whole frames; a pop is a drop in 3-4 discrete
    steps.
@@ -128,7 +128,7 @@ new UI.
   original gradient art), the per-level time-of-day multiply on the backdrop and
   the colour composites are untouched, and the audit allows their colours. The
   few code-drawn world bits that used gradients or blends (chalk faces, glows,
-  cracks, water, particles, the charger's cap, the beacon) were converted to
+  cracks, water, particles, the charger's cap) were converted to
   palette pixels. `tests/pixel-ui.test.mjs` pins the functions in `game.mjs` that
   still use a non-pixel call to exactly that list.
 - **The credits' jam title card** (`intro.jpeg`, an original JPEG) is shown

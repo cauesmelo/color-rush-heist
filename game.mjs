@@ -1597,15 +1597,9 @@ function drawBackground() {
   for (const ox of [0, W]) ctx.drawImage(backdrop("forest"), Math.round(bx + ox), by, W, H);
   ctx.fillStyle = derived.groundFill;
   if (by + H < H) ctx.fillRect(0, by + H, W, H - by - H);
-  // The red the cards stole glows from the vault, far beyond the trees, so the
-  // goal is visible from the first frame without an arrow or label. It is a
-  // light pillar rising from behind the treeline (the canopy band sits at
-  // y~190-260 of the 2x art): three columns of dithered red that thin out
-  // upward, and a flat glow pooled on the canopy. The 0.075 parallax keeps it
-  // reading as very distant; it lands centred over the vault room when the
-  // camera reaches it. Each level brings the beacon closer (level.beacon
-  // 0..1): a faint speck in 1-1, the full pillar over the vault in 1-6. It is
-  // drawn after the time-of-day tint (below) so the tint never recolours it.
+  // No red beacon behind the forest: the owner disliked the distant red light
+  // pillar (2026-11-10), so the backdrop is only sky, forest and the
+  // time-of-day tint. The goal reads from the level itself.
   const tint = TINTS[LV.tint];
   if (tint) {
     ctx.save();
@@ -1613,17 +1607,6 @@ function drawBackground() {
     ctx.fillStyle = tint;
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
-  }
-  if (!game.stolen) {
-    const near = LV.beacon ?? 1,
-      anchor = LV.vault ? LV.vault.cx : LV.width + 2400 * (1 - near),
-      gx = Math.round(W / 2 + (anchor - (cam.x + W / 2)) * 0.075),
-      base = by + 236,
-      pulse = (reducedMotion ? 0.85 : 0.8 + Math.sin(clock * 2) * 0.2) * (0.35 + 0.65 * near);
-    if (gx > -90 && gx < W + 90) {
-      const half = [44, 22, 9].map((h) => Math.max(1, Math.round((h * (0.3 + 0.7 * near)) / 2)));
-      pix.beacon(Math.round(gx / 2), Math.round(base / 2), pulse, half);
-    }
   }
 }
 /** Time of day per level, multiplied over the backdrop only (tiles, cards and

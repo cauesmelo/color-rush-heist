@@ -98,8 +98,7 @@ declared pair). `LEVEL_DESIGN.md` lists each card's safe and expert line.
    keys move between them.
 8. **World map:** a 960×540 side view from `bg1-sky` over `bg1`, regaining 12% color
    per cleared level and full color after 1-6. A slab-cell path (atlas row 0, cells
-   12–17) links six chalk-face nodes 140 px apart; 1-6 is `cofre.png` under the red
-   beacon. Locked nodes are faint, open ones bob, cleared ones are filled with the color
+   12–17) links six chalk-face nodes 140 px apart; 1-6 is `cofre.png`. Locked nodes are faint, open ones bob, cleared ones are filled with the color
    Rubik finished in, a 3/3 node gets a gold rim, and each shows three sticker pips and
    a red seal for stamps. After a first clear the path draws in (0.6 s) and Rubik walks
    to the new node (0.35 s per node, his 2× run row). HUD: owned forms, "n/18"

@@ -6,6 +6,8 @@ Player-facing changes in Color Rush Heist. Versions follow `package.json`; the t
 
 ### Pixel UI
 
+- **The red beacon is gone.** The distant red light pillar behind the forest (in play and on the world map) was removed at the owner's request. The `beacon` keys in the level files are now unused.
+
 - **Every menu is pixel art now.** The HUD, hearts, chain meter, hint and awareness bubbles, popups, level and GET and REVERSE cards, results and world-clear tallies, stamps, sticker sockets, world map, pause and options panels, buttons, toggles, keys, icons, the title's tap plate, the ending and the transitions are drawn on the same 2x pixel grid as the art, in 22 colours that all come from the art files. No rounded corners, soft shadows, gradients, translucency, rotation or system-font glyphs remain in the interface.
 - **Fades are dithers.** The screen dim behind a card, the forest regaining colour (on the map and in play), the comic's drain to grey, the hit flash, the vault's glow and the beacon are ordered dithers of palette pixels. The iris is a pixel-stepped zoom of the Rubik-face cut-out.
 - **Text is bitmap text** at two sizes on the grid (body and heading). The 16 px and 48 px sizes are gone.

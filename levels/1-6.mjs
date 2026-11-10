@@ -121,7 +121,14 @@ export default defineLevel({
     { id: "corridor", job: "watch", kind: "green", mode: "patrol", x: px(32) + 16, floor: px(16), dir: -1, min: px(28) + 16, max: px(38) + 16 },
     // Guards the swap alcove (sticker 1: green jump through it, white air
     // jump); in the escape it faces the island: green, or the stacked gate.
-    { id: "lookout", job: "watch", kind: "green", mode: "patrol", x: px(47) + 16, floor: px(12), dir: 1, min: px(47) + 16, max: px(52) },
+    { id: "lookout", job: "watch", pair: "ledge-red", kind: "green", mode: "patrol", x: px(47) + 16, floor: px(12), dir: 1, min: px(46) + 16, max: px(50) },
+    // The ledge pair: no single colour passes. Inbound, green walks through
+    // the lookout but this red sentry sees green: wait for its back (it turns
+    // every 2.4 s, + 0.4 s look-back) and stomp it at the lip; the bounce
+    // carries on toward the island. On the way home, red walks past it (a
+    // card can't see its own colour) and the green lookout, which sees red,
+    // takes a red dash knock.
+    { id: "ledge-red", job: "gate", pair: "lookout", kind: "red", mode: "sentry", x: px(52) + 16, floor: px(12), dir: -1, min: px(52) + 16, max: px(52) + 16, turnEvery: 2.4 },
     // The vault's only guard. Turns every 2.6 s (+0.4 s look-back): wait on
     // stair 3 (below its cone), go when it looks at the vault, stomp its back.
     // Posted 4 tiles inside the door (not against it), so the doorway reads

@@ -297,22 +297,37 @@ function enforcerStomp(pl) {
 /** 1-6 inbound: corridor in green, white up the ledge, green past the lookout
  * (optionally the swap alcove), the dash crossing, the steps, and the vault. */
 function heistInbound(pl, { alcove = false } = {}) {
-  pl.color("green").right().to(tx(42) + 8); // the canopy corridor, green
-  pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
-  pl.until((p) => p.p.grounded && Math.abs(p.feet - tx(12)) < 1, { right: true }, 240, "ledge");
-  if (alcove) {
-    // Sticker 1: green jump up through the lookout, white air jump at the apex.
-    pl.to(tx(48) + 8).stop().wait(0.1).jump().apex().press({ color: "white", jump: true }).landAt(tx(49) + 16);
-    pl.check(pl.g.stickers[0].collected, "swap alcove");
-    // Off the alcove's right end once the lookout below has walked clear
-    // (landing on its head would bounce Rubik out over the water).
-    pl.color("green").stop();
-    pl.until((p) => Math.abs(p.guard("lookout").x - tx(51)) > 70, {}, 900, "lookout clear");
-    pl.right().until((p) => !p.p.grounded, { right: true }, 120, "off the alcove").landAt(tx(51));
-    pl.check(Math.abs(pl.feet - tx(12)) < 1, "back on the ledge");
-  }
-  // The crossing: a jump down to the island, jump + dash + orb + dash to the bank.
-  pl.right().to(tx(53) + 26).jump().landAt(tx(66));
+  pl.color("green").right().to(tx(41) + 8); // the canopy corridor, green
+  // The ledge pair: the red sentry at the ledge's lip sees green, and its
+  // cone covers the whole ledge, so the climb waits below in the corridor
+  // for its back. Then white up (green again in the air), through the green
+  // lookout, and a stomp on the red sentry's back, a dash at the bounce's
+  // apex (the stomp refills it) onto the island.
+  // The first wait that stays unseen is kept.
+  const red = (p) => p.guard("ledge-red"),
+    unseen = pl.g.spotted;
+  pl.choose(
+    [0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3, 3.3, 3.6, 3.9, 4.2, 4.5].map((w) => (f) => {
+      f.stop().wait(w).right().to(tx(42) + 8);
+      f.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
+      f.until((p) => p.p.grounded && Math.abs(p.feet - tx(12)) < 1, { right: true }, 240, "ledge");
+      if (alcove) {
+        // Sticker 1: green jump up through the lookout, white air jump at the apex.
+        f.to(tx(47) + 8).stop().wait(0.1).jump().apex().press({ color: "white", jump: true }).landAt(tx(48) + 16);
+        f.check(f.g.stickers[0].collected, "swap alcove");
+        // The alcove is above the red sentry's cone: wait up here for its back.
+        f.color("green").stop();
+        f.until((p) => red(p).dir === 1 && red(p).turning <= 0 && red(p).turnClock < 1, {}, 900, "ledge sentry away (alcove)");
+      }
+      f.right().to(tx(50) + 4).jump().steerTo((p) => red(p).x - 8);
+      f.check(red(f).state === "stunned", "ledge sentry stomped");
+      // The stomp refilled the dash: dash at the bounce's apex onto the island.
+      f.right().apex().dash();
+      f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash").landAt(tx(66));
+    }),
+    (f) => f.g.spotted === unseen && f.g.deaths === 0 && Math.abs(f.feet - tx(14)) < 1,
+    "ledge pair",
+  );
   pl.check(Math.abs(pl.feet - tx(14)) < 1, "island");
   pl.to(tx(67) + 26).jump().apex().dash();
   pl.until((p) => p.p.dashCharge > 0 && p.p.dashTime <= 0 && p.p.vy > 120, pl.dir, 120, "orb").dash().land();
@@ -385,11 +400,16 @@ function heistEscape(pl, { roof = false, alcove = false } = {}) {
     (f) => f.g.deaths === deaths && f.g.spotted === spotted && Math.abs(f.feet - tx(12)) < 1 && f.g.phase === "playing",
     "island crossing",
   );
-  pl.left();
+  // The ledge pair on the way home: red walks past the red sentry; the green
+  // lookout sees red, so knock it aside with a red dash.
+  pl.left().color("red");
+  pl.until((p) => Math.abs(p.guard("lookout").x - p.cx) < 120 || p.guard("lookout").state === "stunned", pl.dir, 240, "near the lookout");
+  if (pl.guard("lookout").state !== "stunned") pl.dash().until((p) => p.p.dashTime <= 0, pl.dir, 60, "knock the lookout");
+  pl.check(pl.guard("lookout").state === "stunned", "lookout knocked");
   if (roof) {
     // Sticker 3: from the ledge's left edge, jump and red-dash into the stacked
     // gate, run the roof, dash the mid gate, drop home.
-    pl.color("green").to(tx(44) + 6); // green past the lookout (it faces the vault)
+    pl.to(tx(44) + 6);
     pl.press({ color: "red", jump: true }).apex().dash();
     pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "gate");
     pl.land();

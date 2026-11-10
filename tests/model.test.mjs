@@ -827,7 +827,7 @@ test("every card has a job, proved on the routes; cards that did no work are gon
   const ids = (id) => getLevel(id).guards.map((c) => c.id);
   for (const [id, gone] of [["1-2", ["chain-a", "chain-b"]], ["1-3", ["corridor-a"]], ["1-6", ["burst-a", "burst-b"]]])
     for (const card of gone) assert.ok(!ids(id).includes(card), `${id} ${card}`);
-  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 30);
+  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 31);
 });
 test("no stacked cards: two cards on one floor keep 2+ tiles between their bodies, unless a declared pair", () => {
   for (const level of LEVELS)

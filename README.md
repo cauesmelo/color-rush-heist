@@ -21,8 +21,8 @@ plan is in the brief, §8). `LEVEL_DESIGN.md` covers each level beat by beat.
 
 ```sh
 npm run dev          # http://127.0.0.1:4174 (this folder only, loopback)
-npm test             # 98 tests: 65 model/level + 22 movement audit + 11 campaign (node:test)
-node tests/cone-blind-audit.mjs   # ~40 s: what a cone-blind player gets past (LEVEL_DESIGN.md)
+npm test             # 106 tests: 67 model/level + 22 movement audit + 12 campaign + 5 cone-blind rule (~18 s)
+node tests/cone-blind-audit.mjs   # ~40 s: full report of what a cone-blind player gets past (LEVEL_DESIGN.md)
 npm run routes       # regenerate tests/routes.mjs after a level edit
 npm run build:itch   # dist/color-rush-heist-itch.zip
 ```
@@ -49,8 +49,8 @@ as your first input. Leaving the tab pauses.
 | --- | --- | --- | --- | --- | --- |
 | 1-1 | Home Cliff | Jump | Double jump (4-tile wall on dry ground) | white | — |
 | 1-2 | Stomping Ground | Stomp a card's head | Stomp from behind, then air-jump (7-8-tile heights) | white | GREEN, at the end |
-| 1-3 | Hide in Green | Disguise | White/green trade-off; a timed-turn pillar finale | white, green (spawns green) | — |
-| 1-4 | Storm Dash | Dash | Refills chain dashes (orb, lookout) | white, green (starts green) | DASH, in the first seconds |
+| 1-3 | Hide in Green | Disguise | White/green trade-off: every white climb has a watcher; a card's "!" sends Rubik back (caught) | white, green (spawns green) | — |
+| 1-4 | Storm Dash | Dash | Refills chain dashes (orb, lookout, a turning card over 27 tiles) | white, green (starts green) | DASH, in the first seconds |
 | 1-5 | Lookouts | The awareness ladder and the spear | A red card sees green | white, green, dash | — |
 | 1-6 | The Vault | Every earlier verb, compressed | Theft → REVERSE run home | white, green, dash | RED, at the theft |
 
@@ -87,8 +87,9 @@ declared pair). `LEVEL_DESIGN.md` lists each card's safe and expert line.
    art). Touching it flips it and fills it with Rubik's color; the iris closes on him.
 7. **Level clear tally:** time and best, the three stickers flying into their slots
    (0.15 s each, with a sound; faint = owned from an earlier run), stamps where the
-   level awards them ("Unseen" on the stealth levels 1-3, 1-5 and 1-6, "Quick" on
-   1-6), "1-x is open!" on a first clear. **Continue** (default) or **Retry**; arrow
+   level awards them, stacked in one column: "Ghost" (never spotted) on the stealth
+   levels 1-3, 1-5 and 1-6, "Takedown" (every card stomped or knocked, with this run's
+   tally and the best saved) on 1-5 and 1-6, "Quick" on 1-6. "1-x is open!" on a first clear. **Continue** (default) or **Retry**; arrow
    keys move between them.
 8. **World map:** a 960×540 side view from `bg1-sky` over `bg1`, regaining 12% color
    per cleared level and full color after 1-6. A slab-cell path (atlas row 0, cells
@@ -101,7 +102,7 @@ declared pair). `LEVEL_DESIGN.md` lists each card's safe and expert line.
    and sticker slots. Unlocks are linear.
 9. **World clear (after 1-6):** "You got your red back!", world totals (stickers n/18,
    levels, getaway), six little faces for per-level stickers, three world medals
-   (Full face 18/18, Ghost = Unseen on 1-3 to 1-6, Quick getaway = 1-6 par) and one
+   (Full face 18/18, Ghost = the Ghost stamp on 1-3, 1-5 and 1-6, Quick getaway = 1-6 par) and one
    caption in the comic's style: "Green and red are back. Blue is up in the mountains."
    → the ending: `end_game.png` framed on the colored forest with red and green Rubik,
    its baked "That's it by now." covered by a plate reading "That's it for now." (the
@@ -187,7 +188,10 @@ before and after the audit's tuning; every level gate test re-passes.
   open) → recovery. Body contact only knocks Rubik back; brushing a calm card's back
   doesn't alert it; only spears and water kill. A card pinned at its patrol bound with
   Rubik out of the spear's reach turns back after 0.8 s instead of winding up forever.
-  **Before 1-5 there are no spears** (`spears: false`).
+  **Before 1-5 there are no spears** (`spears: false`). In 1-3 (`caught: true`) a
+  card's "!" sends Rubik back to the checkpoint instead ("caught!"). A card that has
+  shown "?" is locked on: in its cone or right before its face it sees him in any
+  colour, and its body blocks him even in its own colour (no swap-and-walk-through).
 - **Mid-air swap** with a 0.15 s cooldown; a green jump keeps white's unspent air jump.
 - **Dash charge:** one air dash; ground, stomps, refill orbs, smashed stones and
   knocked cards refill it. Before DASH GET, Shift does nothing at all.
@@ -295,12 +299,35 @@ worldMedals, forestColor}`, `save`, `result` (the last tally), `simClock` (the
 `performance.now()` moment the simulation corresponds to, for mapping a key's
 `timeStamp` to its tick).
 
-Routes (`tests/routes.mjs`): `ROUTES[levelId] = { baseline, mastery }`, plain JSON
+Routes (`tests/routes.mjs`): `ROUTES[levelId] = { baseline, mastery }` (plus
+`takedown` on 1-5 and 1-6: every card put down), plain JSON
 `[seconds, input]` arrays using only `left/right/jump/jumpReleased/dash/color`; each
 starts from `startLevel(id)` / `createGame(id)`. `BASELINE_ROUTE` / `MASTERY_ROUTE`
 remain as aliases for 1-6's routes.
 
 ## Validation (actual results)
+
+**Revision five, critic round two (cards with teeth, Ghost/Takedown), 2026-11-10:**
+
+- `npm test`: **106/106 pass** in ~18 s. New: the cone-blind rule (every gate/watch card
+  stops the bot in at least half of 31 arrival times; the exempt list is pinned), 1-3's
+  catch, the stamps on scripted routes, the Takedown save.
+- Cone-blind rule breaks: 12 cards on `6a94a2a` (1-2 pit; 1-3 roof, lookout, floor,
+  alcove, pillar-a, pillar-b, platform; 1-5 p1; 1-6 corridor), 0 now. The bot no longer
+  wins 1-3 (31/31 → 0/31) or the 1-6 escape (5/31 → 0/31). Details: LEVEL_DESIGN.md.
+- Routes, baseline / mastery: 1-2 21.3 / 30.9 s, 1-3 32.0 / 24.3, 1-4 16.5 / 17.0, 1-5
+  19.5 / 20.8, 1-6 35.1 / 36.3 (escape 12.2 / 13.4). Takedown: 1-5 36.6 s, 1-6 37.2 s
+  (escape 14.3), every card down. All 0 deaths, all unseen.
+- D2: 1-4 7.9% (was 2.3%), 1-5 26.6% (was 20.3%), 1-6 escape 8.0%.
+- Movement audit: still 27 PASS / 2 WARN / 0 FAIL (physics untouched);
+  `tests/browser-movement.mjs` 21/21 against the source in Chrome.
+- Real-key Chrome playtest (Playwright, port 4421):
+  - 1-3, a white climb into the lookout's face: "?", "!", "caught!", back at the midpoint.
+  - 1-3, a swap about 0.25 s after the air jump slipped under the "?" (the expert's line).
+  - 1-2, a jump under the lip doesn't rise (12 px of headroom); walking off drops into the pit.
+  - 1-5's Takedown route: the result card shows Ghost and Takedown 6/6, and both are saved.
+- Root QA `ONLY=CTS`: 13/13 on the packaged ZIP, with a new check for 1-3's catch and
+  the 1-5 Takedown stamp.
 
 **Revision five, critic round, 2026-11-10:**
 

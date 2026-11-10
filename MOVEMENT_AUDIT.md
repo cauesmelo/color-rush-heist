@@ -52,9 +52,9 @@ WARN band, and it counts as WARN only as a reasoned exception (see below).
 | C1 | Collider vs sprite | Support = the 40 px box: 9-13 px off the drawn feet in every frame | Support = the feet (±11 px): ≤ 2 px in all standing, landing, falling and storm frames (canvas diff in Chrome: drawn feet −9..+13, feet line exactly on the floor); exceptions listed below | ±2 px every frame; hurtbox ≤ body | FAIL → WARN | C1; browser "C1 canvas" |
 | C2 | Hazard colliders | Spear band 30-70 px for both sheets: the red card's killed 6 px above its drawn spear | Band = the drawn spear head per sheet (green 50-68, red 46-64 px, measured from the PNGs); documented generous shrinks: spear tip 8-12 px short of the drawing, card body 8 px inside each drawn side (bumps only), water kills 10 px under its drawn surface; cone = PNG (existing test) | match, shrinks documented | FAIL → PASS | C2 |
 | C3 | No tunnelling | none found | 114,759 ticks (114,397 on the revision-five routes) (every route + 3000 fuzzed starts at dash 850 / fall 760 / bounce 520 / knock 440 px/s): the box never inside a solid | swept/sub-stepped safe | PASS → PASS | C3 |
-| C4 | Contact rules | spear + water only | `die()` sources are exactly spear (lunge frames) and water; the spear-up tell is drawn from `M.stompable` | consistent, visible | PASS → PASS | C4 |
+| C4 | Contact rules | spear + water only | `die()` sources are exactly spear (lunge frames) and water, plus (critic round two) "caught", 1-3's respawn on a card's "!", which no contact or hitbox decides; the spear-up tell is drawn from `M.stompable` | consistent, visible | PASS → PASS | C4 |
 | D1 | Optional techniques | dash-jump, held stomp, saved air jump | dash-jump +26 px of flight; held stomp 198 vs 150 px; air jump saved for the fall +80 px; (new) a freeze press keeps the air jump | ≥ 2 that change outcomes | PASS → PASS | D1 |
-| D2 | Skill gradient | expert vs baseline: 1-4 9.1%, 1-6 escape 8.1% | 1-4 2.3%, 1-5 4.8%, 1-6 escape 8.4% (the 1-4 baseline itself got 1.1 s faster). Revision five (cards' jobs, same physics): 1-4 2.3%, 1-5 11.2%, 1-6 escape 8.0%; critic round: 1-4 2.3%, 1-5 20.3%, 1-6 escape 8.0% | ≥ 15%, not required | WARN (exception) → WARN (exception) | D2 |
+| D2 | Skill gradient | expert vs baseline: 1-4 9.1%, 1-6 escape 8.1% | 1-4 2.3%, 1-5 4.8%, 1-6 escape 8.4% (the 1-4 baseline itself got 1.1 s faster). Revision five (cards' jobs, same physics): 1-4 2.3%, 1-5 11.2%, 1-6 escape 8.0%; critic round: 1-4 2.3%, 1-5 20.3%, 1-6 escape 8.0%; critic round two: 1-4 7.9%, 1-5 26.6%, 1-6 escape 8.0% | ≥ 15%, not required | WARN (exception) → WARN (exception) | D2 |
 | D3 | Recovery | — | air-jump rescue window over 1-1's first water: 425 ms of timings; landing on a raised spear pops (0 deaths); body contact knocks back | readable recovery | PASS → PASS | D3 |
 | E1 | Action feedback | sound + visual for 13 movement events | same, checked in source | same frame | PASS → PASS | E1-E2 |
 | E2 | Resource state on Rubik | form (sheet), dash (Dim/Flash); **white's air jump not shown anywhere** | + two puffs under the feet while the air jump is unspent | readable without the HUD | FAIL → PASS | E1-E2; screenshots |
@@ -89,7 +89,7 @@ WARN band, and it counts as WARN only as a reasoned exception (see below).
 
 ## Remaining WARNs, with reasons
 
-- **D2 (skill gradient): 2.3-8.4% vs ≥ 15%.** Expert lines (`EXPERT` in
+- **D2 (skill gradient): 7.9-8.0% (1-4, 1-6) vs ≥ 15%; 1-5 is 26.6%.** Expert lines (`EXPERT` in
   `tests/route-scripts.mjs`) use the dash-jump on every 1-4 lip, skip 1-5's lookout waits
   (perch to perch, the high line) and take 1-6's roof gates home. The baselines they are
   compared with are frame-perfect bots on the guided line, and World 1's gaps are gated by
@@ -136,6 +136,31 @@ the expert line move across them at the same speed.
   changes awareness, not movement.
 - **D2 for 1-5 is now 20.3%.** The guided line waits at the post for the enforcer's back; the
   expert's timed double jump over it skips the wait. 1-4 (2.3%) and 1-6 (8.0%) still miss 15%.
+
+## Critic round two (2026-11-10): cards with teeth
+
+No physics value changed (`WORLD`, `PLAYER`, `GUARD` and the cone profile are untouched).
+What changed is awareness and contact, plus level geometry:
+- A card locked on Rubik (it has shown "?") blocks his body in its own colour too, and it
+  follows him right in front of its face.
+- 1-3's `caught` rule sends Rubik back to the checkpoint on a card's "!". C4's source scan
+  now lists it, and the test pins it to 1-3.
+- Sentries can face each way for different times.
+- New geometry: 1-2's lip and 6-deep pit, 1-3's watched climbs and wider finale, 1-4's
+  27-tile chain gap, 1-5's watchers without covers.
+
+Re-measured: the 22 audit tests pass and the scorecard stays **27 PASS / 2 WARN / 0 FAIL**.
+`tests/browser-movement.mjs` passes 21/21 against the source folder in Chrome.
+
+D2 is 1-4 7.9% (was 2.3%), 1-5 26.6% (was 20.3%) and 1-6 escape 8.0%:
+- 1-4 rose because its expert line now goes through the guards. The guided line waits for
+  the turning chain card's back; the expert circles behind it when it faces the bank (over
+  it, back onto its back, then the bounce, air jump and refilled dash).
+- 1-5 rose because the guided line now waits for P1's and P2's backs, while the expert
+  swaps under their 0.25 s "?".
+- 1-6's expert tried red dash-jumps down the vault stairs; that was slower (6.8%), so it
+  was not kept.
+- Green still can't skip 1-4's twist orb: the gap sweeps are unchanged and pass.
 
 ## Not verified
 

@@ -37,7 +37,14 @@ the build differs, this file says so.
 - **Every card has a job** (revision five; see "Every card has a job" below): a
   declared `job` that the routes prove, never a card the guided line just walks
   through. Two cards on one floor keep 2+ tiles between their bodies unless they are a
-  declared `pair` (none is needed today).
+  declared `pair` (1-6's ledge).
+- **Teeth for a player who ignores cones** (critic round two): every gate or watch card
+  stops a cone-blind bot in at least half of 31 arrival times (`tests/cone-blind.test.mjs`,
+  see "Cone-blind audit"). A watcher stands 4-6 tiles back from the 4-tile climb it
+  guards, where the drawn cone is 60+ px tall (at its tip it is a sliver a climb slips
+  through), and faces the climb longer than it looks away (`turnEvery: [s at it, s
+  away]`). A card that has asked "?" is locked on: it sees Rubik in any colour in its
+  cone or right before its face, and its body blocks him even in its own colour.
 
 ## 1-1 Home Cliff — jump → double jump (120 columns)
 
@@ -58,11 +65,11 @@ behind it, a 2-tile step from the face.
 
 Rebuilt after the user's feedback ("no sleeping enemies; I like the head stomp").
 Kit: white. Every card is awake; `spears: false` (being seen only gets Rubik pushed).
-No Unseen stamp: this is the stomp lesson, not a stealth level.
+No Ghost or Takedown stamp: this is the stomp lesson, not a stealth level.
 
 | Columns | Beat | Content | Stickers / CP |
 | --- | --- | --- | --- |
-| 0–32 | Introduce | A slow patrol (60% pace) in a dry pit 4 tiles below the start cliff; its cone is in the pit, so Rubik watches from above, jumps onto its back while it walks away, and the held bounce clears the far rim. Falling in costs nothing: a double jump climbs out | CP start; ★1 at the first bounce's peak; CP "chain" on the rim |
+| 0–32 | Introduce | A slow patrol (60% pace, cols 14–18) in a dry pit (13–20) 6 tiles below the start cliff; its cone is in the pit, so Rubik watches from above. A rock lip (9–14, rows 4–9) over the cliff's end leaves 2 tiles of headroom, so no jump (coyote included) leaves the cliff: he walks off onto its back while it walks away. The far rim is 6 tiles up: only the stomp's held bounce (or bounce + air jump) reaches it, never a double jump (175 + 12 < 192). Revision five's open pit was double-jumped edge to edge | CP start; ★1 at the held bounce's peak (a tap tops out 24 px below); CP "chain" on the rim |
 | 33–64 | Develop | 30 tiles of water with four 1-tile islands, each with a lookout staring ahead (fixed, facing the way Rubik travels): bounce from back to back | ★3 (mastery) on a slab 8 tiles over the last island: a held bounce + air jump |
 | 65–106 | Twist | A far bank 2 below the islands (under the last cone), a 2-tile block whose riser shields the mid face, then a patrol pacing before a 7-tile wall: drop behind it while it walks to the wall, stomp, air-jump at the peak; an 8-tile ledge off to the left. Then a short dip, a breather before the finale (its patrol and pedestal lookout were removed in revision five: the guided line double-jumped both) | CP mid (65); ★2 on the 8-tile ledge; CP "wall" on the wall top |
 | 107–133 | Conclude | 2-tile steps up to the old Stage 1 run-up under its rock overhang: every walk, run, jump or double jump off the edge lands on the back of the **green card**, a lookout facing away that always takes the stomp. Green swirls in → **GREEN GET** → the goal face fills green | auto CP "green" |
@@ -73,25 +80,30 @@ wall top, the 8-tile ledge or the ★3 slab.
 
 ## 1-3 Hide in Green — disguise → white/green trade-off (124 columns)
 
-Kit: white, green; spawns green; no dash. `spears: false`: a spotted Rubik is charged
-and bumped back, never speared (the spear is taught in 1-5). No water, so only two
-checkpoints (start, midpoint).
+Kit: white, green; spawns green; no dash. `spears: false` (the spear is taught in 1-5)
+and `caught: true`: a card's "!" raises the alarm and Rubik is sent back to the last
+checkpoint ("caught!" over the hop). This is Ocarina of Time's castle courtyard: seen =
+thrown out, no death. The "?" 0.35 s before it is the warning: leave the cone and the
+lock breaks. No water. Checkpoints: start, the midpoint, and two on the finale's pit
+floor (below every cone).
 
 | Columns | Beat | Content | Stickers / CP |
 | --- | --- | --- | --- |
 | 0–25 | Introduce | An open glade; a patrol walks toward green Rubik, its cone sweeps him, it hums (♪) and walks through him. It turns 392+ px short of the start face | CP start |
 | 26–60 | Develop | The old disguise corridor: under a 3-tile canopy one patrol walks straight through green Rubik, where he can't jump over or around it (in the glade he could); a 1-tile step. Its twin was removed in revision five | ★1 on the step |
-| 61–83 | Twist | A 4-tile wall green can't climb ("white card + Z" after 2 s of green jumps); a lookout on top facing away: its first "?" at white Rubik gives room to swap ("green card + X") | CP mid (63, the corridor exit) |
+| 61–80 | Twist | A 4-tile wall green can't climb ("white card + Z" after 2 s of green jumps). The lookout, a sentry 5 tiles back from the lip, looks at it 3 s and away 1.6 s. Wait below its cone for its back and climb, or swap to green within 0.25 s of entering its cone ("green card + X"). A white climb into its face gets "?", then "!": caught, back to the midpoint just below | CP mid (63, the corridor exit) |
 | 21–60 (above) | Off line | White up a slab (21–24) onto the canopy roof, green past the roof lookout, white up to a high slab | ★2 on the high slab |
-| 81–113 | Conclude | A 2-tile step down, green through a floor patrol, white up a 4-tile step, green past the alcove lookout | ★3 in the swap alcove 5 tiles above the lookout (green jump through it, white air jump) |
-| 114–167 | Finale | Two pillars and a goal platform over a dry pit, 12 tiles apart, each with a lookout turning every 2.2 s. Only white's double jump makes a hop (green jumps 11), and a hop takes ~0.9 s, longer than the 0.6 s a card needs to spot white Rubik. So wait as green, and hop out behind the card you stand by while it faces you; go green again before landing. Seen as white → the card charges and shoves Rubik into the pit (climb back, ~8 s) | — |
+| 81–113 | Conclude | A 2-tile step down, a dip, and the 4-tile step watched the same way by the alcove card (a sentry at 102, 3 s / 1.6 s). Revision five's floor patrol is gone: green walked through it | ★3 in the swap alcove 5 tiles above the step (green jump through the card, white air jump) |
+| 114–175 | Finale | Pillars A (126–131) and B (144–149) and the goal platform (162–172) over a dry pit, 12-tile gaps (green jumps 11, so every pillar takes a white climb from the pit floor or white's 12-tile hop). Each top has a watcher 4–5 tiles back from its left face, facing the climb 3 s and away 1.6 s. Wait on the pit floor (below every cone), climb on its back, walk through it in green, drop off the far edge | CP pit (116), CP pit2 (151) |
 
-Hints: "white card + Z", "green card + X". "Unseen" is earned here (the finale).
+Hints: "white card + Z", "green card + X". The Ghost stamp is earned here. The expert's
+line needs no waiting: green 0.15 s after each air jump keeps every card under its 0.25 s
+"?" (measured with real keys too; a swap later than ~0.25 s gets caught).
 
 ## 1-4 Storm Dash — dash → refills chain dashes (154 columns)
 
 Kit: white, green, **starting green** (no double jump, so the dash is the guided way
-over); dash **off** until the swirl. Storm tint. `spears: false`. No Unseen stamp.
+over); dash **off** until the swirl. Storm tint. `spears: false`. No Ghost or Takedown stamp.
 
 | Columns | Beat | Content | Stickers / CP |
 | --- | --- | --- | --- |
@@ -99,14 +111,16 @@ over); dash **off** until the swirl. Storm tint. `spears: false`. No Unseen stam
 | 20–31 | Introduce | Gap A: 8 tiles of water + a recovery rock 2 down = 12 tiles bank to bank. Green needs the dash (white may double-jump it); the Shift/DASH bubble after two slow rock landings or falls | ★1 on the jump + dash line |
 | 32–69 | Develop | A 12-tile gap, then a 14-tile gap, bank to bank at the same height (a short hop + dash lands; the ledge assist catches a lip): one air dash per airtime, landing restores it | CP "gap2" on the bank between them |
 | 70–121 | Twist | **20 tiles** of water with a refill orb at the apex (white needs the dash too), then 20 tiles with a lookout on a pillar mid-gap, facing the way Rubik flies: stomp its back to refill the dash | CP mid (72); ★2 on a low dash right off that stomp's refill, then an air jump to the bank |
-| 122–153 | Conclude | Orb → lookout → orb chain over 19 tiles onto an island with a green patrol (Rubik is green); the goal | CP late (123); ★3 on the high line: double jump, dash, a high orb, dash, straight to the island |
+| 122–161 | Conclude | 27 tiles of water (126–152) with one card on a pillar 13 tiles out (139). The gap is wider than white's double jump + dash (~25 tiles bank to bank; a sweep of every takeoff tick, air-jump and dash timing never lands), and green's plain jump (~10) can't reach the card. The card turns: 2.2 s facing the bank with its spear up (landing on it pops Rubik into the water), 1.8 s away. Wait on the bank, jump + dash onto its back, then bounce + dash to the island (153–158). The orbs and the island patrol (a free disguise pass) are gone | CP late (123); ★3: white, bounce off the chain card + air jump + dash (green's bounce peaks 85 px lower) |
 
 Hint: Shift/DASH. Storm wisps (the swirl's streaks) drift across the lip of every
 gap the main line dashes. The HUD gets a dash glyph at the GET and a Shift keycap for
 the first three dashes. Tests sweep every takeoff tick and air-jump timing: green
 never jumps the 12/14-tile gaps and white never double-jumps the 20-tile orb gap
 without dashing (the pillar gap's lookout is a refill: stomping it also refreshes
-white's air jump, an intended alternative).
+white's air jump, an intended alternative). The expert line (D2) circles behind the chain
+card when it faces the bank: over it, back onto its back from the island side, then the
+bounce, the refreshed air jump and the refilled dash.
 
 Differs from the brief: the brief's 16–19-tile "white needs the dash" gaps assumed a
 15-tile double jump; the measured double jump crosses 19, so the twist gaps are 20.
@@ -118,7 +132,7 @@ Kit: white, green, dash. Dusk tint. Spears on.
 | Columns | Beat | Content | Stickers / CP |
 | --- | --- | --- | --- |
 | 0–34 | Introduce | An open arena under the start ledge (its face cuts the cone): one patrol shows the whole ladder in the open — "?" → "!" (0.45 s beat) → charge 240 px/s (Rubik runs 330) → wind-up → a jumpable spear → 0.7 s recovery to stomp | CP start; ★1 high above the arena: a stomp bounce off the teaching card (a double jump falls short) |
-| 35–58 | Develop | 4-tile steps (white) under a patrol and a turning sentry; 2-tile blocks cut their cones; the "…" look-back telegraphs each turn | — |
+| 35–58 | Develop | Two watched 4-tile climbs, 1-3's watcher recombined with the spear: P1 (a sentry 5 tiles back from the arena lip, 3 s / 1.2 s) and P2 (on its 8-wide post, 6 tiles back from the lip, 2.6 s / 1.4 s; stomp its back after the climb and the bounce carries to the post). A 2-tile block on P1 (45–46, a green hop) keeps P1's cone off the P2 climb. The old cover blocks are gone: they hid both climbs. The "…" look-back telegraphs each turn | — |
 | 59–82 | Twist | The old enforcer post: a red sentry (turns every 3 s) sees green; wait it out, stomp it from the perch while it faces away, or hop. Facing Rubik, its spear is up: a run-and-jump at it can't stomp it | CP post (62, shielded by the step); ★2 on the perch behind it |
 | 83–123 | Conclude | Each colour is wrong for one card: a red sentry on the floor sees green, so stomp it from behind when it faces the goal (its 3 s stun covers the climb); then the goal stands at the far end of a **4-tile** block (113–120, a white climb) that a green card patrols. White lands in its view and can't walk past its body (bumped back, spotted), so swap to green before landing (P2's lesson), wait for its back, or stomp it from behind as it walks to the goal. Revision five: this card used to pace the red sentry's floor, overlapping it, and no route came within 192 px of it | CP cross (85, on a block whose risers cut both cones); ★3 at the end of a high line of slabs (row 10) far above the floor cones, which ends on the same block (green before landing) |
 
@@ -165,13 +179,14 @@ that passes. Only the ordinary inputs are recorded; tests replay them from scrat
 | Level | Baseline | Mastery |
 | --- | --- | --- |
 | 1-1 | 11.5 s, ★1 | 15.7 s, 3/3 |
-| 1-2 | 20.9 s, ★1, GREEN GET (unseen, though 1-2 awards no stamp) | 24.6 s, 3/3 |
-| 1-3 | 20.1 s, ★1, unseen | 25.3 s, 3/3, unseen |
-| 1-4 | 14.7 s, ★1, DASH GET (as green) | 15.1 s, 3/3 |
-| 1-5 | 19.4 s, ★2, unseen (white up the goal block, green before landing) | 20.2 s, 3/3, unseen |
-| 1-6 | 35.0 s, escape 12.2 s, unseen (smash + knock in one dash) | 36.7 s, 3/3, escape 13.9 s, 5 smashes |
+| 1-2 | 21.3 s, ★1, GREEN GET (unseen, though 1-2 awards no stamp) | 30.9 s, 3/3 |
+| 1-3 | 32.0 s, ★1, Ghost (waits for each watcher's back) | 24.3 s, 3/3, Ghost (quick swaps, no waits) |
+| 1-4 | 16.5 s, ★1, DASH GET (as green) | 17.0 s, 3/3 |
+| 1-5 | 19.5 s, Ghost | 20.8 s, 3/3, Ghost; Takedown route 36.6 s, 6/6 cards, Ghost too |
+| 1-6 | 35.1 s, escape 12.2 s, Ghost | 36.3 s, 3/3, escape 13.4 s; Takedown route 37.2 s (escape 14.3 s), 6/6 cards, Ghost too |
 
-All zero deaths. These are QA reachability times; first plays should be several times
+All zero deaths. The `takedown` routes (1-5, 1-6) put every card down: they prove the
+Takedown stamp, as the baselines prove Ghost. These are QA reachability times; first plays should be several times
 longer (the brief targets 60–120 s, 120–150 s for 1-6).
 
 ## Every card has a job (revision five)
@@ -199,20 +214,18 @@ Safe line = the guided route; expert line = what rewards skill.
 | 1-3 glade | teach | it walks at green Rubik and hums through him | — |
 | 1-3 corridor-b | disguise | it walks through him under a canopy he can't jump | — |
 | 1-3 roof | watch | (off the line) | white up, green past it, white again: ★2 |
-| 1-3 lookout | watch | its "?" at white Rubik after the 4-tile wall says "go green" | swap in the air before landing |
-| 1-3 floor | watch | time the white climb up the 4-tile step to its back | mid-air swap |
-| 1-3 alcove | watch | white lands in its view: green before landing | green jump through it, white air jump: ★3 |
-| 1-3 pillar-a/b, platform | watch | hop while the next card faces away, wait as green | — |
+| 1-3 lookout | watch | wait below the wall for its back, climb, green before landing | green within 0.25 s of the air jump, no wait |
+| 1-3 alcove | watch | the same over the 4-tile step | quick swap; green jump through it, white air jump: ★3 |
+| 1-3 pillar-a/b, platform | watch | wait on the pit floor for each back, climb, walk through it green | quick swaps |
 | 1-4 pillar | refill | stomp its back mid-gap, dash on | low dash off its refill + air jump: ★2 |
-| 1-4 chain | refill | orb, its back, orb | the high line skips it: ★3 |
-| 1-4 island | disguise | land green through it | — |
+| 1-4 chain | refill | wait for its back, jump + dash onto it, bounce + dash to the island | circle behind it when it faces the bank; white bounce + air jump + dash: ★3 |
 | 1-5 teacher | teach | the ladder in the open (green skips it) | stomp it on its recovery, ride the bounce: ★1 |
-| 1-5 p1 | watch | time the white climb to P2 to its back | — |
-| 1-5 p2 | gate | behind P2's cover, wait for its back, hop onto it (bounce to the post) | — |
+| 1-5 p1 | watch | wait in the arena for its back, climb, through it green | quick swap |
+| 1-5 p2 | gate | wait below its post for its back, climb, stomp its back (bounce to the post) | quick swap, through it green |
 | 1-5 enforcer | gate | wait at the post (the step's riser cuts its cone) for its back, run off the step onto it | a timed white double jump over it; ★2 on the perch 8 tiles up, only off its back (bounce + air jump) |
 | 1-5 cross-red | gate | stomp it from behind when it faces the goal block | a held bounce off it reaches the high line |
 | 1-5 cross-green | swap | white up the goal block, green before landing, walk through it | stomp its back as it walks to the goal; the high line (★3) ends on its block |
-| 1-6 corridor | watch | inbound: the white climb at its end, green again in the air | escape: the roof gates above it: ★3 |
+| 1-6 corridor | swap | escape: green before the corridor (inbound it is 1-3's disguise, green walks through) | knock it with a red dash (Takedown); the roof gates above it: ★3 |
 | 1-6 lookout | watch (pair) | inbound green through it; home: knock it with a red dash | swap alcove inbound: ★1; the stacked gate on the escape |
 | 1-6 ledge-red | gate (pair) | wait in the corridor for its back, stomp it at the lip, dash at the bounce's apex to the island; home: red walks past it | wait in the swap alcove (above its cone) for its back |
 | 1-6 vault-guard | gate | wait on stair 3, go when it looks at the vault, stomp its back; taking red drains it | — |
@@ -220,42 +233,81 @@ Safe line = the guided route; expert line = what rewards skill.
 | 1-6 ambush | swap | green after the last dash, land through it | land clear as red and knock it with a ground dash |
 
 Removed because no route needed them: 1-2 `chain-a`/`chain-b`, 1-3 `corridor-a`, 1-6
-`burst-a`/`burst-b`, and the inbound landing patrol. Added in the critic round: 1-6 `ledge-red` (a red sentry paired with the green lookout) and the escape-only `alarm` card, which replaced the alarm card outside the door. 31 cards remain (was 35).
+`burst-a`/`burst-b`, and the inbound landing patrol. Added in the critic round: 1-6 `ledge-red` (a red sentry paired with the green lookout) and the escape-only `alarm` card, which replaced the alarm card outside the door. Removed in critic round two (no teeth possible): 1-3 `floor` and 1-4 `island`. 29 cards remain (was 35).
 
-## Cone-blind audit (revision five, critic round)
+## Cone-blind audit and rule (revision five, critic rounds one and two)
 
-`node tests/cone-blind-audit.mjs` (~40 s, a dev tool) replays each baseline to every
-checkpoint, then hands control to a terrain-competent, guard-ignorant bot
-(`tests/cone-blind-bot.mjs`) at 31 arrival times. A card "gets passed" when the bot
-gets beyond it in at least 16 of 31 arrival times; "free" means passed with no
-stomp, knock, "?", "!", bump or spear.
+The user (translated): "the enemies exist just to exist; it's very easy to slip between
+them." The critic's cone-blind bot (`tests/cone-blind-bot.mjs`) knows the terrain and the
+colour rules (green by default, white for 3+ tile climbs and wide gaps, dash over water,
+red into stones) but never waits for a cone or aims a stomp. A card that stops it does real
+work.
 
-| Part | Before (`35cc204`) | After |
-| --- | --- | --- |
-| 1-2 | 3/7 passed, 3 free | 3/7, 3 free (unchanged) |
-| 1-3 | 9/9, 8 free | 9/9, 8 free (unchanged; no spears or water by design) |
-| 1-4 | 1/3, 0 free | 1/3, 0 free (unchanged) |
-| 1-5 | 4/6, 2 free | 3/6, 0 free: the enforcer is now passed 3/31 |
-| 1-6 inbound | 2/3, 0 free | 2/4, 0 free: the new ledge sentry is passed 0/31 |
-| 1-6 escape | 5/5, 3 free; the bot won 29/31 | 1/4, 0 free; the bot wins 5/31 |
+**The rule** (`tests/cone-blind.test.mjs`, part of `npm test`, ~15 s): every gate or
+watch card stops the bot in at least half of 31 arrival times. Each card is probed on its
+own: the baseline is replayed to just before it (420 px), then the bot takes over at 31
+arrival times spread over 6 s, a whole turn cycle. A **clean pass** means the bot stands 3
+tiles past the card's patrol without stomping or knocking it and with no death or catch
+since it came within 400 px. Flying over a card into the water, or reaching the foot of
+the wall it guards, is not a pass. A card must be passed clean in fewer than half of the 31.
 
-Still open:
-- **1-2:** the pit card can be double-jumped over. A low overhang over the pit would force
-  the drop.
-- **1-3:** the pillar hops leave the cone band fast, so a card sees white for under 0.25 s.
-- **1-4:** the chain card is skipped and the island card is a free disguise pass.
-- The Ghost / Takedown stamps the critic proposed are not built.
+**Exempt** (listed in the test, with reasons): `teach` cards (1-3 glade, 1-5 teacher: an
+idea's first card, met in the open on purpose), `disguise` (1-3 corridor-b: walking through
+it is the lesson), `swap` (1-5 cross-green, 1-6 ambush and corridor: passing disguised is
+the point), `refill` (1-4 pillar, chain: springboards over water, where the gap is the
+obstacle and the card the way across; the chain card also turns), `knock` (1-6 alarm) and
+`offLine` cards (1-3 roof: it guards sticker 2's roof route, which the bot never takes).
+
+`node tests/cone-blind-audit.mjs` (~40 s) prints the full report: the critic's original
+per-checkpoint counts and the per-card probes. Before and after, measured with the same
+script on `6a94a2a` and on this tree. "Passed" is the critic's count: cards the bot got 30 px
+past in at least 16 of 31 arrival times, 0–3 s, from the first checkpoint that meets them.
+
+| Part | Passed, before → after | Rule breaks (probes), before → after | Bot wins from the start, before → after |
+| --- | --- | --- | --- |
+| 1-2 | 3/7 → 1/7 | pit 31/31 clean → 0/31 | 0/31 → 0/31 |
+| 1-3 | 9/9 → 3/8 (all three exempt) | 7 cards at 31/31 → lookout, alcove, pillar-a, pillar-b, platform 9/31 each | 31/31 → 0/31 |
+| 1-4 | 1/3 → 1/2 (the chain card is flown over into the water: 0/31 clean) | none enforced | 0/31 → 0/31 |
+| 1-5 | 3/6 → 2/6 | p1 31/31 → 11/31; p2 13/31 → 8/31 | 0/31 → 0/31 |
+| 1-6 inbound | 2/4 → 2/4 (corridor is now `swap`) | corridor 31/31 → exempt; lookout, ledge-red, vault-guard 0/31 | 0/31 → 0/31 |
+| 1-6 escape | 1/4 → 1/4 (ambush, a swap card) | — | 5/31 → 0/31 |
+
+What changed: the lock blocks the body (a "?" card is no longer walked through in its
+colour after a swap); the lock follows Rubik right before a card's face; asymmetric
+watchers stand back from their climbs; 1-3's catch rule; 1-2's lip and deeper pit; 1-4's
+single turning chain card over a 27-tile gap; 1-5's covers removed. The previous round's
+spear-pop + air-jump leak at 1-2's wall stays closed: from the "mid" checkpoint the bot
+never climbs the wall without a stomp (0/31; the critic saw 4/31 before the pop nerf).
+
+## Ghost and Takedown stamps
+
+Two per-level stamps compete for the player's attention: slip past every card, or put
+every one down.
+- **Ghost**: never spotted (no "!", no catch). It is the old Unseen stamp renamed (still
+  saved as `unseen`). Awarded on 1-3, 1-5 and 1-6; every baseline earns it.
+- **Takedown**: every card of the level stomped or knocked at least once in the run (the
+  model's `g.takedowns`, restored with each checkpoint, so nothing is farmed). Awarded only
+  where putting a card down is a choice: 1-5 and 1-6. Every 1-2/1-4 card is already a gate
+  or springboard, and 1-3's corridor card can't be reached from above. The result card shows
+  this run's tally and the best saved (`takedownBest`). The `takedown` routes earn it (and
+  happen to stay unseen, the expert's double); the baselines do not.
 
 ## Known design limits
 
 - Cards follow fixed timers, so a human's arrival time decides a patrol's facing; the
   "?" stage, riser cover and the spear-up tell exist for that reason.
+- 1-2's island chain: a perfect white double jump from the rim can land on isle-c's back,
+  skipping isle-a and isle-b (a sweep of jump timings finds it). It is still a stomp, and
+  the bot never finds it (it drowns: 0/31 clean); a cave ceiling would close it but would
+  also cost the sticker-3 slab.
+- 1-3's watchers can be beaten without waiting by a swap to green within ~0.25 s of the
+  air jump. That is the expert's line by design (a later swap is caught); a first-time
+  player is guided to wait for the back.
+- 1-3 is 176 columns (the cap was 170): three 12-tile gaps with 6-tile pillars.
 - Disguise still passes green cards for free where green is all the next beat needs;
   the job test allows that only as 1-3/1-4's lesson. Whether the new jobs are *fun* is
   not measured: it needs the user's playtest.
 - 1-1's QA route is short (~12 s): the level is as long as its idea needs.
-- 1-5's perch-to-perch jump passes the enforcer without a stomp; ★2 there is an easy
-  off-line reward, and 1-5's baseline collects it.
 - White can double-jump 1-4's develop gaps; the level starts green, so the dash is the
   guided way; the orb twist forces it for everyone.
 - The world map has no World 2 teaser; `bg2` stays in the archive.

@@ -462,3 +462,42 @@ Raising them further would mean stronger dash carry, which is a level-design cal
 
 **Not verified:** whether players now find the cards fun. That needs the user's playtest. Watch first:
 whether the knock reads as Rubik's doing rather than an accident, and whether 1-5's last climb feels fair.
+
+## 15. Teeth for a player who ignores cones (2026-11-10, critic round two)
+
+**Measured problem.** The critic's cone-blind bot (terrain and colour rules, no cone
+reading) won 1-3 every time. In a disguise level, a green player is invisible to green
+cards, so a card only matters at the moments white is required, the 4-tile climbs. Those
+climbs left the cones too fast. The cards stood beside their faces, where the drawn cone
+is a thin sliver. A "?" earned on the climb was undone by walking through the card in
+green, and with no spear (1-3 is before 1-5) being spotted cost nothing.
+
+**Decisions and their precedents.**
+- *Caught = back to the checkpoint* (1-3 only). This is Ocarina of Time's Hyrule Castle
+  courtyard: the first stealth section sends a seen Link back to the entrance, a
+  consequence without death, before any lethal guard appears. Mario-style gradual
+  introduction: in 1-3 a cone costs time, in 1-5 the spear makes it cost a life. The "?"
+  stays the warning (GMTK's School of Stealth: a readable escalation before failure).
+- *A watcher stands back from what it watches and looks at it longer than away*
+  (`turnEvery: [at, away]`). The danger then sits where the player can read it, and the
+  safe line is the short look-away, telegraphed by the "…" look-back. That is Mark of the
+  Ninja's rule that sight is exactly the drawn cone, and the drawn cone is fat 4+ tiles
+  out. A climb into the card's face is caught in ~70% of cone-blind arrivals (measured);
+  a cone reader waits at most 3.4 s.
+- *A locked card blocks and follows.* Once a card has asked "?", its own colour no longer
+  walks through it, and it keeps him in view right before its face. A swap after the "?"
+  should never be a skip.
+- *Expression stays.* A swap to green within 0.25 s of the air jump beats every watcher
+  with no wait. That is the expert line, a real-key timing, and the 1-3 and 1-5 mastery and
+  D2 lines use it.
+- *Stamps that reward engagement* (Dishonored's Ghost vs. its kill-based play, Hitman's
+  Silent Assassin): Ghost (never spotted) and Takedown (every card put down) on the levels
+  where both are real choices.
+
+**Rule.** The audit became a test: every gate or watch card stops the bot in at least half
+of 31 arrival times over a whole turn cycle, measured per card. Exemptions are by job
+(teach, disguise, swap, refill, knock) or off the line, listed with reasons in
+`tests/cone-blind.test.mjs`.
+
+**Not verified:** whether a first-time player finds the 1-3 catch fair or tedious, and
+whether the 3.4 s waits feel long. The user's playtest decides.

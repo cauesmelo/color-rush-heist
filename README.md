@@ -387,7 +387,7 @@ remain as aliases for 1-6's routes.
 - Root QA `ONLY=CTS`: **15/15** on the packaged ZIP of a clean clone of the branch (new check: windup
   telegraph, a heart lost with the blink and the HUD, the 4-stomp chain and Chain stamp, a water fall
   that hops back). Release gate `--only=crh`: all steps PASS, one WARN (branch is not `main`).
-- Human proxies, hearts lost and deaths per level: PROXY_README_PLACEHOLDER
+- Human proxies, hearts lost and deaths per level: before -> after clears of 12 (first-timer / casual / expert): 1-1 12/12/12 -> 12/12/12; 1-2 4/0/0 -> 10/1/4; 1-3 6/12/12 -> 7/12/12; 1-4 0/6/6 -> 8/7/8; 1-5 11/11/10 -> 11/11/12; 1-6 1/0/2 -> 1/0/5. Median deaths 1-5 3/2/5 -> 0/0/0 (hearts lost 1/0/1); 1-4 30/26/24 -> 9/4/1 (hearts lost 30/12/5, almost all water); 1-6 22/10/16 -> 10/6/7. Full table in `RESEARCH_COMBAT.md` section 8.
 
 **v1.0 release candidate (release squad), 2026-11-10:** see `ITCH_IO.md` "Release gate"
 for the gate tables before and after.

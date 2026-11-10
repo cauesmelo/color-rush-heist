@@ -209,9 +209,43 @@ lead's request.
 
 ## 8. Measured (actual)
 
-Filled in from the final runs; see the README "Validation" section and `common/SHARED_MEMORY.md`.
+Human-proxy players (`tests/human-proxy-run.mjs all 12 all`, 12 seeds per level and persona, on the
+model; before = `origin/main` 31c51e1's model with the same harness, after = this branch). **Deaths**
+before counted every fall into water; after they count only checkpoint restores (the last heart), so
+"hearts lost" (cards + water) is the comparable damage number.
 
-RESULTS_PLACEHOLDER
+| Level | Persona | Clear before | Clear after | Deaths med/p90 before | Deaths med/p90 after | Hearts lost med/p90 after | Time med after (s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1-1 | first-timer / casual / expert | 12 / 12 / 12 | 12 / 12 / 12 | 0/0 | 0/0 | 0/0 | 17.5 / 14.5 / 12 |
+| 1-2 | first-timer | 4 | **10** | 0/3 | 0/1 | 1/4 | 14.7 |
+| 1-2 | casual | 0 | 1 | 2/8 | 0/0 | 1/1 | 13.4 |
+| 1-2 | expert | 0 | 4 | 0/4 | 0/0 | 1/1 | 15.2 |
+| 1-3 | first-timer / casual / expert | 6 / 12 / 12 | 7 / 12 / 12 | 0/0 | 0/0 | 0/0 | 146.5 / 37.6 / 32.2 |
+| 1-4 | first-timer | 0 | **8** | 30/30 | 9/21 | 30/65 | 72.6 |
+| 1-4 | casual | 6 | 7 | 26/30 | 4/23 | 12/70 | 34.1 |
+| 1-4 | expert | 6 | 8 | 24/30 | 1/17 | 5/54 | 21.2 |
+| 1-5 | first-timer | 11 | 11 | 3/6 | **0/0** | 1/1 | 27.1 |
+| 1-5 | casual | 11 | 11 | 2/6 | 0/1 | 0/4 | 20.8 |
+| 1-5 | expert | 10 | **12** | 5/8 | 0/1 | 1/3 | 19.9 |
+| 1-6 | first-timer | 1 | 1 | 22/28 | 10/11 | 33/35 | 71.6 |
+| 1-6 | casual | 0 | 0 | 10/18 | 6/9 | 20/30 | - |
+| 1-6 | expert | 2 | 5 | 16/23 | 7/9 | 22/29 | 48.7 |
+
+Reading it honestly:
+- Hearts do what they were for: 1-5 went from a median of 2-5 deaths to **0**, with 0-1 hearts lost, because
+  the first strike is a heart and a lesson instead of a restart. 1-4's water gaps (the dash level) went
+  from 24-30 deaths to a median of 1-9: a fall is a hop back, and the first-timer clears 8/12 instead of 0/12.
+- 1-2's new clears (10 / 1 / 4 of 12) come from the pit fight and the stomp from any side; the casual and
+  expert still stop at the 7-tile wall (`stuck@80`, 11 and 8 runs): that is the wall puzzle (stomp from
+  behind, then an air jump at the bounce's peak), which the level lead is rebuilding, not a combat rule.
+- 1-6 is still hard for the proxies (1 / 0 / 5 of 12 clear): the heart pool absorbs mistakes (median
+  deaths 22/10/16 down to 10/6/7) but they stall in the vault room (`stuck@116`, 8 first-timer runs) and
+  die most around the escape's island crossing (heat bin 76). The proxies do not fight: every "cards" hit
+  is a stealth failure. No combat number was tuned to make them pass; the level needs its own tuning
+  pass (level lead).
+- The cone-blind gate holds (`tests/cone-blind.test.mjs`, 5 tests) and every scripted route takes 0 hearts.
+
+Raw output: `common/artifacts/revision-5/crh-combat/before/proxy-before.txt` and `after/proxy-after.txt` (+ `.json`).
 
 ## 9. Open questions for the owner
 

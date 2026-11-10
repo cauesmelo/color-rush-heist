@@ -4,8 +4,8 @@
  * the old Stage 1 home and first steps (safe ditches, no water), a rhythm of
  * 2-tile steps and a one-way slab, then a 4-tile wall on dry ground that only a
  * double jump climbs (the "jump, jump" bubble), and finally the first water
- * with a 4-tile bank beyond it. The goal face stands on that bank; a dozing
- * card below it previews 1-2. No dash glyph, no form cards but white.
+ * with a 4-tile bank beyond it. The goal face stands on that bank. No cards
+ * at all: 1-1 is only about the body. No dash glyph, no form cards but white.
  */
 import { defineLevel, px } from "./builder.mjs";
 
@@ -48,7 +48,7 @@ export default defineLevel({
     ground(100, 115, 10); // bank 4 tiles up: double jump with something at stake
     ledge(103, 107, 6); // sticker 3: two stacked 4-tile one-way ledges,
     ledge(106, 109, 2); // overlapping so two straight-up double jumps climb them
-    ground(116, 118, 12); // past the goal: the dozing card of 1-2 waits below
+    ground(116, 118, 12); // past the goal: a 2-tile dip before the end wall
     fill(119, 119, 0, 21); // end wall
   },
   spawn: { x: 204, floor: px(12) },
@@ -62,8 +62,6 @@ export default defineLevel({
     { id: 2, x: px(52) + 16, y: 262, line: "off", note: "above the slab: only a held jump from the slab reaches it" },
     { id: 3, x: px(108) + 16, y: 20, line: "mastery", note: "top of two stacked ledges: two double jumps" },
   ],
-  // Previews 1-2 past the goal; unreachable (the goal column ends the level).
-  guards: [{ id: "preview", kind: "green", mode: "sleep", trampoline: true, x: px(117) + 16, floor: px(12), dir: -1, min: px(117) + 16, max: px(117) + 16, decor: true }],
   goal: { x: px(113) + 16, floor: px(10) },
   hintZones: {
     // At the wall's foot: jumps from the floor that fall short.

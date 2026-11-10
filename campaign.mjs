@@ -29,12 +29,14 @@ export function newSave() {
 const emptyRecord = () => ({ clear: false, best: null, stickers: [], unseen: false, quick: false, color: null });
 export const levelRecord = (save, id) => ({ ...emptyRecord(), ...(save.levels[id] || {}) });
 
-/** Which stamps a level can award: "Unseen" only where some card can ever see
- * (1-3 onward), "Quick" only where there is an escape par (1-6). */
+/** Which stamps a level can award. "Unseen" only where staying unseen is a
+ * real choice: the stealth levels 1-3, 1-5 and 1-6 (1-1 has no cards, 1-2 is
+ * the stomp lesson and 1-4 a traversal level, where it would come free or
+ * mean nothing: `unseen: false`). "Quick" only where there is a par (1-6). */
 export function levelStamps(id) {
   const level = getLevel(id);
   return {
-    unseen: !!level && level.guards.some((g) => !g.decor && (g.mode !== "sleep" || g.wakeOnTheft)),
+    unseen: !!level && level.unseen !== false && level.guards.length > 0,
     quick: !!level && level.par !== null,
   };
 }

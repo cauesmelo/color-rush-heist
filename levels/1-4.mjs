@@ -25,8 +25,12 @@ export default defineLevel({
   name: "Storm Dash",
   idea: "Dash, and refill it in the air",
   cols: 154,
-  kit: { forms: ["white", "green"], start: "white", dash: false },
+  // Starts GREEN: no double jump, so the dash is the only way over the 12-14
+  // tile gaps of the main line (white can still double-jump them: an
+  // expert's choice, never the guided one).
+  kit: { forms: ["white", "green"], start: "green", dash: false },
   spears: false,
+  unseen: false, // a traversal level: no Unseen stamp (it would be free here)
   hints: ["dash"],
   beacon: 0.5,
   tint: "storm",
@@ -39,8 +43,8 @@ export default defineLevel({
     ground(28, 31, 18); // ...and a recovery rock 2 tiles down (12 tiles bank to bank)
     // --- Develop (32-73) -------------------------------------------------------
     ground(32, 37, 16);
-    water(38, 49); // 12 tiles to a bank 2 tiles higher
-    ground(50, 55, 14);
+    water(38, 49); // 12 tiles, bank to bank at the same height
+    ground(50, 55, 16); // (a checkpoint here: a failed 14 never replays the 12)
     water(56, 69); // 14 tiles
     // --- Twist (70-122) --------------------------------------------------------
     ground(70, 75, 16); // the midpoint face stands here
@@ -60,6 +64,7 @@ export default defineLevel({
     { id: "start", x: 112, floor: px(16) },
     // Saved by DASH GET itself (dash can never be lost to a death).
     { id: "dash", x: px(10), floor: px(16), get: "dash", hint: "dash" },
+    { id: "gap2", x: px(52) + 16, floor: px(16), hint: "dash" },
     { id: "mid", x: px(72), floor: px(16) },
     { id: "late", x: px(123) + 16, floor: px(16) },
   ],
@@ -76,11 +81,23 @@ export default defineLevel({
     { id: "high", x: 4428, y: 312 },
   ],
   guards: [
-    { id: "pillar", kind: "green", mode: "sleep", trampoline: true, x: px(112) + 16, floor: px(18), dir: -1, min: px(112) + 16, max: px(112) + 16 },
-    { id: "chain", kind: "green", mode: "sleep", trampoline: true, x: px(135) + 16, floor: px(18), dir: -1, min: px(135) + 16, max: px(135) + 16 },
+    // Lookouts on pillars, staring ahead (the way Rubik flies): stomp their
+    // backs to refill the dash mid-gap.
+    { id: "pillar", kind: "green", mode: "sentry", fixed: true, x: px(112) + 16, floor: px(18), dir: 1, min: px(112) + 16, max: px(112) + 16 },
+    { id: "chain", kind: "green", mode: "sentry", fixed: true, x: px(135) + 16, floor: px(18), dir: 1, min: px(135) + 16, max: px(135) + 16 },
     { id: "island", kind: "green", mode: "patrol", x: px(148), floor: px(16), dir: 1, min: px(146) + 16, max: px(149) },
   ],
   goal: { x: px(149) + 24, floor: px(16) },
+  /** Storm wisps at the takeoff lip of every gap the main line dashes: the
+   * swirl's own streaks, pointing across (drawn, no text). */
+  dashMarks: [
+    { x: px(19) + 16, floor: px(16) },
+    { x: px(37) + 16, floor: px(16) },
+    { x: px(55) + 16, floor: px(16) },
+    { x: px(75) + 16, floor: px(16) },
+    { x: px(101) + 16, floor: px(16) },
+    { x: px(125) + 16, floor: px(16) },
+  ],
   hintZones: {
     // Two slow landings on the rock (or two falls) -> the Shift/DASH bubble.
     dash: { x0: px(17), x1: px(32), rock: { x0: px(28), x1: px(32), floor: px(18) }, doneFloor: px(16) },

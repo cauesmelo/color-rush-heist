@@ -14,6 +14,13 @@
  *            go green ("green card + X").
  * conclude:  green past a patrol, white up a 4-tile step, green past a
  *            lookout; the swap alcove above it (green jump, white air jump).
+ * finale:    a timed-turn crossing - two pillars over a dry pit, each with a
+ *            turning lookout, 12 tiles apart: only white's double jump makes a
+ *            hop (green jumps 11), and a hop takes ~0.9 s, longer than the
+ *            0.6 s a card needs to spot white Rubik. So hop while the next
+ *            card looks away, wait as green, hop again. Landing in front of an
+ *            alert card gets Rubik shoved off into the pit (climb back, ~8 s):
+ *            the teeth, without a spear. "Unseen" is earned here.
  */
 import { defineLevel, px } from "./builder.mjs";
 
@@ -32,7 +39,7 @@ export default defineLevel({
   id: "1-3",
   name: "Hide in Green",
   idea: "Green cards can't see green",
-  cols: 124,
+  cols: 168,
   kit: { forms: ["white", "green"], start: "green", dash: false },
   spears: false,
   hints: ["white", "green"],
@@ -56,15 +63,18 @@ export default defineLevel({
     ground(84, 96, 16); // patrol C's floor
     ground(97, 113, 12); // 4-tile step: white
     ledge(103, 106, 7); // swap alcove 5 tiles above lookout D's patrol
-    ground(114, 120, 14);
-    fill(121, 123, 0, 21); // end wall
+    // --- Finale (114-167): pillars over a dry pit, timed turns ------------
+    ground(114, 157, 16); // the pit floor (dry; 4 below the pillar tops)
+    ground(126, 129, 12); // pillar A (12 tiles from the step's edge)
+    ground(142, 145, 12); // pillar B (12 from A)
+    ground(158, 164, 12); // the goal platform (12 from B)
+    fill(165, 167, 0, 21); // end wall
   },
   spawn: { x: 204, floor: px(16) },
   checkpoints: [
     { id: "start", x: 176, floor: px(16) },
     // Midpoint at the corridor exit, before the twist (out of every cone).
     { id: "mid", x: px(63), floor: px(16), hint: "white" },
-    { id: "late", x: px(82), floor: px(14), hint: "green" },
   ],
   stickers: [
     { id: 1, x: px(40), y: px(15) - 30, line: "main", note: "on the 1-tile step between the corridor patrols" },
@@ -83,8 +93,12 @@ export default defineLevel({
     patrol("lookout", 70, 78, 12, 1),
     patrol("floor", 86, 94, 16, -1),
     patrol("alcove", 101, 108, 12, 1),
+    // The finale's lookouts turn every 2.2 s (+0.4 s look-back), out of step.
+    { id: "pillar-a", kind: "green", mode: "sentry", x: px(128) + 16, floor: px(12), dir: -1, min: px(128) + 16, max: px(128) + 16, turnEvery: 2.2 },
+    { id: "pillar-b", kind: "green", mode: "sentry", x: px(144) + 16, floor: px(12), dir: 1, min: px(144) + 16, max: px(144) + 16, turnEvery: 2.2 },
+    { id: "platform", kind: "green", mode: "sentry", x: px(160) + 16, floor: px(12), dir: -1, min: px(160) + 16, max: px(160) + 16, turnEvery: 2.2 },
   ],
-  goal: { x: px(118) + 16, floor: px(14) },
+  goal: { x: px(163), floor: px(12) },
   hintZones: {
     white: { x0: px(58), x1: px(65), top: px(12), past: px(66) },
   },

@@ -1,30 +1,36 @@
-/** 1-2 "Sleeping Cards": stomp/bounce -> the bounce refreshes the air jump ->
- * GREEN GET. White only at the start; no card is ever awake in this level.
+/** 1-2 "Stomping Ground": the head stomp -> stomp from behind -> GREEN GET.
+ * White only at the start; every card is awake. Cards here only push
+ * (`spears: false`): the spear arrives in 1-5.
  *
- * Every card here is a `trampoline`: it dozes forever, never sees, and only
- * bounces Rubik (~111 px over its head; a white air jump at the bounce apex
- * adds ~83 px: feet ~277 px over the card's floor). Rubik can't stand on a
- * card, so a 1-tile island holding one is a springboard, not a floor.
+ * The stomp rules this level teaches (model.mjs `stompable`): land on a card's
+ * head from above or behind and it is stunned for 3 s while Rubik bounces -
+ * high if jump is held (195 px over the card's floor), a short hop if not. A
+ * card that FACES Rubik raises its spear (drawn): landing on it pops him away.
  *
- * introduce: a card in a 1-tile notch blocks the path (solid); jump on it.
- * develop:   island cards over water carry Rubik across, 7-8 tiles apart
- *            (a full-speed bounce flies ~300 px: let go of right a little).
- * twist:     7-tile walls and 8-tile ledges that the double jump (175 px)
- *            can never reach: bounce, then jump in the air.
- * conclude:  the old opening's overhang drop onto the glowing card: every way
- *            off the run-up lands on it; green swirls in -> GREEN GET; the goal
- *            face is a few steps further on and fills green.
+ * introduce: a slow card patrols a dry pit below the start cliff; its cone is
+ *            in the pit, so Rubik watches from above and drops on its back.
+ *            The held bounce clears the pit's far rim.
+ * develop:   a chain of lookouts on 1-tile islands over water, all staring
+ *            ahead (fixed, facing the way Rubik travels): bounce from back to
+ *            back. A checkpoint stands right before the chain.
+ * twist:     a patrol paces in front of a 7-tile wall: only a stomp from
+ *            behind while it walks toward the wall, then an air jump at the
+ *            bounce's peak, gets up (a double jump tops out at 175 px). Then
+ *            a patrol and a pedestal lookout to bounce over (or jump).
+ * conclude:  the old opening's overhang drop onto a green lookout facing
+ *            away: every way off the run-up lands on its back; its green
+ *            swirls in -> GREEN GET; the goal face fills green.
  */
 import { defineLevel, px } from "./builder.mjs";
 
-const card = (id, col, floorRow, extra = {}) => ({
+const lookout = (id, col, floorRow, dir = 1, extra = {}) => ({
   id,
   kind: "green",
-  mode: "sleep",
-  trampoline: true,
+  mode: "sentry",
+  fixed: true, // stares one way; the chain reads at a glance
   x: px(col) + 16,
   floor: px(floorRow),
-  dir: -1,
+  dir,
   min: px(col) + 16,
   max: px(col) + 16,
   ...extra,
@@ -32,65 +38,75 @@ const card = (id, col, floorRow, extra = {}) => ({
 
 export default defineLevel({
   id: "1-2",
-  name: "Sleeping Cards",
-  idea: "Bounce on dozing cards",
-  cols: 135,
+  name: "Stomping Ground",
+  idea: "Stomp a card from behind",
+  cols: 134,
   kit: { forms: ["white"], start: "white", dash: false },
-  hints: [], // the geometry teaches it: a bounce loop until Rubik jumps in the air
+  spears: false,
+  unseen: false, // a stomp lesson, not a stealth level: no Unseen stamp here
+  hints: [],
   beacon: 0.2,
   tint: null,
   build({ fill, ground, ledge, water, back }) {
     fill(0, 2, 0, 21);
-    // --- Introduce (3-28): a dozing card in a notch across the path --------
-    ground(3, 13, 14);
-    ground(14, 15, 15); // 1-tile notch: the card's head is 52 px above the path
-    ground(16, 28, 14); // 13 tiles: a full bounce (~300 px) lands on dry ground
-    // --- Develop (29-63): island cards over water ---------------------------
-    water(29, 63);
-    for (const col of [34, 41, 48, 56]) ground(col, col, 18); // 1-tile islands, 2 over the water
-    // --- Twist (64-107): bounce + air jump ----------------------------------
-    ground(64, 81, 18); // far bank; the midpoint face stands here
-    ledge(70, 74, 10); // sticker 2: an 8-tile ledge (256 px), bounce + air jump only
-    ground(82, 93, 11); // 7-tile wall: the main line's bounce + air jump
-    ground(94, 106, 18); // second low floor
-    ground(100, 101, 16); // 2-tile pedestal for the second card of the chain
-    ledge(103, 105, 8); // the high nook (sticker 3): two-card bounce chain + air jump
-    fill(106, 106, 6, 13); // the nook's hanging back wall (walk under it, rows 14-17)
-    back(103, 105, 8, 13);
-    // --- Conclude (107-134): the overhang drop onto the glowing card --------
-    ground(107, 108, 16); // 2-tile steps back up to the run-up
+    // --- Introduce (3-32): a slow card in a dry pit -------------------------
+    ground(3, 12, 12); // start cliff, 4 tiles over the pit floor
+    ground(13, 26, 16); // the pit (dry): fall in and the double jump climbs out
+    ground(27, 32, 12); // far rim: the held bounce clears it
+    // --- Develop (33-70): lookouts on islands over water --------------------
+    water(33, 62);
+    for (const col of [38, 45, 52, 58]) ground(col, col, 16); // 1-tile islands, 4 below the rim
+    // Sticker 3's slab, 8 tiles over the last island: a held bounce off that
+    // lookout plus an air jump (235 px feet) reaches it; a double jump from
+    // the far bank (273 px feet) never does.
+    ledge(60, 62, 8);
+    ground(63, 67, 18); // far bank, 2 below the islands: under the last lookout's cone
+    ground(68, 69, 16); // a 2-tile block: its riser cuts the wall patrol's cone (mid face)
+    // --- Twist (71-108): stomp from behind, bounce + air jump ---------------
+    ground(70, 81, 18); // the patrol's floor
+    ledge(73, 76, 10); // sticker 2: an 8-tile ledge over the floor
+    ground(82, 93, 11); // 7-tile wall
+    ground(94, 106, 18); // second low floor: a patrol and a lookout to bounce over
+    ground(100, 101, 16); // 2-tile pedestal for the lookout
+    // --- Conclude (107-133): the overhang drop onto the green card ----------
+    ground(107, 108, 16);
     ground(109, 117, 14); // run-up
     // A rock overhang over the last 4 tiles of the run-up and the drop: 2
-    // tiles of headroom, so no jump can sail over the glowing card, and 6
-    // tiles tall, so even a double jump can't hop onto it (old Stage 1 opening).
+    // tiles of headroom, so no jump can sail over the green card, and 6 tiles
+    // tall, so even a double jump can't hop onto it (old Stage 1 opening).
     fill(114, 123, 6, 11);
-    ground(118, 131, 18); // clearing, 4 tiles below the run-up
-    fill(132, 134, 0, 21); // end wall
+    ground(118, 130, 18); // clearing, 4 tiles below the run-up
+    fill(131, 133, 0, 21); // end wall
   },
-  spawn: { x: 204, floor: px(14) },
+  spawn: { x: 204, floor: px(12) },
   checkpoints: [
-    { id: "start", x: 176, floor: px(14) },
-    { id: "mid", x: px(66) + 16, floor: px(18) },
+    { id: "start", x: 176, floor: px(12) },
+    // Before the island chain (out of every cone: the chain stares right).
+    { id: "chain", x: px(29), floor: px(12) },
+    { id: "mid", x: px(65) + 16, floor: px(18) },
+    { id: "wall", x: px(88), floor: px(11) }, // on the 7-tile wall: the twist is banked
     // Saved by GREEN GET itself (a death can't take green away).
-    { id: "green", x: px(122) + 16, floor: px(18), get: "green" },
+    { id: "green", x: px(124) + 16, floor: px(18), get: "green" },
   ],
   stickers: [
-    { id: 1, x: 560, y: 300, line: "main", note: "the first bounce's apex" },
-    { id: 2, x: px(72), y: 296, line: "off", note: "on the 8-tile ledge: bounce, air jump, drift left" },
-    { id: 3, x: px(104) + 16, y: 228, line: "mastery", note: "the high nook: bounce, land on the pedestal card, bounce again, air jump" },
+    { id: 1, x: px(21), y: 296, line: "main", note: "over the pit: the first bounce's peak (hold jump)" },
+    { id: 2, x: px(75), y: 296, line: "off", note: "on the 8-tile ledge: stomp from behind, air jump, drift left" },
+    { id: 3, x: px(61) + 16, y: 228, line: "mastery", note: "the slab over the last island: held bounce + air jump" },
   ],
   guards: [
-    card("notch", 14, 15, { x: px(15), min: px(15), max: px(15), catch: 24 }),
-    card("isle-a", 34, 18),
-    card("isle-b", 41, 18),
-    card("isle-c", 48, 18),
-    card("isle-d", 56, 18),
-    card("wall", 79, 18),
-    card("chain-a", 97, 18),
-    card("chain-b", 100, 16, { x: px(101), min: px(101), max: px(101) }),
-    // The glowing card: it holds green. Its stomp head is 24 px wider each
-    // side (not 10): with the overhang, every way off the run-up lands on it.
-    { id: "glow", kind: "green", mode: "sleep", absorb: true, catch: 24, x: px(118) + 44, floor: px(18), dir: 1, min: px(118) + 44, max: px(118) + 44 },
+    // A slow patrol: it walks at 60% pace and turns with a readable look-back.
+    { id: "pit", kind: "green", mode: "patrol", pace: 0.6, x: px(16) + 16, floor: px(16), dir: 1, min: px(15) + 16, max: px(24) + 16 },
+    lookout("isle-a", 38, 16),
+    lookout("isle-b", 45, 16),
+    lookout("isle-c", 52, 16),
+    lookout("isle-d", 58, 16),
+    { id: "wall", kind: "green", mode: "patrol", pace: 0.7, x: px(75) + 16, floor: px(18), dir: 1, min: px(73) + 16, max: px(79) + 16 },
+    { id: "chain-a", kind: "green", mode: "patrol", pace: 0.7, x: px(96) + 16, floor: px(18), dir: 1, min: px(95) + 16, max: px(98) },
+    lookout("chain-b", 100, 16, 1, { x: px(101), min: px(101), max: px(101) }),
+    // The green card: it holds Rubik's green and faces away from the drop. Its
+    // stomp head is 24 px wider each side (not 10): with the overhang, every
+    // way off the run-up lands on its back.
+    lookout("glow", 118, 18, 1, { absorb: true, catch: 24, x: px(118) + 44, min: px(118) + 44, max: px(118) + 44 }),
   ],
-  goal: { x: px(128) + 16, floor: px(18) },
+  goal: { x: px(127) + 16, floor: px(18) },
 });

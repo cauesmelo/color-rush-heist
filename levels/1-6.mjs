@@ -60,11 +60,16 @@ export default defineLevel({
     { id: "start", x: 176, floor: px(12) },
     // On the steps: the step's riser cuts the corridor patrol's cone.
     { id: "steps", x: px(15) + 16, floor: px(14) },
-    { id: "bank", x: px(86) + 16, floor: px(14) },
+    // 6 tiles of runway from the water on the way home (respawns face left).
+    { id: "bank", x: px(90) + 16, floor: px(14) },
     // On stair 1, out of the landing and chamber cones.
     { id: "stairs", x: px(98), floor: px(14) },
-    // Saved by RED GET at the theft; respawn on stair 3 facing home.
-    { id: "vault", x: px(104) + 22, floor: px(10), get: "red" },
+    // Stair 3, below every chamber cone: the wait for the vault guard is banked.
+    { id: "stair3", x: px(104) + 8, floor: px(10) },
+    // Saved by RED GET at the theft. Respawn INSIDE the sealed room, facing
+    // the door, so the forced first smash always happens; every card holds
+    // still for 1.25 s after a respawn here (model.mjs respawnCalm + 0.5).
+    { id: "vault", x: px(112) + 16, floor: px(8), get: "red" },
   ],
   stickers: [
     { id: 1, x: px(49) + 16, y: px(7) - 30, line: "main", note: "the swap alcove above the lookout (green jump, white air jump)" },
@@ -90,11 +95,12 @@ export default defineLevel({
     { id: "corridor", kind: "green", mode: "patrol", x: px(32) + 16, floor: px(16), dir: -1, min: px(28) + 16, max: px(38) + 16 },
     { id: "lookout", kind: "green", mode: "patrol", x: px(47) + 16, floor: px(12), dir: 1, min: px(47) + 16, max: px(52) },
     { id: "landing", kind: "green", mode: "patrol", x: px(106) + 16, floor: px(8), dir: 1, min: px(106) + 16, max: px(109) + 8 },
-    // Turns every 1.6 s (+0.4 s look-back): the wait on stair 3 is short.
-    { id: "vault-guard", kind: "red", mode: "sentry", x: px(113) + 16, floor: px(8), dir: -1, min: px(113), max: px(116) + 16, turnEvery: 1.6 },
-    // Behind the vault: asleep inbound, they wake and charge at the theft.
-    { id: "burst-a", kind: "green", mode: "sleep", x: px(124) + 28, floor: px(8), dir: -1, min: px(111), max: px(125), wakeOnTheft: true },
-    { id: "burst-b", kind: "green", mode: "sleep", x: px(129) + 12, floor: px(8), dir: -1, min: px(111), max: px(130), wakeOnTheft: true },
+    // Turns every 2.6 s (+0.4 s look-back): a readable wait on stair 3.
+    { id: "vault-guard", kind: "red", mode: "sentry", x: px(113) + 16, floor: px(8), dir: -1, min: px(113), max: px(116) + 16, turnEvery: 2.6 },
+    // Behind the vault: two awake patrols (green, so green Rubik walks among
+    // them inbound); at the theft they turn and chase (after the calm hold).
+    { id: "burst-a", kind: "green", mode: "patrol", x: px(123) + 16, floor: px(8), dir: 1, min: px(122) + 16, max: px(126) + 16, chaseOnTheft: true, chaseMin: px(111) },
+    { id: "burst-b", kind: "green", mode: "patrol", x: px(129), floor: px(8), dir: -1, min: px(127) + 16, max: px(130), chaseOnTheft: true, chaseMin: px(111) },
     // Escape only: absent inbound, it arrives on the island at the theft.
     { id: "ambush", kind: "green", mode: "patrol", x: px(65) + 16, floor: px(14), dir: 1, min: px(64) + 24, max: px(67) + 8, escapeOnly: true },
   ],

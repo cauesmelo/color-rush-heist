@@ -27,30 +27,57 @@ export const WORLD = Object.freeze({
   height: ROWS * TILE, // every level is 22 rows; widths differ (level.width)
   viewportWidth: 960,
   viewportHeight: 540,
-  gravity: 1180, // px/s^2
+  // ---- Movement feel (crisp, readable, expressive; tests pin every number) --
+  // Vertical: rise under 1180 px/s^2, fall 15% harder once past the apex band
+  // (a firm, predictable landing), and a held jump floats at its peak.
+  gravity: 1180, // px/s^2 while rising
+  fallGravity: 1.15, // x gravity once vy > apexBand: falls read quicker than rises
   maxFall: 760, // px/s; 6.3 px per 120 Hz tick, far below a 32 px tile
+  jump: 470, // px/s -> 93 px apex with the apex hang (2 tiles safe, never 3)
+  airJump: 0.94, // white's air jump: +83 px (175 px in all), so 4-tile ledges need it
+  apexBand: 60, // |vy| below this while jump is held: half gravity (the apex hang)
+  jumpCut: 0.5, // releasing jump while rising halves vy: a tap is a ~25-45 px hop
+  // Horizontal: snappy starts and stops, a near-instant turnaround on the
+  // ground, full air control (precision first) with a little drift on release.
   speed: 330, // px/s run speed
-  acceleration: 2600,
-  braking: 3300, // a full-speed stop in 0.1 s
-  jump: 470, // px/s -> ~95 px apex with apex half-gravity (2 tiles safe, never 3)
-  airJump: 0.94, // white's air jump: +83 px, so 4-tile ledges need it
-  apexBand: 60, // |vy| below this while holding jump = half gravity (Celeste)
-  cornerCorrection: 6, // px nudge around ceiling corners while rising
+  acceleration: 2600, // 0 -> 330 in 0.13 s
+  braking: 3300, // no input on the ground: 330 -> 0 in 0.10 s
+  turn: 6000, // input against motion on the ground: 330 -> -330 in 0.11 s
+  airAcceleration: 2600, // same as the ground: the arc is the player's to steer
+  airTurn: 4200, // reversing mid-air: 0.16 s
+  airBraking: 3000, // letting go mid-air drifts ~18 px before stopping (precise stomps)
+  // Forgiveness windows.
+  coyote: 0.1, // s after leaving a ledge that a ground jump still works
+  jumpBuffer: 0.12, // s a jump press waits for the ground (kept alive through an air dash)
+  dashBuffer: 0.1, // a dash pressed during hit-stop or a dash's last frames still fires
+  cornerCorrection: 6, // px: rising into a ceiling corner by <= 6 px slides around it
+  ledgeAssist: 12, // px: hitting a lip with the feet <= 12 px below its top steps onto it.
+  // 12 < 32 (one tile), so it never creates a climb: 93 + 12 < 128 and 175 + 12 < 192
+  // keep every white-only and bounce-only height in the maps out of reach.
+  // Dash: horizontal only (left/right/facing), so gap rules stay exact and readable.
   dashSpeed: 850,
   dashDuration: 0.17, // 145 px burst, gravity-free
+  dashFreeze: 0.033, // a 4-tick freeze-frame as the dash fires (impact, not lag)
   groundDashDelay: 0.25, // ground re-dash; air dashes need the single charge
-  coyote: 0.1,
-  jumpBuffer: 0.12,
-  dashBuffer: 0.1, // a dash pressed during hit-stop or a dash's last frames still fires
+  // Dash-jump: jumping during a ground dash keeps 560 px/s of it, bleeding back
+  // to run speed at 900 px/s^2 (about +2 tiles of reach: player expression).
+  dashJumpSpeed: 560,
+  carryDecay: 900,
+  // Stomp: hold jump (or press it as you land) for the high bounce.
+  stompBounce: 520, // held: 195 px over the card's floor at the peak (111 over its head)
+  stompBounceLow: 400, // not held: a short hop off the head
   colorCooldown: 0.15, // generous: swapping is a skill tool, never blocked long
   storm: 0.18, // transformation animation (rubik_storm.png)
-  stompBounce: 520, // ~115 px rebound
   respawnDelay: 0.45,
   respawnGrace: 0.75,
   bumpGrace: 0.6,
+  // After a respawn (and after the theft's cards) every card holds still: a
+  // respawn is never an instant alert, and the REVERSE cards never cover a charge.
+  respawnCalm: 0.75,
+  theftCalm: 1.9, // REVERSE sweep (1.1 s) + 0.8 s to act, counted after the GET card
   // get: the ability GET card (Mega Man's "weapon get") freezes the world for
   // 1.2 s; it is part of the simulation so routes replay identically.
-  hitstop: { stomp: 0.06, smash: 0.09, knock: 0.09, theft: 0.25, get: 1.2 },
+  hitstop: { stomp: 0.08, smash: 0.09, knock: 0.09, theft: 0.25, get: 1.2 },
   orbRespawn: 2.5,
   goalReach: 220, // px above a goal face's floor that still touches it
 });
@@ -181,6 +208,11 @@ function makePlayer(x, floor, color, direction) {
     dashCharge: 1,
     dashBuffer: 0,
     dashDirection: direction,
+    dashAir: false,
+    carry: 0, // 1 while a dash-jump's extra speed is bleeding off
+    // Keys held through a death are ignored after the respawn until they are
+    // let go and pressed again (no run straight back into the water).
+    heldLock: { left: false, right: false },
     knock: 0,
     bumpGrace: 0,
     grace: WORLD.respawnGrace,
@@ -193,9 +225,9 @@ function makePlayer(x, floor, color, direction) {
 function makeGuard(spec) {
   return {
     ...spec,
-    // Inbound: escape-only cards are "away" (not drawn, no body). Dozing cards
-    // sleep; `trampoline` ones (1-2) sleep forever and only ever bounce Rubik.
-    state: spec.escapeOnly ? "away" : spec.mode === "sleep" ? "asleep" : "calm",
+    // Every card is awake: patrols walk, sentries turn on timers (or hold one
+    // facing: `fixed`). Escape-only cards are "away" (no body) until the theft.
+    state: spec.escapeOnly ? "away" : "calm",
     bumps: 0,
     timer: 0,
     sight: 0,
@@ -205,6 +237,9 @@ function makeGuard(spec) {
     reach: CONE.length,
     sees: false,
     lungeTarget: spec.x,
+    stuck: 0, // s spent at a patrol bound with Rubik out of the spear's reach
+    sideX: 0, // world side (-1 left, 1 right) Rubik was last on, clear of its head
+    squash: 0, // presentation: s left of the stomp squash
     anim: 0,
   };
 }
@@ -252,6 +287,8 @@ export function createGame(level = "1-1", options = {}) {
     escapeTime: null,
     unlocked: { white: kit.forms.includes("white"), green: kit.forms.includes("green"), red: kit.forms.includes("red") },
     dashUnlocked: !!kit.dash,
+    calm: 0, // s every card holds still (after a respawn, after the theft)
+    deadJump: 0, // a jump pressed during the death hop, carried into the respawn
     gets: [], // abilities granted in this run, in order (GET moments)
     pendingAbsorb: 0,
     colorCooldown: 0,
@@ -306,7 +343,7 @@ function saveCheckpoint(g, index) {
     // Awareness never persists into a respawn: a card mid-charge at save time
     // is restored calm where it stood, so a respawn is never an instant alert.
     guards: g.guards.map((guard) =>
-      ["asleep", "drained", "stunned", "calm", "away"].includes(guard.state)
+      ["drained", "stunned", "calm", "away"].includes(guard.state)
         ? guard
         : { ...guard, state: "calm", sight: 0, lost: 0, timer: 0 },
     ),
@@ -334,6 +371,14 @@ export function respawn(g) {
     cp = g.level.checkpoints[g.checkpointIndex];
   for (const key of RESTORED) g[key] = s[key];
   g.player = makePlayer(cp.x - PLAYER.w / 2, cp.floor, s.color, g.stolen ? -1 : cp.dir ?? 1);
+  // A direction held continuously since the death stays locked until it is
+  // let go (no running straight back off the ledge); one released and pressed
+  // again during the hop counts at once. No input is lost: a jump pressed in
+  // the hop's last moments fires on arrival.
+  g.player.heldLock = { ...(g.deathHeld || { left: true, right: true }) };
+  if (g.deadJump > 0) g.player.jumpBuffer = g.deadJump;
+  g.deadJump = 0;
+  g.calm = g.stolen ? WORLD.respawnCalm + 0.5 : WORLD.respawnCalm;
   g.phase = "playing";
   g.deathTimer = 0;
   g.hitstop = 0;
@@ -349,6 +394,7 @@ export function die(g, reason) {
   if (g.phase !== "playing") return false;
   if (reason !== "water" && p.grace > 0) return false;
   g.phase = "dead";
+  g.deathHeld = { left: true, right: true }; // cleared per key once released
   g.deaths++;
   g.deathsHere++;
   g.deathTimer = WORLD.respawnDelay;
@@ -391,9 +437,11 @@ export function dash(g, axis = 0) {
   p.direction = p.dashDirection; // facing and travel stay locked for the burst
   p.dashTime = WORLD.dashDuration;
   p.dashCooldown = WORLD.groundDashDelay;
+  p.dashAir = !p.grounded;
   p.vy = 0;
   p.rising = false;
   g.dashes++;
+  g.hitstop = Math.max(g.hitstop, WORLD.dashFreeze);
   event(g, "dash", p.x + p.w / 2, p.y + p.h / 2, { direction: p.dashDirection, color: p.color, air: !p.grounded });
   return true;
 }
@@ -408,11 +456,21 @@ function refill(g, source) {
 
 function tryJump(g) {
   const p = g.player;
-  if (p.jumpBuffer <= 0 || p.dashTime > 0 || p.knock > 0) return false;
+  if (p.jumpBuffer <= 0 || p.knock > 0) return false;
   const ground = p.grounded || p.coyote > 0;
+  let dashJump = false;
+  if (p.dashTime > 0) {
+    // Air dashes finish first (the buffered press fires when they end); a
+    // jump during a GROUND dash is a dash-jump that keeps part of its speed.
+    if (!ground || p.dashAir) return false;
+    dashJump = true;
+    p.dashTime = 0;
+    p.vx = p.dashDirection * WORLD.dashJumpSpeed;
+    p.carry = 1;
+  }
   if (!ground && (p.color !== "white" || p.airJumped)) return false;
   p.vy = -WORLD.jump * (ground ? 1 : WORLD.airJump);
-  if (p.jumpCutQueued) p.vy *= 0.5;
+  if (p.jumpCutQueued) p.vy *= WORLD.jumpCut;
   if (!ground) p.airJumped = true;
   p.jumps = ground ? 1 : 2;
   p.grounded = false;
@@ -420,7 +478,7 @@ function tryJump(g) {
   p.coyote = 0;
   p.jumpBuffer = 0;
   p.jumpCutQueued = false;
-  event(g, ground ? "jump" : "airjump", p.x + p.w / 2, p.y + p.h);
+  event(g, dashJump ? "dashjump" : ground ? "jump" : "airjump", p.x + p.w / 2, p.y + p.h);
   return true;
 }
 
@@ -445,11 +503,25 @@ function moveX(g, dx) {
     const stone = stoneAt(g, col, row);
     if (stone && !stone.broken && p.color === "red" && p.dashTime > 0) smash(g, stone);
     if (blocked(g, col, row)) {
+      if (row === bottom && ledgeAssist(g, row)) return false;
       p.x = dx > 0 ? col * TILE - p.w : (col + 1) * TILE;
       return true;
     }
   }
   return false;
+}
+/** Ledge assist: airborne (not rising fast) or dashing, Rubik meets a lip
+ * with only his feet below its top - by at most 12 px - and room above it:
+ * he steps onto it instead of sliding down the face ("visually made it"). */
+function ledgeAssist(g, row) {
+  const p = g.player,
+    lift = p.y + p.h - row * TILE;
+  if (p.grounded || lift <= 0 || lift > WORLD.ledgeAssist || (p.vy < -WORLD.apexBand && p.dashTime <= 0)) return false;
+  if (!boxFree(g, p.x, row * TILE - p.h, p.w, p.h)) return false;
+  p.y = row * TILE - p.h;
+  p.vy = Math.max(0, p.vy);
+  event(g, "assist", p.x + p.w / 2, p.y + p.h);
+  return true;
 }
 
 function boxFree(g, x, y, w, h) {
@@ -575,10 +647,6 @@ function updateGuard(g, guard, dt) {
   guard.anim += dt;
   if (guard.state === "drained" || guard.state === "away") return;
   guard.reach = coneReach(g, guard);
-  if (guard.state === "asleep") {
-    guard.sees = false;
-    return;
-  }
   if (guard.state === "stunned") {
     guard.sees = false;
     guard.timer -= dt;
@@ -586,6 +654,13 @@ function updateGuard(g, guard, dt) {
       guard.state = "search";
       guard.timer = GUARD.searchTime;
     }
+    return;
+  }
+  guard.squash = tick(guard.squash, dt);
+  if (g.calm > 0 && guard.state !== "stunned") {
+    // The calm hold: nothing advances, nothing moves (respawns, the theft).
+    guard.sees = false;
+    guard.disguiseSeen = false;
     return;
   }
   const playerBox = { x: p.x, y: p.y, w: p.w, h: p.h },
@@ -617,13 +692,14 @@ function updateGuard(g, guard, dt) {
         guard.turning -= dt;
         if (guard.turning <= 0) guard.dir *= -1;
       } else if (guard.mode === "sentry") {
-        guard.turnClock += dt;
+        // A `fixed` sentry holds its facing (a lookout staring one way).
+        if (!guard.fixed) guard.turnClock += dt;
         if (guard.turnClock >= (guard.turnEvery || 3)) {
           guard.turnClock = 0;
           guard.turning = GUARD.lookBack;
         }
       } else {
-        const speed = GUARD.patrolSpeed * (g.stolen && guard.kind === "green" ? GUARD.escapeSpeed : 1);
+        const speed = GUARD.patrolSpeed * (guard.pace ?? 1) * (g.stolen && guard.kind === "green" ? GUARD.escapeSpeed : 1);
         guard.x += guard.dir * speed * dt;
         if (guard.x <= guard.min || guard.x >= guard.max) {
           clampX();
@@ -668,15 +744,34 @@ function updateGuard(g, guard, dt) {
         guard.timer = tick(guard.timer, dt);
         break;
       }
-      const sameFloor = Math.abs(p.y + p.h - guard.floor) < 48;
+      const sameFloor = Math.abs(p.y + p.h - guard.floor) < 48,
+        atBound = guard.dir > 0 ? guard.x >= guard.max - 0.5 : guard.x <= guard.min + 0.5,
+        room = Math.max(0, guard.dir > 0 ? guard.max - guard.x : guard.x - guard.min),
+        // How far ahead the spear can land from here, given the patrol bound.
+        spearReach = Math.min(GUARD.lungeDistance, room) + GUARD.w / 2 + GUARD.spearReach,
+        inReach = Math.abs(dx) - p.w / 2 <= spearReach;
       // Before 1-5 teaches the full ladder, a card that spots Rubik only
       // charges and bumps him back (level.spears === false): no spear yet.
-      if (g.level.spears !== false && sees && sameFloor && Math.abs(dx) <= GUARD.lungeRange && Math.sign(dx) === guard.dir) {
+      if (g.level.spears !== false && sees && sameFloor && inReach && Math.abs(dx) <= GUARD.lungeRange && Math.sign(dx) === guard.dir) {
         guard.state = "windup";
         guard.timer = GUARD.windup;
+        guard.stuck = 0;
         event(g, "windup", guard.x, guard.floor - GUARD.h, { guard: guard.id });
         break;
       }
+      // Pinned at its patrol bound with Rubik out of reach: it gives up after
+      // 0.8 s and turns back (no endless wind-ups 10 px short).
+      if (atBound && !inReach) {
+        guard.stuck += dt;
+        if (guard.stuck >= 0.8) {
+          guard.stuck = 0;
+          guard.dir *= -1;
+          guard.state = "search";
+          guard.lost = 0;
+          guard.sight = 0;
+          break;
+        }
+      } else guard.stuck = 0;
       guard.x += guard.dir * GUARD.chargeSpeed * dt;
       clampX();
       break;
@@ -713,16 +808,21 @@ function updateGuard(g, guard, dt) {
 
 function stomp(g, guard) {
   const p = g.player;
-  p.vy = -WORLD.stompBounce;
+  // Hold jump (or press it as you land) for the high bounce; otherwise a hop.
+  const high = p.jumpHeld || p.jumpBuffer > 0;
+  p.vy = -(high ? WORLD.stompBounce : WORLD.stompBounceLow);
+  p.jumpHeld = high;
+  p.jumpBuffer = 0;
   p.jumps = 1;
   p.airJumped = false; // a bounce refreshes white's air jump
   p.rising = false;
   p.grounded = false;
   g.hitstop = Math.max(g.hitstop, WORLD.hitstop.stomp);
   refill(g, "stomp");
-  if (guard.state === "drained" || (guard.trampoline && guard.state === "asleep")) {
-    // The grey card stays dazed forever, and 1-2's dozing cards never wake:
-    // both are springboards (a bounce, not a stun, so nothing is farmed).
+  guard.squash = 0.16;
+  if (guard.state === "drained") {
+    // The drained card stays dazed forever: a springboard (a bounce, not a
+    // stun, so nothing is farmed).
     g.bounces++;
     event(g, "bounce", guard.x, guard.floor - GUARD.h, { guard: guard.id });
     return;
@@ -778,10 +878,46 @@ function separate(g, box) {
   if ((left && p.vx > 0) || (!left && p.vx < 0)) p.vx = 0;
 }
 const AWARE = ["alert", "windup", "lunge", "recover", "search", "suspect"];
+/** How far Rubik's centre is ahead of a card, along the way it faces (px). */
+const aheadOf = (g, guard) => (g.player.x + g.player.w / 2 - guard.x) * guard.dir;
+/** Head stomps work from above or behind. A card that faces Rubik raises its
+ * spear (drawn), and an aware card ("!", wind-up, lunge) always has it up; its
+ * 0.7 s recovery after a lunge is the stompable opening. */
+export function stompable(g, guard) {
+  if (guard.state === "drained" || guard.state === "recover") return true;
+  // The card holding Rubik's green (1-2) carries it, not a spear: always.
+  if (guard.absorb && !g.unlocked.green) return true;
+  if (["alert", "windup", "lunge", "stunned"].includes(guard.state)) return false;
+  // Came at its face (the last side Rubik was on while clear of its head is
+  // the side it looks at): it saw him coming, even if the jump carries him
+  // over onto its back half. Run-and-jump can't skip a lookout; drop from
+  // above or come from behind.
+  if (guard.sideX * guard.dir > 0) return false;
+  return aheadOf(g, guard) <= 12; // up to half the head ahead of centre still counts as "above"
+}
+/** Landing on a raised spear: Rubik is popped up and away (no damage) and the
+ * card turns on him. */
+function spike(g, guard) {
+  const p = g.player,
+    away = Math.sign(p.x + p.w / 2 - guard.x) || guard.dir;
+  p.vy = -360;
+  p.vx = away * GUARD.awareKnock;
+  p.knock = 0.22; // long enough to clear the head: no spike-spike loop
+  p.jumps = 1;
+  p.grounded = false;
+  p.bumpGrace = WORLD.bumpGrace;
+  event(g, "spike", guard.x, guard.floor - GUARD.h, { guard: guard.id });
+  if (guard.state === "recover" || guard.state === "drained") return;
+  guard.dir = away;
+  alertGuard(g, guard, canSee(guard, p.color));
+}
 function guardContacts(g, prevBottom) {
   const p = g.player;
   for (const guard of g.guards) {
     if (guard.state === "away") continue;
+    // Which world side Rubik approaches from (kept while he is over its head).
+    const rel = p.x + p.w / 2 - guard.x;
+    if (Math.abs(rel) > 40) guard.sideX = Math.sign(rel);
     const box = guardBox(guard),
       top = guard.floor - GUARD.h,
       widen = guard.catch ?? 10;
@@ -790,7 +926,9 @@ function guardContacts(g, prevBottom) {
     // contact from counting as a stomp.
     const head = { x: box.x - widen, y: box.y, w: box.w + widen * 2, h: box.h };
     if (p.vy > 0 && prevBottom <= top + 10 && guard.state !== "stunned" && overlaps(p, head)) {
-      stomp(g, guard);
+      if (stompable(g, guard)) stomp(g, guard);
+      else if (p.bumpGrace > 0) separate(g, box); // just spiked: slide off, no loop
+      else spike(g, guard);
       continue;
     }
     if (!overlaps(p, box)) continue;
@@ -809,8 +947,13 @@ function guardContacts(g, prevBottom) {
       event(g, "knock", guard.x, guard.floor - GUARD.h / 2, { guard: guard.id });
       continue;
     }
-    if (guard.state === "asleep" || p.bumpGrace > 0 || p.grace > 0) {
-      separate(g, box); // solid, but no new bump (dozing cards don't wake)
+    if (p.bumpGrace > 0 || p.grace > 0) {
+      separate(g, box); // solid, but no new bump during grace
+      continue;
+    }
+    if (guard.state === "calm" && aheadOf(g, guard) < -4) {
+      // Brushing a calm card's back: it doesn't notice (sneak up, don't shove).
+      separate(g, box);
       continue;
     }
     // Body contact never kills by itself: Rubik is thrown back the way he came
@@ -853,6 +996,10 @@ function steal(g) {
   p.dashCooldown = 0;
   p.grace = 1;
   g.hitstop = WORLD.hitstop.theft;
+  // Fairness: once the RED GET card closes, every card holds still while the
+  // REVERSE card sweeps and for ~0.8 s after; Rubik is untouchable meanwhile.
+  g.calm = WORLD.theftCalm;
+  p.grace = WORLD.theftCalm + 0.4;
   // The chamber door slams: the first smash is forced, right here, with
   // nothing in reach (teach red smash in safety before the run home).
   for (const stone of g.stones) if (stone.sealOnTheft) stone.broken = false;
@@ -865,10 +1012,13 @@ function steal(g) {
     if (guard.escapeOnly) {
       guard.state = "calm";
       event(g, "arrive", guard.x, guard.floor - GUARD.h, { guard: guard.id });
-    } else if (guard.wakeOnTheft) {
+    } else if (guard.chaseOnTheft) {
+      // The vault room's own cards turn on Rubik (held by the calm below) and
+      // may now chase the whole room, up to the sealed door.
       guard.dir = -1;
+      guard.min = guard.chaseMin ?? guard.min;
       alertGuard(g, guard, false);
-    } else if (!["asleep", "stunned"].includes(guard.state)) {
+    } else if (guard.state !== "stunned") {
       guard.state = "calm";
       guard.sight = 0;
       guard.turning = 0;
@@ -999,6 +1149,9 @@ export function update(g, dt, input = {}) {
   if (g.phase === "dead") {
     g.time += dt;
     g.deathTimer -= dt;
+    if (input.jump) g.deadJump = WORLD.jumpBuffer;
+    else g.deadJump = tick(g.deadJump, dt);
+    for (const key of ["left", "right"]) if (!input[key]) g.deathHeld[key] = false;
     if (g.deathTimer <= 0) respawn(g);
     return;
   }
@@ -1014,7 +1167,7 @@ export function update(g, dt, input = {}) {
   if (input.jumpReleased) {
     p.jumpHeld = false;
     if (p.jumpBuffer > 0) p.jumpCutQueued = true;
-    else if (p.vy < 0 && p.rising) p.vy *= 0.5;
+    else if (p.vy < 0 && p.rising) p.vy *= WORLD.jumpCut;
   }
   if (input.dash) p.dashBuffer = WORLD.dashBuffer;
   if (g.hitstop > 0) {
@@ -1027,12 +1180,16 @@ export function update(g, dt, input = {}) {
   p.bumpGrace = tick(p.bumpGrace, dt);
   p.storm = tick(p.storm, dt);
   p.dashCooldown = tick(p.dashCooldown, dt);
-  p.jumpBuffer = tick(p.jumpBuffer, dt);
+  if (!(p.dashTime > 0 && p.dashAir)) p.jumpBuffer = tick(p.jumpBuffer, dt);
   p.knock = tick(p.knock, dt);
+  g.calm = tick(g.calm, dt);
   p.landed = tick(p.landed, dt);
   if (!p.grounded) p.coyote = tick(p.coyote, dt);
   if (input.color) switchColor(g, input.color);
-  const axis = p.knock > 0 ? 0 : Number(!!input.right) - Number(!!input.left);
+  for (const key of ["left", "right"]) if (!input[key]) p.heldLock[key] = false;
+  const right = !!input.right && !p.heldLock.right,
+    left = !!input.left && !p.heldLock.left,
+    axis = p.knock > 0 ? 0 : Number(right) - Number(left);
   if (axis && p.dashTime <= 0 && p.knock <= 0) p.direction = axis;
   if (p.dashBuffer > 0 && dash(g, axis)) p.dashBuffer = 0;
   p.dashBuffer = tick(p.dashBuffer, dt);
@@ -1045,11 +1202,19 @@ export function update(g, dt, input = {}) {
     p.vy = 0;
     if (p.dashTime <= 0) p.vx = p.dashDirection * WORLD.speed; // exit at run speed
   } else {
-    if (p.knock <= 0)
-      p.vx = toward(p.vx, axis * WORLD.speed, (axis ? WORLD.acceleration : WORLD.braking) * dt);
+    if (p.knock <= 0) {
+      const ground = p.grounded,
+        against = axis !== 0 && p.vx !== 0 && Math.sign(p.vx) === -axis;
+      let rate = !axis ? (ground ? WORLD.braking : WORLD.airBraking) : against ? (ground ? WORLD.turn : WORLD.airTurn) : ground ? WORLD.acceleration : WORLD.airAcceleration;
+      // Dash-jump carry: above run speed the extra bleeds off slowly unless
+      // the player pushes against it (then the normal turn rate applies).
+      if (p.carry > 0 && Math.abs(p.vx) > WORLD.speed && !against) rate = WORLD.carryDecay;
+      p.vx = toward(p.vx, axis * WORLD.speed, rate * dt);
+      if (Math.abs(p.vx) <= WORLD.speed) p.carry = 0;
+    }
     // Only a held jump (or bounce) floats at its apex; walking off a ledge never does.
     const apex = p.jumpHeld && p.jumps > 0 && Math.abs(p.vy) < WORLD.apexBand && !p.grounded;
-    p.vy = Math.min(WORLD.maxFall, p.vy + WORLD.gravity * (apex ? 0.5 : 1) * dt);
+    p.vy = Math.min(WORLD.maxFall, p.vy + WORLD.gravity * (apex ? 0.5 : p.vy > WORLD.apexBand ? WORLD.fallGravity : 1) * dt);
   }
   if (p.vy >= 0) p.rising = false;
   if (moveX(g, p.vx * dt)) {
@@ -1065,6 +1230,7 @@ export function update(g, dt, input = {}) {
     p.coyote = WORLD.coyote;
     p.jumps = 0;
     p.airJumped = false;
+    if (p.dashTime <= 0) p.carry = 0;
     if (p.dashTime <= 0) p.dashCharge = 1;
     if (!wasGrounded) {
       p.landed = 0.1;

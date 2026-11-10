@@ -97,12 +97,12 @@ test("World 1 is six levels in order, each with 3 stickers, a start face and an 
   assert.deepEqual(LEVEL_IDS, ["1-1", "1-2", "1-3", "1-4", "1-5", "1-6"]);
   assert.deepEqual(
     LEVELS.map((l) => l.name),
-    ["Home Cliff", "Sleeping Cards", "Hide in Green", "Storm Dash", "Lookouts", "The Vault"],
+    ["Home Cliff", "Stomping Ground", "Hide in Green", "Storm Dash", "Lookouts", "The Vault"],
   );
   for (const level of LEVELS) {
     assert.equal(level.map.length, B.ROWS, level.id);
     for (const row of level.map) assert.equal(row.length, level.cols, level.id);
-    assert.ok(level.cols >= 100 && level.cols <= 160, `${level.id}: ${level.cols} columns`);
+    assert.ok(level.cols >= 100 && level.cols <= 170, `${level.id}: ${level.cols} columns`);
     assert.deepEqual(level.stickers.map((s) => s.id), [1, 2, 3], level.id);
     assert.ok(level.checkpoints.length >= 2, `${level.id}: a start face and a midpoint`);
     assert.ok(Math.abs(level.checkpoints[0].x - level.spawn.x) < 60, `${level.id}: start face at the spawn`);
@@ -111,12 +111,29 @@ test("World 1 is six levels in order, each with 3 stickers, a start face and an 
     else assert.ok(level.goal && !level.vault && !level.home, level.id);
   }
 });
+test("no sleeping cards anywhere: every card is awake, and no card is ever asleep in any route", () => {
+  for (const level of LEVELS)
+    for (const card of level.guards) {
+      assert.ok(["patrol", "sentry"].includes(card.mode), `${level.id} ${card.id}: ${card.mode}`);
+      assert.ok(!card.trampoline && !card.wakeOnTheft, `${level.id} ${card.id}`);
+    }
+  for (const id of LEVEL_IDS)
+    for (const kind of ["baseline", "mastery"]) {
+      const states = new Set();
+      replayTo(id, ROUTES[id][kind], (g) => {
+        for (const c of g.guards) states.add(c.state);
+        return false;
+      });
+      assert.ok(!states.has("asleep"), `${id} ${kind}`);
+    }
+  assert.ok(LEVELS[0].guards.length === 0, "1-1 is only about the body: no cards");
+});
 test("kits: each level always starts with the abilities it was designed for; later ones are absent", () => {
   const expect = {
     "1-1": { forms: ["white"], start: "white", dash: false },
     "1-2": { forms: ["white"], start: "white", dash: false },
     "1-3": { forms: ["white", "green"], start: "green", dash: false },
-    "1-4": { forms: ["white", "green"], start: "white", dash: false },
+    "1-4": { forms: ["white", "green"], start: "green", dash: false },
     "1-5": { forms: ["white", "green"], start: "white", dash: true },
     "1-6": { forms: ["white", "green"], start: "white", dash: true },
   };
@@ -182,13 +199,13 @@ for (const id of LEVEL_IDS)
     }
     assert.equal(M.stickerCount(mastery), 3, `${id} mastery takes all three stickers`);
     assert.equal(mastery.medals.fullFace, true);
-    assert.equal(base.spotted, 0, `${id} baseline is never spotted`);
+    if (getLevel(id).unseen !== false && id !== "1-1") assert.equal(base.spotted, 0, `${id} baseline is never spotted`);
     // Same inputs, same result: a second replay is identical.
     const again = replay(id, ROUTES[id].mastery);
     assert.equal(again.time, mastery.time);
     assert.deepEqual(again.stickers, mastery.stickers);
     // QA routes are short; first plays are several times longer.
-    assert.ok(base.time < 35, `${id} baseline ${base.time.toFixed(1)} s`);
+    assert.ok(base.time < 40, `${id} baseline ${base.time.toFixed(1)} s`);
   });
 test("routes are plain JSON [seconds, input] arrays of ordinary actions; legacy names point at 1-6", () => {
   const allowed = new Set(["left", "right", "jump", "jumpReleased", "dash", "color"]);
@@ -204,8 +221,16 @@ test("routes are plain JSON [seconds, input] arrays of ordinary actions; legacy 
   assert.equal(BASELINE_ROUTE, ROUTES["1-6"].baseline);
   assert.equal(MASTERY_ROUTE, ROUTES["1-6"].mastery);
 });
-test("checkpoints: at most 12 s of baseline route time apart in every level; respawn takes 0.45 s", () => {
+test("checkpoints: at most 12 s of baseline route time apart wherever Rubik can die; respawn takes 0.45 s", () => {
   for (const id of LEVEL_IDS) {
+    // 1-3 has no water and no spears: nothing to retry, so its checkpoints
+    // are only the start and the midpoint (the brief's "fewer checkpoints").
+    const level = getLevel(id),
+      deadly = level.map[B.WATER_ROW].includes("~") || level.spears !== false;
+    if (!deadly) {
+      assert.equal(level.checkpoints.length, 2, `${id}: start + midpoint`);
+      continue;
+    }
     const g = fresh(id),
       saves = [0];
     let last = g.checkpoint;
@@ -257,47 +282,93 @@ test("1-1: hints - move after 4 s idle at the start; jump-jump after two short j
 });
 
 // ------------------------------------------------- 1-2: bounce -> green -----
-test("1-2: dozing cards are trampolines that never wake, see, stun or count as stomps", () => {
-  const g = fresh("1-2"),
-    c = only(g, "isle-a");
-  place(g, c.x + 200, c.floor); // standing right beside a dozing card, white
-  ticks(g, seconds(3));
-  assert.equal(c.state, "asleep");
-  assert.equal(g.spotted, 0);
-  place(g, c.x, c.floor - M.GUARD.h - 30, { vy: 200 });
-  g.player.grounded = false;
-  ticks(g, seconds(0.3));
-  assert.equal(g.bounces, 1);
-  assert.equal(g.stomps, 0);
-  assert.equal(c.state, "asleep");
-  assert.ok(getLevel("1-2").guards.every((x) => x.mode === "sleep"), "no card is ever awake in 1-2");
-});
-test("1-2: nothing 7+ tiles up is reachable without a bounce; bounce + air jump reaches 8 tiles", () => {
-  // The twist wall (7 tiles over the far bank) and the 8-tile ledge.
-  for (const target of [
-    { start: { x: 72 * T, feet: 18 * T }, top: 11 * T, past: 82 * T + 8 },
-    { start: { x: 64 * T, feet: 18 * T }, top: 10 * T, past: 70 * T },
-  ])
-    assert.equal(anyReaches("1-2", target, jumpFamily({ maxTakeoff: 140, air: true })), false, "a double jump never gets there");
-  // The measured envelope the geometry relies on.
-  const bounce = (air) => {
+test("1-2: stomp from above or behind stuns a card; a card facing Rubik raises its spear (no stomp)", () => {
+  const drop = (dir, offset) => {
     const g = fresh("1-2"),
       c = only(g, "wall");
-    Object.assign(g.player, { x: c.x - 20, y: c.floor - M.GUARD.h - 112, vy: 100, grounded: false, jumpHeld: true, jumps: 1, grace: 0 });
-    let top = Infinity,
-      did = false;
-    for (let i = 0; i < 240; i++) {
-      ticks(g, 1, air && !did && g.bounces && g.player.vy >= 0 ? ((did = true), { jump: true }) : {});
-      if (g.bounces) top = Math.min(top, feet(g));
+    Object.assign(c, { x: 76 * T, dir, state: "calm", turning: 0, turnClock: 0 });
+    place(g, c.x + offset, c.floor - M.GUARD.h - 30, { vy: 200, jumpHeld: true, jumps: 1 });
+    g.player.grounded = false;
+    ticks(g, seconds(0.2));
+    return { g, c };
+  };
+  const behind = drop(1, -14); // card faces right, Rubik lands on its back
+  assert.equal(behind.c.state, "stunned");
+  assert.equal(behind.g.stomps, 1);
+  const above = drop(1, 6); // right over its head (within half the head)
+  assert.equal(above.c.state, "stunned");
+  const front = drop(-1, -30); // card faces Rubik: spear up
+  assert.notEqual(front.c.state, "stunned");
+  assert.equal(events(front.g, "spike").length, 1);
+  assert.equal(front.g.deaths, 0, "a spike pops Rubik away, never kills");
+  assert.ok(front.g.player.x + M.PLAYER.w / 2 < front.c.x, "popped back the way he came");
+  // An aware card always has its spear up, from any side.
+  const g = fresh("1-2"),
+    c = only(g, "wall");
+  Object.assign(c, { x: 76 * T, dir: 1, state: "alert", timer: 1 });
+  place(g, c.x - 14, c.floor - M.GUARD.h - 30, { vy: 200 });
+  g.player.grounded = false;
+  ticks(g, seconds(0.2));
+  assert.equal(events(g, "spike").length, 1);
+});
+test("1-2: hold jump for the high bounce; a tap (or a walk-off) gives the short hop", () => {
+  const bounce = (held) => {
+    const g = fresh("1-2"),
+      c = only(g, "wall");
+    Object.assign(c, { x: 76 * T, dir: 1, state: "calm", turning: 0, turnClock: 0, pace: 0 });
+    c.min = c.max = c.x;
+    Object.assign(g.player, { x: c.x - 34, y: c.floor - M.GUARD.h - 112, vy: 100, grounded: false, jumpHeld: held, jumps: held ? 1 : 0, grace: 0 });
+    let top = Infinity;
+    for (let i = 0; i < 160; i++) {
+      ticks(g, 1);
+      if (g.stomps) top = Math.min(top, feet(g));
     }
     return c.floor - top;
   };
-  assert.ok(bounce(false) > 190 && bounce(false) < 7 * T, `bounce ${bounce(false).toFixed(1)} px`);
-  assert.ok(bounce(true) > 8 * T + 16, `bounce + air jump ${bounce(true).toFixed(1)} px`);
+  const high = bounce(true),
+    low = bounce(false);
+  assert.ok(high > 190 && high < 7 * T, `held bounce ${high.toFixed(1)} px`);
+  assert.ok(low < high - 40 && low > M.GUARD.h + 40, `tap bounce ${low.toFixed(1)} px`);
 });
-test("1-2: the glowing card can't be skipped: every walk, run, jump and double jump off the run-up lands on it", () => {
-  const glow = getLevel("1-2").guards.find((x) => x.absorb),
-    edge = 118 * T; // the run-up's end
+test("1-2: nothing 7+ tiles up is reachable without a stomp; stomp + air jump reaches 8 tiles", () => {
+  // The twist wall (7 tiles over the patrol's floor) and the 8-tile ledge.
+  for (const target of [
+    { start: { x: 72 * T, feet: 18 * T }, top: 11 * T, past: 82 * T + 8 },
+    { start: { x: 71 * T, feet: 18 * T }, top: 10 * T, past: 73 * T },
+  ])
+    assert.equal(anyReaches("1-2", target, jumpFamily({ maxTakeoff: 140, air: true })), false, `a double jump never gets to ${target.top}`);
+  // Sticker 3's slab (row 8): the highest double jump from the block or the
+  // far bank stays under it.
+  for (const [x, floor] of [
+    [68 * T + 20, 16 * T],
+    [64 * T + 16, 18 * T],
+  ]) {
+    const g = noCards(fresh("1-2"));
+    place(g, x, floor);
+    let best = Infinity;
+    ticks(g, 1, { jump: true });
+    for (let i = 0; i < 200; i++) {
+      ticks(g, 1, !g.player.airJumped && g.player.vy >= 0 ? { jump: true } : {});
+      best = Math.min(best, feet(g));
+    }
+    assert.ok(best > 8 * T, `double jump from ${x} tops out at ${best.toFixed(1)}`);
+  }
+  // The measured envelope: a held stomp + air jump clears the 8-tile ledge.
+  const g = fresh("1-2"),
+    c = only(g, "wall");
+  Object.assign(c, { x: 76 * T, dir: 1, state: "calm", turning: 0, pace: 0 });
+  c.min = c.max = c.x;
+  Object.assign(g.player, { x: c.x - 34, y: c.floor - M.GUARD.h - 112, vy: 100, grounded: false, jumpHeld: true, jumps: 1, grace: 0 });
+  let top = Infinity,
+    did = false;
+  for (let i = 0; i < 240; i++) {
+    ticks(g, 1, !did && g.stomps && g.player.vy >= 0 ? ((did = true), { jump: true }) : {});
+    if (g.stomps) top = Math.min(top, feet(g));
+  }
+  assert.ok(c.floor - top > 8 * T + 16, `stomp + air jump ${(c.floor - top).toFixed(1)} px`);
+});
+test("1-2: the green card can't be skipped: every walk, run, jump and double jump off the run-up lands on its back", () => {
+  const edge = 118 * T; // the run-up's end
   let tries = 0;
   for (let jumpAt = edge - 220; jumpAt <= edge + 10; jumpAt += 10)
     for (const air of [false, true]) {
@@ -321,10 +392,9 @@ test("1-2: the glowing card can't be skipped: every walk, run, jump and double j
     for (let i = 0; i < 300 && !g.unlocked.green; i++) ticks(g, 1, { right: i < hold });
     assert.equal(g.unlocked.green, true, `nudge ${hold}`);
   }
-  assert.ok(tries > 40 && glow.catch === 24);
+  assert.ok(tries > 40);
+  assert.equal(guard(fresh("1-2"), "glow").state, "calm", "the green card is awake (eyes open, a lookout)");
 });
-
-// ------------------------------------------------ 1-3: hide in green ------
 test("1-3: green can't climb the 4-tile wall (white can); cards only warn and push here", () => {
   const wall = { start: { x: 61 * T, feet: 16 * T }, top: 12 * T, past: 65 * T + 8 };
   assert.equal(anyReaches("1-3", { ...wall, form: "green" }, jumpFamily({ maxTakeoff: 100 })), false);
@@ -362,25 +432,36 @@ test("1-3: the glade card hums at green Rubik and walks through him; white gets 
   assert.equal(w.hint, "green");
 });
 
+test("1-3 finale: green can't make a pillar hop (12 tiles), white can; a hop is long enough to be spotted", () => {
+  const hop = { start: { x: 111 * T, feet: 12 * T }, top: 12 * T, past: 126 * T };
+  assert.equal(anyReaches("1-3", { ...hop, form: "green" }, jumpFamily({ maxTakeoff: 60 })), false);
+  assert.equal(anyReaches("1-3", { ...hop, form: "white" }, jumpFamily({ maxTakeoff: 60, air: true })), true);
+  // White in a facing lookout's cone through a whole hop: it spots him.
+  const g = fresh("1-3"),
+    c = only(g, "pillar-a");
+  Object.assign(c, { dir: -1, state: "calm", turning: 0, turnClock: 0, fixed: true });
+  place(g, 126 * T + 20, 12 * T, { color: "white" }); // pillar A's left half, in front of its card
+  ticks(g, seconds(0.9));
+  assert.equal(g.spotted, 1, "0.9 s in sight > 0.6 s");
+});
+
 // ---------------------------------------------------- 1-4: storm dash -----
 test("1-4: gap widths force the dash - green can't jump the 12/14-tile gaps, white can't double-jump the 20s", () => {
   const gaps = [
     { name: "Gap A", start: { x: 16 * T, feet: 16 * T }, top: 16 * T, past: 32 * T },
-    { name: "develop 12", start: { x: 34 * T, feet: 16 * T }, top: 14 * T, past: 50 * T },
-    { name: "develop 14", start: { x: 52 * T, feet: 14 * T }, top: 16 * T, past: 70 * T },
+    { name: "develop 12", start: { x: 34 * T, feet: 16 * T }, top: 16 * T, past: 50 * T },
+    { name: "develop 14", start: { x: 52 * T, feet: 16 * T }, top: 16 * T, past: 70 * T },
   ];
   for (const gap of gaps) {
     assert.equal(anyReaches("1-4", { ...gap, form: "green" }, jumpFamily({ maxTakeoff: 60 })), false, `${gap.name}: green jump`);
     assert.equal(anyReaches("1-4", { ...gap, form: "green", dash: true }, jumpFamily({ maxTakeoff: 60, dashDelays: [30, 40, 50, 54, 60] })), true, `${gap.name}: green jump + dash`);
   }
-  // Both twist gaps (20 tiles; an orb / a pillar card mid-gap): white's
-  // double jump - with its air jump at any moment, even saved for the fall -
-  // never makes it without the dash.
-  for (const twist of [
-    { start: { x: 72 * T, feet: 16 * T }, top: 16 * T, past: 96 * T },
-    { start: { x: 98 * T, feet: 16 * T }, top: 16 * T, past: 122 * T },
-  ])
-    assert.equal(anyReaches("1-4", { ...twist, form: "white" }, jumpFamily({ maxTakeoff: 80, air: true })), false, "white double jump");
+  // The orb twist gap (20 tiles): white's double jump - with its air jump at
+  // any moment, even saved for the fall - never makes it without the dash.
+  // (The pillar gap's lookout is a refill: stomping its back also refreshes
+  // white's air jump, an intended alternative.)
+  const twist = { start: { x: 72 * T, feet: 16 * T }, top: 16 * T, past: 96 * T };
+  assert.equal(anyReaches("1-4", { ...twist, form: "white" }, jumpFamily({ maxTakeoff: 80, air: true })), false, "white double jump");
   assert.equal(getLevel("1-4").map[B.WATER_ROW].slice(76, 96), "~".repeat(20));
   assert.equal(getLevel("1-4").map[B.WATER_ROW].slice(102, 122).replace("#", "~"), "~".repeat(20));
 });
@@ -401,15 +482,15 @@ test("1-4: before the swirl Shift does nothing; DASH GET; refills chain dashes i
   ticks(o, seconds(0.25), { right: true });
   assert.ok(orb.respawn > 0, "orb taken");
   assert.equal(o.player.dashCharge, 1);
-  // A stomp on the pillar card refills it too.
+  // A stomp on the pillar lookout's back refills it too.
   const s = noCards(fresh("1-4"));
   s.dashUnlocked = true;
   const c = guard(s, "pillar");
-  c.state = "asleep";
-  place(s, c.x, c.floor - M.GUARD.h - 20, { vy: 200, dashCharge: 0 });
+  c.state = "calm";
+  place(s, c.x - 12, c.floor - M.GUARD.h - 20, { vy: 200, dashCharge: 0 });
   s.player.grounded = false;
   ticks(s, seconds(0.15));
-  assert.equal(s.bounces, 1);
+  assert.equal(s.stomps, 1);
   assert.equal(s.player.dashCharge, 1);
 });
 test("1-4: two slow landings on Gap A's recovery rock offer the dash bubble", () => {
@@ -454,6 +535,20 @@ test("1-5: the full ladder in the open - ?, !, charge, wind-up, a jumpable spear
   ticks(d, 1);
   assert.equal(d.deathReason, "spear");
 });
+test("1-5: hold right and one jump no longer skips the red guard: facing Rubik, it can't be stomped", () => {
+  for (const id of ["enforcer", "cross-red", "p1"]) {
+    const g = fresh("1-5"),
+      c = only(g, id);
+    Object.assign(c, { dir: -1, state: "calm", turning: 0, turnClock: 0, fixed: true });
+    place(g, c.x - 150, c.floor, { color: "green" });
+    g.unlocked.green = true;
+    ticks(g, 1, { right: true, jump: true });
+    for (let i = 0; i < seconds(1.2); i++) ticks(g, 1, { right: true });
+    assert.notEqual(c.state, "stunned", `${id}: no stomp from the front`);
+    // Getting past means a hop through its cone: it has noticed (at least "?").
+    if (M.canSee(c, "green")) assert.ok(c.state !== "calm" || events(g, "suspect").length > 0 || events(g, "spike").length > 0, `${id}: it noticed`);
+  }
+});
 test("1-5: a red card sees green (and white) but not red; green cards see white and red", () => {
   const g = fresh("1-5"),
     e = only(g, "enforcer");
@@ -467,7 +562,7 @@ test("1-5: a red card sees green (and white) but not red; green cards see white 
 });
 
 // ------------------------------------------------------- 1-6: the vault ---
-test("1-6: the theft - RED GET, REVERSE, the burst wakes, the chamber door seals and only red breaks it", () => {
+test("1-6: the theft - RED GET, REVERSE, the room's cards turn, the door seals and only red breaks it", () => {
   const g = replayTo("1-6", ROUTES["1-6"].baseline, (x) => x.stolen);
   assert.equal(g.unlocked.red, true);
   assert.equal(g.player.color, "red");
@@ -486,7 +581,7 @@ test("1-6: the theft - RED GET, REVERSE, the burst wakes, the chamber door seals
   ]) {
     const t = replayTo("1-6", ROUTES["1-6"].baseline, (x) => x.stolen);
     for (const c of t.guards) c.state = "away";
-    M.advance(t, 1.3, {});
+    M.advance(t, 1.3 + M.WORLD.theftCalm, {});
     t.player.color = color;
     for (let i = 0; i < 6; i++) {
       ticks(t, 1, input);
@@ -494,6 +589,38 @@ test("1-6: the theft - RED GET, REVERSE, the burst wakes, the chamber door seals
     }
     assert.ok(cx(t) > 112 * T, `${color} stays inside`);
   }
+});
+test("1-6 fairness: after RED GET every card holds still through REVERSE (+0.8 s), and Rubik can't be hit", () => {
+  const g = replayTo("1-6", ROUTES["1-6"].baseline, (x) => x.stolen);
+  const at = () => g.guards.map((c) => [c.id, c.x, c.state]);
+  M.advance(g, M.WORLD.hitstop.get + 0.01, {}); // the GET card (frozen)
+  const held = JSON.stringify(at());
+  M.advance(g, M.WORLD.theftCalm - 0.05, {}); // standing still, cards charging-to-be
+  assert.equal(JSON.stringify(at()), held, "nothing moved or advanced during the hold");
+  assert.equal(g.phase, "playing");
+  assert.ok(g.player.grace > 0, "and Rubik is still untouchable at its end");
+  M.advance(g, 0.3, {});
+  assert.notEqual(JSON.stringify(at()), held, "then they come");
+});
+test("1-6: a death after the theft respawns inside the sealed room, held still, the door right there", () => {
+  const g = replayTo("1-6", ROUTES["1-6"].baseline, (x) => x.stolen);
+  M.advance(g, M.WORLD.hitstop.get + 0.05, {});
+  M.die(g, "water");
+  ticks(g, seconds(M.WORLD.respawnDelay + 0.02));
+  assert.equal(g.phase, "playing");
+  assert.equal(g.checkpoint, "vault");
+  const seal = getLevel("1-6").stones.find((s) => s.id === "seal-low");
+  assert.equal(g.stones.find((s) => s.id === "seal-low").broken, false, "the door is shut again");
+  assert.ok(cx(g) > (seal.x + 2) * T && cx(g) - (seal.x + 2) * T < 2 * T, "inside, within 2 tiles of the door");
+  assert.ok(g.calm >= 1, `every card holds for ${g.calm.toFixed(2)} s`);
+  // Cards that see red and share the room (the landing card is behind the door).
+  const inside = g.guards.filter((c) => M.canSee(c, "red") && c.state !== "away" && c.x > (seal.x + 2) * T);
+  const nearest = Math.min(...inside.map((c) => Math.abs(c.x - cx(g))));
+  assert.ok(nearest > 200, `the nearest card in the room that sees red is ${nearest.toFixed(0)} px away`);
+  // The forced smash: a red dash at the door opens it.
+  ticks(g, 1, { left: true, dash: true });
+  ticks(g, seconds(0.3), { left: true });
+  assert.equal(g.stones.find((s) => s.id === "seal-low").broken, true);
 });
 test("1-6: home only ends the level after the theft; the escape has no fail timer", () => {
   const g = fresh("1-6");
@@ -545,8 +672,11 @@ test("no respawn point in any level can be inside a sight cone (any card, any pa
   for (const level of LEVELS) {
     const g = fresh(level.id);
     for (const cp of level.checkpoints) {
+      // The theft's checkpoint is inside the sealed room by design (the forced
+      // smash); it is covered by its own respawn test (calm hold, distance).
+      if (cp.get === "red") continue;
       const box = { x: cp.x - M.PLAYER.w / 2, y: cp.floor - M.PLAYER.h, w: M.PLAYER.w, h: M.PLAYER.h };
-      for (const card of g.guards.filter((c) => !c.absorb && !c.trampoline && !c.decor))
+      for (const card of g.guards.filter((c) => !c.absorb))
         for (let x = card.min; x <= card.max; x += 4)
           for (const dir of [-1, 1]) {
             const probe = { ...card, x, dir };
@@ -585,6 +715,7 @@ test("checkpoints restore the whole segment; nothing is farmable; deaths and spo
   const g = replay("1-5", ROUTES["1-5"].baseline, (x) => x.checkpoint === "post");
   const e = guard(g, "enforcer"),
     stomps = g.stomps;
+  e.dir = 1; // facing away from where Rubik came from: a stomp from behind
   place(g, e.x, e.floor - M.GUARD.h - 20, { vy: 200 });
   g.player.grounded = false;
   ticks(g, seconds(0.1));
@@ -674,18 +805,28 @@ test('awareness: "?" after 0.25 s, "!" at 0.6 s, calm again after losing sight',
   assert.equal(d.state, "calm");
   assert.equal(q.spotted, 0);
 });
-test("body contact only knocks Rubik back the way he came; cards are solid to other colors", () => {
+test("body contact only knocks Rubik back the way he came; a calm card's back can be brushed; cards are solid", () => {
   const g = fresh("1-5"),
     c = only(g, "teacher");
-  Object.assign(c, { x: 900, dir: -1, state: "calm", turning: 0 });
-  place(g, 960, c.floor); // behind it, then walk into it
+  Object.assign(c, { x: 900, dir: -1, state: "suspect", turning: 0, pace: 0 });
+  c.min = c.max = 900;
+  place(g, 960, c.floor); // behind a suspicious (aware) card, walk into it
   ticks(g, seconds(0.4), { left: true });
   assert.equal(g.deaths, 0);
   assert.equal(events(g, "bump").length, 1);
   assert.ok(cx(g) > c.x, "pushed back the way he came");
-  assert.equal(c.state, "alert");
   ticks(g, seconds(0.7), { right: true });
   assert.equal(g.phase, "playing", "running away after a bump is always possible");
+  // A calm card facing away doesn't notice Rubik brushing its back.
+  const b = fresh("1-5"),
+    d = only(b, "teacher");
+  Object.assign(d, { x: 900, dir: -1, state: "calm", turning: 0, pace: 0 });
+  d.min = d.max = 900;
+  place(b, 960, d.floor);
+  ticks(b, seconds(0.4), { left: true });
+  assert.equal(events(b, "bump").length, 0);
+  assert.equal(d.state, "calm");
+  assert.ok(cx(b) > d.x, "but it's still solid");
   // Red Rubik walks straight through a red card.
   const r = fresh("1-5");
   r.unlocked.red = true;
@@ -695,6 +836,15 @@ test("body contact only knocks Rubik back the way he came; cards are solid to ot
   ticks(r, seconds(1.5), { right: true });
   assert.ok(cx(r) > er.x);
   assert.equal(events(r, "bump").length, 0);
+});
+test("a card pinned at its patrol bound with Rubik out of reach gives up instead of spearing the air", () => {
+  const g = fresh("1-5"),
+    c = only(g, "teacher");
+  Object.assign(c, { x: c.min, dir: -1, state: "alert", timer: 0, turning: 0 });
+  place(g, c.min - M.GUARD.w / 2 - M.GUARD.spearReach - 60, c.floor); // just beyond the spear from the bound
+  ticks(g, seconds(1.5));
+  assert.equal(events(g, "windup").length, 0, "no endless wind-ups 10 px short");
+  assert.ok(["search", "calm"].includes(c.state) && c.dir === 1, `it turned back (${c.state})`);
 });
 test("mid-air swap: a green jump keeps white's unspent air jump; a spent one never refreshes", () => {
   const g = noCards(fresh("1-3"));
@@ -747,7 +897,7 @@ test("red smash: stones break only to a red dash, which refunds it; a red dash k
   }
   const r = setup("red");
   ticks(r, 1, { dash: true, right: true });
-  ticks(r, seconds(0.3), { right: true });
+  ticks(r, seconds(0.6), { right: true });
   assert.equal(stone(r).broken, true);
   assert.equal(r.smashes, 1);
   assert.equal(r.player.dashCharge, 1);

@@ -94,19 +94,19 @@ test("full mastery of World 1 = 18/18 stickers, all three world medals", () => {
   const medals = C.worldMedals(save);
   assert.equal(medals.fullFace, true);
   assert.equal(medals.quickGetaway, true, "the mastery escape beats the par");
-  // 1-5 mastery is spotted once, so Ghost needs its baseline too.
-  assert.equal(medals.ghost, false);
-  save = clearWith(save, "1-5");
-  assert.equal(C.worldMedals(save).ghost, true, "Unseen on every level with awake cards");
+  assert.equal(medals.ghost, true, "every mastery route on a stealth level is unseen");
+  // A spotted clear never takes a stamp back; a fresh save needs all three.
+  const partial = clearWith(clearWith(C.newSave(), "1-3"), "1-5");
+  assert.equal(C.worldMedals(partial).ghost, false, "1-6 not yet unseen");
 });
-test("stamps: Unseen only where cards can see (1-3 on); Quick only on 1-6; best time only improves", () => {
+test("stamps: Unseen only on the stealth levels (1-3, 1-5, 1-6); Quick only on 1-6; best time only improves", () => {
   assert.deepEqual(
     C.WORLD1.map((id) => C.levelStamps(id)),
     [
       { unseen: false, quick: false },
       { unseen: false, quick: false },
       { unseen: true, quick: false },
-      { unseen: true, quick: false },
+      { unseen: false, quick: false },
       { unseen: true, quick: false },
       { unseen: true, quick: true },
     ],

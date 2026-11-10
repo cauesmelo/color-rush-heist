@@ -388,7 +388,7 @@ function planGround(g, M, bot, outcome) {
     if (bot.persona.id === "first") break;
   }
   if (bot.persona.id !== "first") worked.sort((a, b) => b.w.hi - b.w.lo - (a.w.hi - a.w.lo) || worked.indexOf(a) - worked.indexOf(b));
-  if (process.env.PDEBUG) console.error(`[plan t=${bot.tick}] x=${Math.round(cx)} target=${Math.round(target)} k ${kMin}..${kMax} worked=${JSON.stringify(worked.map(({ family, w }) => [Object.keys(family).join("+"), w.lo, w.hi]))}`);
+  if (typeof process !== "undefined" && process.env?.PDEBUG) console.error(`[plan t=${bot.tick}] x=${Math.round(cx)} target=${Math.round(target)} k ${kMin}..${kMax} worked=${JSON.stringify(worked.map(({ family, w }) => [Object.keys(family).join("+"), w.lo, w.hi]))}`);
   for (const { family, w } of worked) {
     bot.log.plans++;
     const center = (w.lo + w.hi) / 2,

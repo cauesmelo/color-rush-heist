@@ -46,7 +46,7 @@ the build differs, this file says so.
   away]`). A card that has asked "?" is locked on: it sees Rubik in any colour in its
   cone or right before its face, and its body blocks him even in its own colour.
 
-## 1-1 Home Cliff — jump → double jump (120 columns)
+## 1-1 Home Cliff — jump → double jump (132 columns)
 
 Kit: white. No dash, no awake cards, no water before the midpoint.
 
@@ -55,9 +55,15 @@ Kit: white. No dash, no awake cards, no water before the midpoint.
 | 0–33 | Introduce | The old home cliff (row 12) and first steps: 2-tile drop, 1-tile drop, a 1-tile step up, a 4-tile ditch only 2 deep with a walk-out step | CP start; ★1 on the ditch's arc |
 | 34–59 | Develop | 2-tile steps and dry 3-tile ditches; a one-way slab (51–54) level with the step beside it | ★2 above the slab: a held jump from it |
 | 60–95 | Twist | Flat dry run-up, then a 4-tile wall (71) and a second 4-tile step (77): a single jump (93 px) can't, a double jump can; "jump, jump" bubble after two short jumps and 2 s; 2-tile steps back down | CP mid (62) |
-| 96–119 | Conclude | The first water (4 tiles) with a bank 4 tiles up; the goal face (113); two stacked 4-tile slabs above the bank | ★3 on the top slab (two straight-up double jumps) |
+| 92–131 | Conclude | v1.0 (rescue round): the first water is a 2-tile puddle between level banks (102–103), then 2 tiles of water (110–111) and a 4-tile stump at the foot of the 4-tile bank (116): a plain jump lands on the stump or slides down the bank's face onto it, and the double jump tops the bank from the stump or straight from the edge. The goal face (125); two stacked 4-tile slabs above the bank | CP pool (93, 9 tiles before the puddle); ★3 on the top slab (two straight-up double jumps) |
 
 Hints: ◀▶ after 4 s idle; "jump, jump". No cards at all: 1-1 is only about the body.
+
+Why the conclude changed (v1.0): the old 4-tile water with a 4-tile bank came right
+after the double jump was learned, 34 columns from the checkpoint. A first-timer's first
+try at a new obstacle is a plain jump, so the first-timer proxy (`tests/human-proxy.mjs`)
+died there: median 1, p90 4 deaths, 5 of 24 runs with 3+ deaths on the spot. With the
+puddle, the stump and the "pool" checkpoint: 0 deaths (median and p90), 17.5 s.
 The goal stands before the end wall: passing above it from the slabs only drops Rubik
 behind it, a 2-tile step from the face.
 
@@ -178,7 +184,7 @@ that passes. Only the ordinary inputs are recorded; tests replay them from scrat
 
 | Level | Baseline | Mastery |
 | --- | --- | --- |
-| 1-1 | 11.5 s, ★1 | 15.7 s, 3/3 |
+| 1-1 | 12.6 s, ★1 | 18.0 s, 3/3 |
 | 1-2 | 21.3 s, ★1, GREEN GET (unseen, though 1-2 awards no stamp) | 30.9 s, 3/3 |
 | 1-3 | 32.0 s, ★1, Ghost (waits for each watcher's back) | 24.3 s, 3/3, Ghost (quick swaps, no waits) |
 | 1-4 | 16.5 s, ★1, DASH GET (as green) | 17.0 s, 3/3 |

@@ -201,7 +201,7 @@ function autoAir(c, M, input, knows) {
 /** Step a copy with plan inputs until done(c, i) says stop. Plan entries are
  * relative ticks: {k: jump press, hold: ticks held, air: "apex"|ticks after
  * takeoff, dash: "apex"|ticks after takeoff|"now"}. */
-function simulate(g, M, plan, { frozen = true, horizon = 300, dir = dirOf(g), done }) {
+export function simulate(g, M, plan, { frozen = true, horizon = 300, dir = dirOf(g), done }) {
   const c = copy(g, frozen);
   const move = plan.stop ? {} : dir > 0 ? { right: true } : { left: true };
   let takeoff = -1,
@@ -279,7 +279,7 @@ function probeWalk(g, M, horizon = 140) {
 }
 
 /** Success: alive, standing, and past `target` (progress), within the horizon. */
-const reaches = (target, extra = () => true) => (c) => {
+export const reaches = (target, extra = () => true) => (c) => {
   if (c.phase === "dead") return false;
   if (c.phase === "won") return true;
   // A stomp past the start is progress too (a chain of backs over water).
@@ -362,9 +362,21 @@ function planGround(g, M, bot, outcome) {
     naive = bot.persona.id === "first" && !(bot.deathsAt[bin] > 0) && !(bot.deathsAt[bin + dir] > 0) && !((bot.triesAt[bin] || 0) >= 2);
   if (outcome.kind !== "death") bot.triesAt[bin] = (bot.triesAt[bin] || 0) + 1;
   const families = candidatePlans(g, bot).filter((f) => !naive || (f.air == null && f.dash == null && !f.auto && !f.noJump));
+  // Calibration (levels round): the first working technique won, however thin
+  // its window (a 3-tick one at 1-4's orb gap), and an expert aiming at it with
+  // 30 ms of noise missed it again and again. The casual and the expert choose
+  // the technique with the widest margin; the first-timer still tries the
+  // simplest first.
+  const worked = [];
   for (const family of families) {
     const w = window(g, M, family, target, kMin, kMax, 3, 260);
     if (!w) continue;
+    worked.push({ family, w });
+    if (bot.persona.id === "first") break;
+  }
+  if (bot.persona.id !== "first") worked.sort((a, b) => b.w.hi - b.w.lo - (a.w.hi - a.w.lo) || worked.indexOf(a) - worked.indexOf(b));
+  if (process.env.PDEBUG) console.error(`[plan t=${bot.tick}] x=${Math.round(cx)} target=${Math.round(target)} k ${kMin}..${kMax} worked=${JSON.stringify(worked.map(({ family, w }) => [Object.keys(family).join("+"), w.lo, w.hi]))}`);
+  for (const { family, w } of worked) {
     bot.log.plans++;
     const center = (w.lo + w.hi) / 2,
       press = bot.tick + center + noise(bot);
@@ -442,7 +454,7 @@ function planAir(g, M, bot) {
   for (const kind of options) {
     const ok = [];
     const knows = { air: bot.knows.has("air"), dash: g.dashUnlocked && bot.knows.has("dash") };
-    for (let a = 0; a <= 72; a += 3) ok.push(simulateFromAir(g, M, kind, a, knows) ? a : null);
+    for (let a = 0; a <= 72; a += 3) ok.push(simulateFromAir(g, M, kind, a, knows, bot.hopAt !== undefined && bot.tick - bot.hopAt < 120) ? a : null);
     let best = null,
       run = null;
     for (const a of ok) {
@@ -476,7 +488,7 @@ function steerInput(c, steer) {
 }
 
 /** An air jump or dash `a` ticks from now: does Rubik land alive and further on? */
-function simulateFromAir(g, M, kind, a, knows) {
+function simulateFromAir(g, M, kind, a, knows, strict = false) {
   const c = copy(g, true),
     dir = dirOf(g),
     move = dir > 0 ? { right: true } : { left: true },
@@ -500,7 +512,7 @@ function simulateFromAir(g, M, kind, a, knows) {
       // the middle of a bounce that landed at a 7-tile wall's FOOT, so the
       // earliest window in the list won and a bounce never topped a wall. A
       // person presses the air jump when he sees the arc will not top the edge.
-      return probeWalk(c, M, 40).kind !== "stall";
+      return !strict || probeWalk(c, M, 40).kind !== "stall";
     }
   }
   return false;
@@ -829,8 +841,23 @@ export function decide(g, M, bot) {
       }
     }
   }
+  // A ground plan that trusted his in-air habits (orb -> dash -> orb, bounce ->
+  // held bounce -> stomp) must also play them: before this, only the planning
+  // sim did, so the real run took off with the plan and then pressed nothing.
+  let habit = null;
+  if (grounded) {
+    bot.intent = null;
+    g.autoState = undefined;
+  } else if (bot.intent?.auto && bot.tick - bot.takeoffAt > 2) {
+    habit = {};
+    autoAir(g, M, habit, bot.intent.auto);
+    if (habit.left || habit.right) moveDir = habit.right ? 1 : -1;
+    if (moveDir > 0) (want.right = true), (want.left = false);
+    if (moveDir < 0) (want.left = true), (want.right = false);
+    if (moveDir === 0) (want.left = false), (want.right = false);
+  }
   // Air planning: every 50 ms while airborne and nothing queued.
-  if (!grounded && !bot.plan.some((x) => x.type === "jump" || x.type === "dash") && bot.tick - bot.airPlanAt >= 6) {
+  if (!grounded && !bot.intent?.auto && !bot.plan.some((x) => x.type === "jump" || x.type === "dash") && bot.tick - bot.airPlanAt >= 6) {
     bot.airPlanAt = bot.tick;
     planAir(g, M, bot);
   }
@@ -859,6 +886,11 @@ export function decide(g, M, bot) {
     if (a.type === "jump") want.jump = true;
     if (a.type === "release") want.jump = false;
     if (a.type === "dash") want.dash = true;
+  }
+  if (habit) {
+    if (habit.jump) want.jump = true;
+    if (habit.jumpReleased) want.jump = false;
+    if (habit.dash) want.dash = true;
   }
   bot.jumpHeld = want.jump;
   return want;

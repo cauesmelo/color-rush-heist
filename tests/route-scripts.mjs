@@ -94,8 +94,11 @@ export const SCRIPTS = {
       pl.check(Math.abs(pl.feet - tx(12)) < 1, "slab");
       jumpAt(pl, tx(24) + 8).land(); // onto the canopy roof (2 up)
       pl.color("green").to(tx(47));
-      pl.stop().wait(0.12).right().press({ color: "white", jump: true }).airJump().land();
-      pl.check(pl.g.stickers[1].collected, "roof sticker");
+      pl.stop().wait(0.12).right().press({ color: "white", jump: true }).airJump();
+      // The jump flies on off the roof's end onto the wall top, where the
+      // lookout patrols: green right after the sticker, long before its view
+      // (once a card has shown "?", a swap in its cone no longer fools it).
+      pl.until((p) => p.g.stickers[1].collected, pl.dir, 240, "roof sticker").color("green").land();
       // Off the roof's end: the drop carries onto the 4-tile wall's top (its lip
       // is caught), so the white climb is only needed when it falls short.
       pl.color("green").to(tx(61) + 8).land();
@@ -106,7 +109,18 @@ export const SCRIPTS = {
       }
       pl.check(Math.abs(pl.feet - tx(12)) < 1 && pl.p.color === "green", "on the wall, green");
       pl.to(tx(84)).land();
-      pl.to(tx(95) + 24).press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
+      // The white climb up the 4-tile step lands in the alcove card's view:
+      // time it (the first wait that stays unseen is kept).
+      const unseen = pl.g.spotted;
+      pl.choose(
+        [0, 0.4, 0.8, 1.2, 1.6, 2, 2.4, 2.8, 3.2].map((w) => (f) => {
+          f.to(tx(95)).stop().wait(w).right().to(tx(95) + 24);
+          f.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
+          f.wait(0.8, {});
+        }),
+        (f) => f.g.spotted === unseen && Math.abs(f.feet - tx(12)) < 1,
+        "alcove climb",
+      );
       // Sticker 3: green jump up through the alcove card, white air jump at the apex.
       pl.to(tx(103) + 8).stop().wait(0.1).jump().apex().press({ color: "white", jump: true }).land();
       pl.check(pl.g.stickers[2].collected, "alcove sticker");

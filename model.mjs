@@ -268,6 +268,10 @@ function makeGuard(spec) {
     sees: false,
     lungeTarget: spec.x,
     stuck: 0, // s spent at a patrol bound with Rubik out of the spear's reach
+    // Locked on: once a card has shown "?" at Rubik, it keeps seeing him in
+    // its cone whatever colour he swaps to (it watched him change), until he
+    // leaves the cone. No more swapping to its colour right under its nose.
+    locked: false,
     sideX: 0, // world side (-1 left, 1 right) Rubik was last on, clear of its head
     squash: 0, // presentation: s left of the stomp squash
     anim: 0,
@@ -374,8 +378,8 @@ function saveCheckpoint(g, index) {
     // is restored calm where it stood, so a respawn is never an instant alert.
     guards: g.guards.map((guard) =>
       ["drained", "stunned", "calm", "away"].includes(guard.state)
-        ? guard
-        : { ...guard, state: "calm", sight: 0, lost: 0, timer: 0 },
+        ? { ...guard, locked: false }
+        : { ...guard, state: "calm", sight: 0, lost: 0, timer: 0, locked: false },
     ),
     stones: g.stones,
     orbs: g.orbs.map((orb) => ({ ...orb, respawn: 0 })),
@@ -713,6 +717,7 @@ function updateGuard(g, guard, dt) {
   guard.reach = coneReach(g, guard);
   if (guard.state === "stunned") {
     guard.sees = false;
+    guard.locked = false;
     guard.timer -= dt;
     if (guard.timer <= 0) {
       guard.state = "search";
@@ -728,26 +733,34 @@ function updateGuard(g, guard, dt) {
     return;
   }
   const playerBox = { x: p.x, y: p.y, w: p.w, h: p.h },
-    sees = g.phase === "playing" && canSee(guard, p.color) && boxInCone(guard, playerBox, guard.reach),
+    inCone = g.phase === "playing" && boxInCone(guard, playerBox, guard.reach);
+  // Leaving the cone breaks a lock; inside it, a locked card sees any colour.
+  if (!inCone || guard.state === "calm") guard.locked = false;
+  const sees = inCone && (canSee(guard, p.color) || guard.locked),
     dx = p.x + p.w / 2 - guard.x;
   guard.sees = sees;
   // Presentation hint: a cone sweeping over a disguised Rubik makes the card
   // hum ("♪") instead of reacting, so the disguise is visibly working.
-  guard.disguiseSeen = g.phase === "playing" && !canSee(guard, p.color) && boxInCone(guard, playerBox, guard.reach);
+  guard.disguiseSeen = inCone && !sees;
   const clampX = () => {
     guard.x = Math.max(guard.min, Math.min(guard.max, guard.x));
   };
   switch (guard.state) {
     case "calm": {
+      // "green card + X" (1-3, the trade-off level): white Rubik is in, or
+      // one step from, a green card's cone. Taught BEFORE the "?", because
+      // once a card has asked, a swap in its view no longer fools it.
+      if (guard.kind === "green" && p.color === "white" && g.unlocked.green && levelHint(g, "green") && g.hints.green === "pending" && g.phase === "playing") {
+        const near = { x: playerBox.x - 64, y: playerBox.y, w: playerBox.w + 128, h: playerBox.h };
+        if (boxInCone(guard, near, guard.reach)) showHint(g, "green");
+      }
       if (sees) {
         guard.sight += dt;
         if (guard.sight >= (g.stolen ? GUARD.escapeSuspect : GUARD.suspectAfter)) {
           guard.state = "suspect";
+          guard.locked = true;
           guard.lost = 0;
           event(g, "suspect", guard.x, guard.floor - GUARD.h, { guard: guard.id });
-          // "green card + X": the first "?" from a green card while white, in
-          // the level that teaches the trade-off (1-3).
-          if (guard.kind === "green" && p.color === "white" && g.unlocked.green && levelHint(g, "green") && g.hints.green === "pending") showHint(g, "green");
         }
         break;
       }

@@ -1792,7 +1792,8 @@ function drawCone(guard) {
   // Only active threats get a clear cone: dozing cards show none, and a card
   // that can't see Rubik's current color shows only a faint one.
   if (["stunned", "drained", "asleep", "away"].includes(guard.state)) return;
-  const asleep = !M.canSee(guard, game.player.color),
+  // A card locked on after its "?" keeps a lit cone through any swap.
+  const asleep = !M.canSee(guard, game.player.color) && !guard.locked,
     reach = guard.reach,
     tip = guard.x + guard.dir * M.CONE.offset;
   if (reach <= 0) return;

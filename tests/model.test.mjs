@@ -1001,11 +1001,25 @@ test('awareness: "?" after 0.25 s, "!" at 0.6 s, calm again after losing sight',
   ticks(g, seconds(0.36));
   assert.equal(c.state, "alert");
   assert.equal(g.spotted, 1);
+  // It watched him: a swap to its colour inside its cone doesn't fool it
+  // (locked on until he leaves the cone)...
   M.switchColor(g, "green");
-  ticks(g, seconds(1.05));
-  assert.equal(c.state, "search");
-  ticks(g, seconds(1.05));
-  assert.equal(c.state, "calm");
+  ticks(g, seconds(0.2));
+  assert.ok(c.locked && c.sees && c.state !== "search", `still on him after the swap (${c.state})`);
+  // ...stepping out of the cone breaks the lock; then the disguise works.
+  const e = fresh("1-5"),
+    f = only(e, "teacher");
+  Object.assign(f, { x: 900, dir: -1, state: "calm", turning: 0 });
+  place(e, 700, f.floor);
+  ticks(e, seconds(0.7));
+  assert.equal(f.state, "alert");
+  place(e, 1000, f.floor, { color: "green" }); // behind it, green
+  ticks(e, 1);
+  assert.equal(f.locked, false);
+  ticks(e, seconds(1.05));
+  assert.equal(f.state, "search");
+  ticks(e, seconds(1.05));
+  assert.equal(f.state, "calm");
   // A "?" that loses sight before 0.6 s calms down without spotting.
   const q = fresh("1-5"),
     d = only(q, "teacher");

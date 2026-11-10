@@ -2,6 +2,16 @@
 
 Player-facing changes in Color Rush Heist. Versions follow `package.json`; the title screen shows the release as `v1.0`.
 
+## [Unreleased]
+
+### Combat
+
+- **Three hearts.** A spear strike, a card's body and a fall into water each cost one. A hit freezes the world for a beat, knocks Rubik back and makes him blink for 1.5 seconds. A new checkpoint refills every heart; losing the last one sends you back to the checkpoint as before.
+- **Water is cheaper:** a fall costs a heart and hops Rubik back onto the last safe ground. The third fall is a real death.
+- **Cards fight:** every card chases (walkers), holds its post (sentinels) or charges (the red enforcer). Each attack has a clear wind-up with the swept ground drawn on the floor, a short strike, and an open recovery. A card that cannot reach you gives up instead of staring.
+- **The head stomp works from any side** and defeats a card with a poof. The armoured red card is dazed first (a visible ring) and needs a second stomp or a red dash. Gate cards that are the way over a wall flatten and stay as springboards.
+- **Stomp chains:** each chained stomp bounces a little higher and sounds a little higher; the third pays a heart. 1-2 has a new Chain stamp for the island chain.
+
 ## [1.0.0] - 2026-11-10
 
 The first release of Color Rush Heist, a browser remake of the jam game *Color Theft Story* (minigamejam 22, by Vitor Farias and @cauesmelo). Every picture is Vitor Farias's original art.

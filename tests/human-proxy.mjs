@@ -569,10 +569,11 @@ function planSpringboard(g, M, bot, target, onlyId = null, maxWait = 3.5 * 120) 
   const cx = cxOf(g),
     feet = feetOf(g);
   // Discovery (levels round): a first-timer thinks of a card as the way over a
-  // wall only if it stands within 5 tiles of where he is stuck (real keys, 1-2:
-  // he hopped at a 7-tile wall for a minute with a flat pad 8 tiles behind him);
-  // the casual looks about 10 tiles, the expert 14.
-  const reach = { first: 5, casual: 10, expert: 14 }[bot.persona.id] * T;
+  // wall only if it stands right at the wall (within 2.5 tiles of where he is
+  // stuck). Real keys on the old 1-2: he hopped at a 7-tile wall for minutes
+  // with the flat pad 3-5 tiles behind him, so a larger radius reproduced a
+  // success nobody saw; the casual looks about 10 tiles, the expert 14.
+  const reach = { first: 2.5, casual: 10, expert: 14 }[bot.persona.id] * T;
   const cards = g.guards.filter((c) => (!onlyId || c.id === onlyId) && bouncy(c) && Math.abs(c.floor - feet) < 40 && Math.abs(c.x - cx) < reach).sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx));
   for (const card of cards.slice(0, 2)) {
     // He may first wait (standing still) for the card to turn its back.
@@ -836,13 +837,14 @@ export function decide(g, M, bot) {
   // The first-timer mashes in the air against a wall too, once he sees he
   // is stuck on it (reaction time after the takeoff) and nothing is planned.
   const planned = bot.airPlanned || bot.plan.some((x) => x.type === "jump");
-  // Calibration (levels round): the mash press came a FIXED reaction time after
-  // the takeoff, so a bounce at a wall always got its air jump at the same
-  // early moment and never topped it. A person mashing presses at scattered
-  // moments: each airtime draws its own delay (0.1-0.55 s after the takeoff or
-  // the bounce), so the apex is hit now and then.
+  // Calibration (levels round): a plain jump keeps the learned double-jump
+  // rhythm (a reaction time after the takeoff: 1-1 teaches "jump, jump"). After
+  // a BOUNCE the same fixed delay counted from the old takeoff and fired the
+  // air jump at once, so a bounce at a wall never topped it. A person mashing
+  // there presses at scattered moments: each bounce draws its own delay
+  // (0.1-0.55 s after it), so the apex is hit now and then.
   if (!grounded && bot.persona.mash && bot.mashRoll === undefined) bot.mashRoll = 0.1 + bot.r() * 0.45;
-  if (!grounded && bot.persona.mash && !planned && bot.tick >= bot.mashNext && bot.tick - Math.max(bot.takeoffAt, bot.hopAt ?? -1e9) > (bot.mashRoll ?? 0.3) * 120 && p.vx === 0 && !p.airJumped && p.color === "white") {
+  if (!grounded && bot.persona.mash && !planned && bot.tick >= bot.mashNext && bot.tick - Math.max(bot.takeoffAt, bot.hopAt ?? -1e9) > ((bot.hopAt ?? -1e9) > bot.takeoffAt ? bot.mashRoll ?? 0.3 : bot.react) * 120 && p.vx === 0 && !p.airJumped && p.color === "white") {
     const front = Math.floor((cxOf(g) + dir * (p.w / 2 + 4)) / T);
     if (wallHeight(g, M, front, feetOf(g)) > 0) {
       schedule(bot, bot.tick, "release");

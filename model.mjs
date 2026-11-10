@@ -87,6 +87,13 @@ export const WORLD = Object.freeze({
   storm: 0.18, // transformation animation (rubik_storm.png)
   respawnDelay: 0.45,
   respawnGrace: 0.75,
+  // A direction held through a death waits this long after the respawn, then
+  // counts as if pressed: Rubik lands and the camera settles before he runs,
+  // but a player who simply keeps holding right is never ignored. (It used to
+  // wait for a release: a first-time player holding right through the death
+  // saw a frozen Rubik and thought the game was broken.) Released and pressed
+  // again it counts at once. Every checkpoint has runway for it (tested).
+  respawnHold: 0.2,
   bumpGrace: 0.6,
   // After a respawn (and after the theft's cards) every card holds still: a
   // respawn is never an instant alert, and the REVERSE cards never cover a charge.
@@ -255,9 +262,10 @@ function makePlayer(x, floor, color, direction) {
     carry: 0, // 1 while a dash-jump's extra speed is bleeding off
     corner: 0, // lip rest: side of the lip (-1 left, 1 right) the box sits on, feet over the air
     bounce: 0, // s left in which a jump press turns a short stomp hop into the high bounce
-    // Keys held through a death are ignored after the respawn until they are
-    // let go and pressed again (no run straight back into the water).
+    // Keys held through a death wait WORLD.respawnHold after the respawn
+    // (holdLock counts it down), or until let go and pressed again.
     heldLock: { left: false, right: false },
+    holdLock: 0,
     knock: 0,
     bumpGrace: 0,
     grace: WORLD.respawnGrace,
@@ -425,11 +433,16 @@ export function respawn(g) {
     cp = g.level.checkpoints[g.checkpointIndex];
   for (const key of RESTORED) g[key] = s[key];
   g.player = makePlayer(cp.x - PLAYER.w / 2, cp.floor, s.color, g.stolen ? -1 : cp.dir ?? 1);
-  // A direction held continuously since the death stays locked until it is
-  // let go (no running straight back off the ledge); one released and pressed
-  // again during the hop counts at once. No input is lost: a jump pressed in
-  // the hop's last moments fires on arrival.
-  g.player.heldLock = { ...(g.deathHeld || { left: true, right: true }) };
+  // A direction held continuously since the death waits WORLD.respawnHold
+  // (0.2 s), then moves Rubik as if pressed; one released and pressed again
+  // during the hop counts at once. A retry (R) while alive locks nothing: the
+  // player chose it. No input is lost: a jump pressed in the hop's last
+  // moments fires on arrival.
+  if (g.deathHeld) {
+    g.player.heldLock = { ...g.deathHeld };
+    g.player.holdLock = WORLD.respawnHold;
+  }
+  g.deathHeld = null;
   if (g.deadJump > 0) g.player.jumpBuffer = g.deadJump;
   g.deadJump = 0;
   g.calm = g.stolen ? WORLD.respawnCalm + 0.5 : WORLD.respawnCalm;
@@ -1340,7 +1353,8 @@ export function update(g, dt, input = {}) {
   p.landed = tick(p.landed, dt);
   if (!p.grounded) p.coyote = tick(p.coyote, dt);
   if (input.color) switchColor(g, input.color);
-  for (const key of ["left", "right"]) if (!input[key]) p.heldLock[key] = false;
+  p.holdLock = tick(p.holdLock, dt);
+  for (const key of ["left", "right"]) if (!input[key] || p.holdLock <= 0) p.heldLock[key] = false;
   const right = !!input.right && !p.heldLock.right,
     left = !!input.left && !p.heldLock.left,
     axis = p.knock > 0 ? 0 : Number(right) - Number(left);

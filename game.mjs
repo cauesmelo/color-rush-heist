@@ -270,7 +270,8 @@ let colorAmount = 0;
  * rate. Rules (tests/movement-audit.test.mjs, A3): a direction held is held
  * whenever play is live (also through a pause and into a level); presses only
  * count when made in play, on the level card or on the comic skip; after a
- * death the model locks directions held since the death until released. */
+ * death a direction held since the death waits the model's 0.2 s landing
+ * beat (WORLD.respawnHold), then moves Rubik. */
 const keysDown = new Set();
 const held = new Set();
 const pulses = { jump: false, jumpReleased: false, dash: false, color: undefined };

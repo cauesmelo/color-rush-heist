@@ -193,7 +193,7 @@ same at 30, 60, 120 or 240 Hz and through frame hitches.
 | Dash | horizontal only (left/right/facing), 850 px/s × 0.17 s = 145 px, gravity-free, one in the air, 4-tick freeze-frame | horizontal keeps the gap rules exact and readable |
 | Dash-jump | jump during a ground dash keeps 560 px/s, bleeding to run speed at 900 px/s² | player expression; never required |
 | Stomp | hold jump (or press it as you land: 0.12 s before, in the 0.08 s freeze or 0.05 s after) for the high bounce (195 px over the card's floor), else a hop (~150) | bounce-height variety; a freeze press never spends the air jump |
-| Respawn | 0.45 s hop; keys held since the death stay locked until released; a jump pressed in its last 0.12 s fires | no running straight back into the water, no lost input |
+| Respawn | 0.45 s hop; a direction held since the death waits a 0.2 s landing beat, then runs (released and pressed again: at once); a jump pressed in its last 0.12 s fires; every checkpoint has 0.8 s of runway both ways | a player who keeps holding right is never ignored (it used to stay locked until released and looked frozen), no lost input |
 | Pause | a direction held through a pause applies on resume; presses in the menu never reach Rubik | no lost or phantom input |
 | Hitbox | Rubik 40×52 inside his 56×60 drawn art, feet on the ground line; card body 48×84 (8 px inside the drawn card); spear band = the drawn spear head (green 50–68, red 46–64 px up) | tested against the PNG alpha and the canvas |
 

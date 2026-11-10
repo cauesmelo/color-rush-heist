@@ -155,6 +155,41 @@ const fromMap = await state();
 await page.keyboard.up("ArrowRight");
 check("A3 QA start is clean (nothing held carries into startLevel)", Math.abs(fromMap.player.x - 184) < 30, fromMap.player.x);
 
+// A3 death: right held (a real key) through a fall into 1-1's first water,
+// the death hop and the respawn moves Rubik again within the 0.2 s landing
+// beat plus a few frames (it used to stay locked until released: the rescue
+// round's "I can't pass the first level"). Only the start position is set
+// through the model; the key is never released.
+await start("1-1");
+await page.evaluate(() => {
+  const g = window.__game.model,
+    water = g.level.map[20].indexOf("~");
+  for (const c of g.guards) c.state = "away";
+  // Over the first water, falling: the death is on its way.
+  Object.assign(g.player, { x: water * 32 + 40, y: 16 * 32, vx: 0, vy: 300, grounded: false, grace: 0 });
+});
+await page.keyboard.down("ArrowRight");
+const deathRun = await page.evaluate(
+  () =>
+    new Promise((resolve) => {
+      const g = window.__game;
+      let respawnAt = null,
+        x0 = null,
+        t0 = performance.now();
+      const poll = () => {
+        const s = g.getState(),
+          now = performance.now();
+        if (respawnAt === null && s.respawns > 0) (respawnAt = now), (x0 = s.player.x);
+        if (respawnAt !== null && s.player.x > x0 + 8) return resolve({ movedAfterMs: Math.round(now - respawnAt), deaths: s.deaths });
+        if (now - t0 > 4000) return resolve({ movedAfterMs: null, deaths: s.deaths, respawns: s.respawns, x: s.player.x, x0 });
+        requestAnimationFrame(poll);
+      };
+      poll();
+    }),
+);
+await page.keyboard.up("ArrowRight");
+check("A3 right held through a death moves again <= 0.3 s after the respawn", deathRun.deaths === 1 && deathRun.movedAfterMs !== null && deathRun.movedAfterMs <= 300, deathRun);
+
 // C1 on the canvas itself: Rubik drawn standing at two spots (the camera is
 // clamped at the level start), the frames diffed: his drawn feet and body
 // against the collider (feet support +-11 px, box 40 x 52).

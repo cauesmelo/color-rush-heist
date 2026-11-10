@@ -444,7 +444,9 @@ test("1-3: green can't climb the 4-tile wall (white can); cards only warn and pu
   assert.equal(events(g, "windup").length, 0);
   ticks(g, seconds(1));
   assert.equal(g.phase, "playing");
-  assert.equal(g.player.x + g.player.w / 2, g.level.checkpoints[0].x, "back at the checkpoint");
+  // (right is still held, so 0.2 s after the respawn he walks on: read the
+  // respawn itself)
+  assert.equal(events(g, "respawn")[0].x + M.PLAYER.w / 2, g.level.checkpoints[0].x, "back at the checkpoint");
 });
 test("1-3 caught: '?' is the warning, '!' sends Rubik back; leaving the cone in time breaks the lock", () => {
   const setup = () => {

@@ -194,7 +194,7 @@ test("A4: determinism - two runs of every route give a bit-identical trace", (t)
 });
 
 test("A3: presses at the edges - landing, respawn, freezes, stomps - are honoured or ignored by rule, never doubled", (t) => {
-  // Respawn: a direction held since the death stays locked until released;
+  // Respawn: a direction held since the death waits 0.2 s, then moves;
   // a jump pressed in the hop's last 0.12 s fires on arrival, an earlier one doesn't.
   const death = (pressAt) => {
     const g = noCards(fresh("1-1"));
@@ -212,12 +212,14 @@ test("A3: presses at the edges - landing, respawn, freezes, stomps - are honoure
   assert.equal(late.phase, "playing");
   assert.ok(late.player.vy < 0, "a jump pressed 8 ticks before the respawn fires on arrival");
   assert.ok(early.player.vy >= 0, "one pressed 30 ticks (0.25 s) before it does not");
+  // Right held through the death waits the 0.2 s landing beat, then runs
+  // (it used to stay locked until released: a player who kept holding right
+  // saw Rubik frozen at the checkpoint, tests/held-input.test.mjs).
   const x0 = late.player.x;
+  ticks(late, Math.round(W.respawnHold * 120) - 2, { right: true });
+  assert.ok(Math.abs(late.player.x - x0) < 4, "right, held through the death, waits the landing beat");
   ticks(late, 30, { right: true });
-  assert.ok(Math.abs(late.player.x - x0) < 4, "right, held through the death, is locked");
-  ticks(late, 1, {});
-  ticks(late, 30, { right: true });
-  assert.ok(late.player.x > x0 + 40, "released and pressed again: it moves");
+  assert.ok(late.player.x > x0 + 40, "then the held key moves him");
   // The 1.2 s GET card (1-4's DASH GET, caught in the air): a dash pressed at
   // its start is not replayed 1.2 s later; one pressed in its last 0.08 s
   // fires as the world resumes.

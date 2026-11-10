@@ -1185,8 +1185,11 @@ function handleEvents() {
         break;
       case "smash":
         cam.shake = reducedMotion ? 0 : 4;
-        for (let i = 0; i < 14; i++)
-          fx.particles.push({ x: e.x + (Math.random() - 0.5) * 50, y: e.y + (Math.random() - 0.5) * 50, vx: (Math.random() - 0.5) * 420 + p.dashDirection * 160, vy: -Math.random() * 360, life: 0.9, age: 0, gravity: 1400, size: 16, debris: [128 + (i % 2) * 8, 32 + (i % 4 < 2 ? 0 : 8)] });
+        // Flying rock debris is motion too: under reduced motion the stone
+        // just goes (the smash sound and the open gap carry the cue).
+        if (!reducedMotion)
+          for (let i = 0; i < 14; i++)
+            fx.particles.push({ x: e.x + (Math.random() - 0.5) * 50, y: e.y + (Math.random() - 0.5) * 50, vx: (Math.random() - 0.5) * 420 + p.dashDirection * 160, vy: -Math.random() * 360, life: 0.9, age: 0, gravity: 1400, size: 16, debris: [128 + (i % 2) * 8, 32 + (i % 4 < 2 ? 0 : 8)] });
         break;
       case "knock":
         burst(e.x, e.y, 12, "#ff7a5a", 200, 0.45);
@@ -3102,6 +3105,8 @@ function getState() {
     save: structuredClone(save),
     result: fx.result ? structuredClone(fx.result) : null,
     camera: { x: cam.x, y: cam.y },
+    // What reduced motion removes (QA: all stay 0 / false under it).
+    effects: { shake: cam.shake, flash: fx.flash, particles: fx.particles.length, squash: !!fx.squash, iris: fx.iris },
     settings: { ...settings },
     motion: { reduced: reducedMotion, source: settings.reduceMotion === null ? "system" : "player" },
     audio: { musicDecoded: !!track.buffer, musicPlaying: !!track.source, musicRate: track.rate, context: audio?.state ?? "none" },

@@ -490,7 +490,8 @@ function orbCrossing(pl, lip, floor, label) {
 /** Expert lines for the skill-gradient audit (tests/movement-audit.test.mjs,
  * D2). Not QA fixtures and not required to finish anything: the same goal by
  * optional technique. 1-4: a dash-jump off every lip (a ground dash with a
- * jump during it keeps 560 px/s) and the air dash at its apex; 1-6: the
+ * jump during it keeps 560 px/s) and the air dash at its apex; 1-5: no
+ * waiting on its red lookouts (perch to perch, then the high line); 1-6: the
  * guided heist, then home over the roof gates (jump + red dash through the
  * stacked gate, run the roof, dash the mid gate) instead of the corridor. */
 export const EXPERT = {
@@ -541,6 +542,33 @@ export const EXPERT = {
       (f) => f.g.phase === "won" && f.g.stomps === stomps,
       "island",
     );
+  },
+  // 1-5: no waiting on the two red lookouts - white double jump perch to
+  // perch over the enforcer's cone, then the high line of slabs above both
+  // crossing cones, a dash off its end onto the goal block.
+  "1-5"(pl) {
+    pl.right().color("green").to(tx(33) + 8);
+    pl.press({ color: "white", jump: true }).airJump().land();
+    jumpAt(pl, tx(36) + 8).land();
+    pl.color("green").to(tx(52) + 4);
+    pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
+    pl.jump();
+    pl.until((p) => p.p.grounded && p.feet > tx(15), (p) => (p.cx < tx(61) ? { right: true } : {}), 600, "down to the post");
+    pl.right().to(tx(62) + 16).stop().wait(0.15);
+    pl.jump().landAt(tx(65));
+    pl.jump().landAt(tx(67));
+    pl.check(Math.abs(pl.feet - tx(12)) < 1, "on the perch");
+    pl.color("white").right().to(tx(68) + 8).jump().airJump().landAt(tx(77) + 16);
+    pl.check(Math.abs(pl.feet - tx(12)) < 1, "far perch");
+    pl.right().to(tx(81) + 8).land();
+    pl.to(tx(82) + 4).jump().landAt(tx(85));
+    pl.check(Math.abs(pl.feet - tx(14)) < 1, "on the block");
+    pl.right().to(tx(86)).jump().airJump().landAt(tx(89) + 16);
+    pl.check(Math.abs(pl.feet - tx(10)) < 1, "high line");
+    jumpAt(pl, tx(91) + 8).land();
+    jumpAt(pl, tx(100) + 8).land();
+    pl.to(tx(109) + 4).jump().apex().dash().land();
+    pl.right().to(tx(120)).check(pl.g.phase === "won", "goal face");
   },
   "1-6"(pl) {
     heistInbound(pl);

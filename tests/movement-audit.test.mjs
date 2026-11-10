@@ -921,8 +921,8 @@ test("F: gap envelope after tuning - dash-required gaps still need the dash, whi
           for (let i = 0; i < 400 && g.phase === "playing"; i++) {
             const input = { right: true };
             if (jumped < 0 && 40 * T - cx(g) <= t0 * 2.75) (input.jump = true), (jumped = i);
-            if (jumped >= 0 && i === jumped + a) input.jump = true;
-            if (jumped >= 0 && i === jumped + d) input.dash = true;
+            if (jumped >= 0 && a !== null && i === jumped + a) input.jump = true;
+            if (jumped >= 0 && d !== null && i === jumped + d) input.dash = true;
             M.update(g, M.TICK, input);
             if (g.player.grounded && cx(g) > (40 + n) * T && Math.abs(feet(g) - 16 * T) < 1) return true;
           }
@@ -935,7 +935,10 @@ test("F: gap envelope after tuning - dash-required gaps still need the dash, whi
     return n;
   };
   const env = { greenJump: widest("green", false, false), greenJumpDash: widest("green", false, true), whiteDouble: widest("white", true, false), whiteDoubleDash: widest("white", true, true) };
-  report(t, "F gap envelope, water tiles bank to bank (same as before the tuning: 10 / 15 / 17 / 20)", env);
+  // Before this tuning (box support, 1.15x fall) the same sweep gave the same
+  // 10 / 15 / 17 / 20: the feet support and the coyote window measured from the
+  // feet keep the takeoff point, and the faster fall costs less than a tile.
+  report(t, "F gap envelope, water tiles bank to bank: green jump / green jump+dash / white double / white double+dash", env);
   assert.ok(env.greenJump < 12, "1-4's 12/14-tile gaps need the dash as green");
   assert.ok(env.greenJumpDash >= 14, "...and the dash crosses them");
   assert.ok(env.whiteDouble < 20, "the 20-tile twist gaps need the dash as white too");

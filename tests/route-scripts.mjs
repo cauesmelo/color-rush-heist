@@ -72,17 +72,15 @@ export const SCRIPTS = {
   },
   "1-3": {
     baseline(pl) {
-      // Green from the start: the glade patrol and the corridor cards hum.
+      // Green from the start: the glade patrol and the corridor card hum.
       pl.right().to(tx(38));
-      pl.jump().land(); // the 1-tile step between the patrols (sticker 1)
-      pl.to(tx(63) + 8);
-      // The 4-tile wall: white and jump on the same press, jump again, and
-      // green again before landing on top (the lookout patrols up there).
-      pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
-      pl.until((p) => p.feet <= tx(12) + 1 && p.p.grounded, { right: true }, 240, "on the wall");
+      pl.jump().land(); // the 1-tile step in the corridor (sticker 1)
+      // The 4-tile wall: wait below the lookout's cone for its back, then
+      // white and jump on the same press, jump again, green before landing.
+      watchedClimb(pl, "lookout", tx(63) + 8);
       pl.to(tx(84)).land();
-      // Patrol C hums as green Rubik walks through; white up the 4-tile step.
-      pl.to(tx(95) + 24).press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
+      // The step: the alcove card watches it the same way.
+      watchedClimb(pl, "alcove", tx(95) + 8);
       pillarFinale(pl);
     },
     mastery(pl) {
@@ -109,23 +107,14 @@ export const SCRIPTS = {
       }
       pl.check(Math.abs(pl.feet - tx(12)) < 1 && pl.p.color === "green", "on the wall, green");
       pl.to(tx(84)).land();
-      // The white climb up the 4-tile step lands in the alcove card's view:
-      // time it (the first wait that stays unseen is kept).
-      const unseen = pl.g.spotted;
-      pl.choose(
-        [0, 0.4, 0.8, 1.2, 1.6, 2, 2.4, 2.8, 3.2].map((w) => (f) => {
-          f.to(tx(95)).stop().wait(w).right().to(tx(95) + 24);
-          f.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
-          f.wait(0.8, {});
-        }),
-        (f) => f.g.spotted === unseen && Math.abs(f.feet - tx(12)) < 1,
-        "alcove climb",
-      );
+      // The expert's climb up the step: no wait, green 0.15 s after the air
+      // jump, under the 0.25 s the alcove card needs for its "?".
+      watchedClimb(pl, "alcove", tx(95) + 8, { quick: true });
       // Sticker 3: green jump up through the alcove card, white air jump at the apex.
       pl.to(tx(103) + 8).stop().wait(0.1).jump().apex().press({ color: "white", jump: true }).land();
       pl.check(pl.g.stickers[2].collected, "alcove sticker");
       pl.color("green").right();
-      pillarFinale(pl);
+      pillarFinale(pl, { quick: true });
     },
   },
   "1-4": {
@@ -146,15 +135,13 @@ export const SCRIPTS = {
       pl.settle().apex().dash();
       pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").landAt(tx(123) + 16);
       pl.check(Math.abs(pl.feet - tx(16)) < 1, "over the pillar gap");
-      // The chain: dash through orb A, the chain lookout's back, dash through
-      // orb B, dash again onto the island (the patrol is green, like Rubik).
-      pl.right().to(tx(125) + 26).jump().apex().dash();
-      pl.steerTo((p) => p.guard("chain").x - 6);
-      pl.check(pl.guard("chain").state === "stunned", "chain stomped");
-      pl.right().settle().apex().dash();
-      pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").dash();
-      pl.landAt(tx(147));
-      pl.right().to(tx(151)).check(pl.g.phase === "won", "goal face");
+      // The chain: wait on the bank for the turning card's back, jump + dash
+      // onto it, the held bounce (jump in the stomp's freeze) and a dash on
+      // its refill reach the island.
+      chainCard(pl);
+      pl.jump().settle().apex().dash();
+      pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").landAt(tx(155));
+      pl.right().to(tx(158)).check(pl.g.phase === "won", "goal face");
     },
     mastery(pl) {
       pl.right().to(tx(7) + 4).jump();
@@ -172,14 +159,14 @@ export const SCRIPTS = {
       pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").jump();
       pl.landAt(tx(123) + 16);
       pl.check(pl.g.stickers[1].collected, "second dash line");
-      // Sticker 3: the high line - jump, air jump, dash at its apex, the high
-      // orb refills, dash again, and fall straight onto the island.
-      pl.right().to(tx(125) + 20).jump().airJump().apex().dash();
-      pl.until((p) => p.p.dashCharge > 0 && p.p.dashTime <= 0, pl.dir, 120, "high orb").dash();
+      // Sticker 3: white onto the chain card's back (the jump is still held,
+      // so the bounce is the high one), the air jump at its peak, a dash.
+      chainCard(pl, "white");
+      pl.settle().apex().jump().apex().dash();
       pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash");
       pl.check(pl.g.stickers[2].collected, "high sticker");
-      pl.color("green").landAt(tx(147));
-      pl.right().to(tx(151)).check(pl.g.phase === "won", "goal face");
+      pl.color("green").landAt(tx(155));
+      pl.right().to(tx(158)).check(pl.g.phase === "won", "goal face");
     },
   },
   "1-5": {
@@ -430,12 +417,15 @@ function heistEscape(pl, { roof = false, alcove = false } = {}) {
 /** 1-2 introduce: from the cliff's edge, jump onto the slow pit card's back
  * while it walks away; the held bounce clears the far rim. */
 function stompIntoPit(pl) {
+  // Under the rock lip at the cliff's edge: no jump, so watch the card and
+  // walk off onto its back while it walks away; jump in the stomp's freeze
+  // for the high bounce, which clears the 6-tile far rim.
   pl.right().to(tx(12) + 4).stop();
   const card = (p) => p.guard("pit");
-  pl.until((p) => card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(17) && card(p).x < tx(19), {}, 1200, "pit card walking away");
-  pl.right().jump().steerTo((p) => card(p).x - 6);
+  pl.until((p) => card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(14) + 24 && card(p).x < tx(15) + 24, {}, 1500, "pit card walking away");
+  pl.right().until((p) => !p.p.grounded, { right: true }, 120, "off the edge").steerTo((p) => card(p).x - 6);
   pl.check(card(pl).state === "stunned", "pit card stomped");
-  pl.landAt(tx(29) + 16);
+  pl.jump().landAt(tx(29) + 16);
   pl.check(Math.abs(pl.feet - tx(12)) < 1, "far rim");
 }
 /** 1-2 develop: bounce from back to back along the island lookouts
@@ -482,29 +472,46 @@ function glowDrop(pl) {
   pl.settle().land();
   pl.right().to(tx(128)).check(pl.g.phase === "won", "goal face");
 }
-/** 1-3 finale: wait as green; when the card you stand by faces you (so the
- * hop goes out behind it), go white and double-jump, green again before
- * landing on the next pillar. */
-function pillarFinale(pl) {
-  const hop = (card, target) => {
-    pl.stop().color("green");
-    pl.until((p) => !card || (p.guard(card).dir === -1 && p.guard(card).turning <= 0 && p.guard(card).turnClock < 0.4), {}, 1200, `${card} faces back`);
-    pl.right().press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
-    pl.landAt(target);
-    pl.check(Math.abs(pl.feet - tx(12)) < 1, `landed by ${target}`);
-  };
-  // Land on a pillar's left edge (clear of its card), walk through the card
-  // as green to the right edge, hop from there.
-  const cross = (target) => pl.right().to(target).stop();
-  pl.right().to(tx(113) + 10);
-  hop(null, tx(126) + 4);
-  cross(tx(129) + 12);
-  hop("pillar-a", tx(142) + 4);
-  cross(tx(145) + 12);
-  hop("pillar-b", tx(158) + 8);
-  pl.right().to(tx(164)).check(pl.g.phase === "won", "goal face");
+/** 1-3: a watched 4-tile climb. Wait on the floor below the watcher's cone
+ * (`base`) until it has just turned away, then white + jump, the air jump,
+ * green again 0.15 s later, and land on top (green: it can't see him when it
+ * turns back). `quick` skips the wait: the expert's mid-air swap, under the
+ * 0.25 s a card needs for its "?". */
+function watchedClimb(pl, id, base, { quick = false } = {}) {
+  pl.right().to(base);
+  if (!quick) {
+    pl.stop();
+    const c = (p) => p.guard(id);
+    pl.until((p) => c(p).dir === 1 && c(p).turning <= 0 && c(p).turnClock < 0.3, {}, 1200, `${id} looks away`);
+    pl.right();
+  }
+  pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
+  pl.until((p) => p.p.grounded || p.g.phase === "won", { right: true }, 240, `${id} climb`);
+  pl.check(Math.abs(pl.feet - tx(12)) < 1 && pl.p.color === "green", `on top by ${id}, green`);
+}
+/** 1-3 finale: off the step into the pit, then three watched climbs, each
+ * card walked through in green, each pillar left by its far edge. */
+function pillarFinale(pl, opts = {}) {
+  pl.right().to(tx(114)).land(); // walk off the step: the pit is below every cone
+  watchedClimb(pl, "pillar-a", tx(124) + 8, opts);
+  pl.right().to(tx(132)).land();
+  watchedClimb(pl, "pillar-b", tx(142) + 8, opts);
+  pl.right().to(tx(150)).land();
+  watchedClimb(pl, "platform", tx(160) + 8, opts);
+  pl.right().to(tx(173)).check(pl.g.phase === "won", "goal face");
 }
 
+/** 1-4 conclude: on the late bank, wait until the chain card has just turned
+ * to face the island, then jump + dash onto its back (stunned on return). */
+function chainCard(pl, color = null) {
+  if (color) pl.color(color);
+  const c = (p) => p.guard("chain");
+  pl.right().to(tx(124)).stop();
+  pl.until((p) => c(p).dir === 1 && c(p).turning <= 0 && c(p).turnClock < 0.3, {}, 1200, "chain card faces away");
+  pl.right().to(tx(125) + 26).jump().apex().dash();
+  pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").steerTo((p) => c(p).x - 6);
+  pl.check(c(pl).state === "stunned", "chain card stomped");
+}
 /** 1-4: jump at the lip, dash at the apex, land on the far bank (floor y). */
 function jumpDash(pl, lip, floor, label) {
   pl.right().to(lip).jump().apex().dash();
@@ -568,18 +575,38 @@ export const EXPERT = {
     pl.check(pl.guard("pillar").state === "stunned", "pillar stomped");
     pl.settle().apex().dash();
     dashEnd().landAt(tx(123) + 16);
-    pl.right().to(tx(125) + 26).jump().apex().dash();
-    pl.steerTo((p) => p.guard("chain").x - 6);
-    pl.check(pl.guard("chain").state === "stunned", "chain stomped");
-    pl.right().settle().apex().dash();
-    dashEnd().dash();
-    // Onto the island beside its patrol, not on its head (a bounce costs ~1 s).
-    const stomps = pl.g.stomps;
-    pl.choose(
-      [150, 151, 149, 148, 147, 146, 145].map((target) => (f) => f.landAt(tx(target)).right().to(tx(151))),
-      (f) => f.g.phase === "won" && f.g.stomps === stomps,
-      "island",
-    );
+    // The chain card, without the guided wait: if it faces the island, a
+    // dash-jump onto its back; if it faces the bank (spear up), white flies
+    // over it, turns back and drops onto its back from the island side,
+    // then the bounce, the refreshed air jump and the refilled dash reach
+    // the island. The first line that lands is kept (waiting only if both fail).
+    const c = (p) => p.guard("chain");
+    const direct = (f) => {
+      f.right();
+      f.check(c(f).dir === 1 && c(f).turning <= 0, "faces away");
+      f.to(tx(124));
+      f.until((p) => p.p.dashCooldown <= 0 && p.p.grounded && p.g.hitstop <= 0, f.dir, 60, "cooldown").dash();
+      f.wait(0.06).jump().apex().dash();
+      f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash end").steerTo((p) => c(p).x - 6);
+      f.check(c(f).state === "stunned", "chain stomped");
+      f.jump().settle().apex().dash();
+      f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash end").landAt(tx(155));
+    };
+    const circle = (over) => (f) => {
+      f.color("white").right().to(tx(125) + 26).jump().apex().dash();
+      f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash end").airJump();
+      f.until((p) => p.cx > c(p).x + over || p.p.grounded || p.g.phase !== "playing", { right: true }, 200, "over the card");
+      f.left().steerTo((p) => c(p).x + 4);
+      f.check(c(f).state === "stunned", "chain stomped from behind");
+      f.right().apex().jump().apex().dash();
+      f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash end").color("green").landAt(tx(155));
+    };
+    const lines = [direct, circle(40), circle(70)],
+      options = [];
+    for (const w of [0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3, 3.2, 3.6, 4, 4.4])
+      for (const line of lines) options.push((f) => { if (w) f.stop().wait(w); line(f); });
+    pl.choose(options, (f) => f.g.deaths === 0 && f.p.grounded && f.cx > tx(153), "chain card");
+    pl.right().to(tx(158)).check(pl.g.phase === "won", "goal face");
   },
   // 1-5: no waiting on the two red lookouts - white double jump perch to
   // perch over the enforcer's cone, then the high line of slabs above both

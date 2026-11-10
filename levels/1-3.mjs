@@ -39,13 +39,29 @@ const patrol = (id, job, minCol, maxCol, floorRow, dir, startCol = dir > 0 ? min
   max: px(maxCol) + 16,
 });
 
+/** A watch sentry: faces the climb it guards (left) 3 s, then away 1.6 s,
+ * with the 0.4 s look-back before each turn. */
+const sentry = (id, col, floorRow) => ({
+  id,
+  job: "watch",
+  kind: "green",
+  mode: "sentry",
+  x: px(col) + 16,
+  floor: px(floorRow),
+  dir: -1,
+  min: px(col) + 16,
+  max: px(col) + 16,
+  turnEvery: [3, 1.6],
+});
+
 export default defineLevel({
   id: "1-3",
   name: "Hide in Green",
   idea: "Green cards can't see green",
-  cols: 168,
+  cols: 176,
   kit: { forms: ["white", "green"], start: "green", dash: false },
   spears: false,
+  caught: true,
   hints: ["white", "green"],
   beacon: 0.35,
   tint: null,
@@ -62,23 +78,34 @@ export default defineLevel({
     ledge(49, 52, 6); // above the canopy roof: white again after the roof lookout
     // --- Twist (61-80): a 4-tile wall, a lookout above it --------------------
     ground(65, 80, 12); // white-only: green's 93 px jump cannot reach 128 px
-    // --- Conclude (81-123): green, white, green ------------------------------
-    ground(81, 83, 14); // a 2-tile step down: its riser cuts patrol C's cone (late face)
-    ground(84, 96, 16); // patrol C's floor
-    ground(97, 113, 12); // 4-tile step: white
-    ledge(103, 106, 7); // swap alcove 5 tiles above lookout D's patrol
-    // --- Finale (114-167): pillars over a dry pit, timed turns ------------
-    ground(114, 157, 16); // the pit floor (dry; 4 below the pillar tops)
-    ground(126, 129, 12); // pillar A (12 tiles from the step's edge)
-    ground(142, 145, 12); // pillar B (12 from A)
-    ground(158, 164, 12); // the goal platform (12 from B)
-    fill(165, 167, 0, 21); // end wall
+    // --- Conclude (81-113): green, white, green ------------------------------
+    ground(81, 83, 14); // a 2-tile step down
+    ground(84, 96, 16); // the dip before the step
+    ground(97, 113, 12); // 4-tile step: white, under the alcove card's eyes
+    ledge(103, 106, 7); // swap alcove 5 tiles above the step top
+    // --- Finale (114-175): three watched climbs over a dry pit ---------------
+    // Every gap is 12 tiles: green jumps 11, so the only ways onto a pillar
+    // are white's 12-tile hop or a white climb from the pit floor (4 tiles).
+    // Each card stands 4 tiles back from the face it watches, where the drawn
+    // cone is ~60 px tall (at the tip it is a 4 px sliver a climb slips
+    // through: the old pillars' cards stood beside their faces and saw a
+    // climb for under 0.25 s).
+    ground(114, 161, 16); // the pit floor (dry; 4 below the pillar tops)
+    ground(126, 131, 12); // pillar A
+    ground(144, 149, 12); // pillar B
+    ground(162, 172, 12); // the goal platform: the climb lands in its card's view
+    fill(173, 175, 0, 21); // end wall
   },
   spawn: { x: 204, floor: px(16) },
   checkpoints: [
     { id: "start", x: 176, floor: px(16) },
     // Midpoint at the corridor exit, before the twist (out of every cone).
     { id: "mid", x: px(63), floor: px(16), hint: "white" },
+    // On the pit floor before the finale, below every cone: a catch there
+    // costs one climb, not the whole conclude.
+    { id: "pit", x: px(116) + 16, floor: px(16) },
+    // And between pillar B and the goal platform (12 s rule).
+    { id: "pit2", x: px(151) + 16, floor: px(16) },
   ],
   stickers: [
     { id: 1, x: px(40), y: px(15) - 30, line: "main", note: "on the 1-tile step between the corridor patrols" },
@@ -94,23 +121,24 @@ export default defineLevel({
     patrol("corridor-b", "disguise", 43, 49, 16, -1),
     // On the canopy roof, guarding the white ledge (sticker 2's route: white
     // up, green past it, white again).
-    patrol("roof", "watch", 32, 44, 10, -1),
-    // On the wall top: faces away from the arrival point first; its "?" at
-    // white Rubik after the climb is the "green card + X" moment.
-    patrol("lookout", "watch", 70, 78, 12, 1),
-    // Its cone covers the white climb up the 4-tile step at 97 when it walks
-    // right: time the climb to its back, or swap to green mid-air.
-    patrol("floor", "watch", 86, 94, 16, -1),
-    // Lookout D on the step top: white lands in its view, so green before
-    // landing; it also guards the swap alcove (sticker 3).
-    patrol("alcove", "watch", 101, 108, 12, 1),
-    // The finale's lookouts turn every 2.2 s (+0.4 s look-back), out of step:
-    // each white hop is timed to the next card's back.
-    { id: "pillar-a", job: "watch", kind: "green", mode: "sentry", x: px(128) + 16, floor: px(12), dir: -1, min: px(128) + 16, max: px(128) + 16, turnEvery: 2.2 },
-    { id: "pillar-b", job: "watch", kind: "green", mode: "sentry", x: px(144) + 16, floor: px(12), dir: 1, min: px(144) + 16, max: px(144) + 16, turnEvery: 2.2 },
-    { id: "platform", job: "watch", kind: "green", mode: "sentry", x: px(160) + 16, floor: px(12), dir: -1, min: px(160) + 16, max: px(160) + 16, turnEvery: 2.2 },
+    { ...patrol("roof", "watch", 32, 44, 10, -1), offLine: true },
+    // The twist's lookout on the wall top, 5 tiles back from the lip: it
+    // looks at the lip 3 s, away 1.6 s (a "…" before each turn). Climb while
+    // it looks away, or swap to green within 0.25 s of entering its cone; a
+    // white climb into its face earns "?" and then, still in view, "!":
+    // caught, back to the midpoint just below.
+    sentry("lookout", 70, 12),
+    // The conclude: the same watcher over the 4-tile step, with the swap
+    // alcove (sticker 3) above it. Revision five's floor patrol is gone: green
+    // walked through it and the climb left its cone before it could look.
+    sentry("alcove", 102, 12),
+    // The finale: one watcher per climb, each looking back at the face it
+    // guards (a pillar's card faces the incoming climb, its back the next gap).
+    sentry("pillar-a", 130, 12),
+    sentry("pillar-b", 148, 12),
+    sentry("platform", 167, 12),
   ],
-  goal: { x: px(163), floor: px(12) },
+  goal: { x: px(172), floor: px(12) },
   hintZones: {
     white: { x0: px(58), x1: px(65), top: px(12), past: px(66) },
   },

@@ -744,11 +744,15 @@ test("C3: no tunnelling - the box never overlaps a solid tile, at every max spee
 test("C4: contact rules - only the lunging spear and water kill; everything else bumps or is safe", (t) => {
   const src = readFileSync(path.join(demo, "model.mjs"), "utf8");
   const kills = [...src.matchAll(/die\(g, "(\w+)"\)/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(kills)].sort(), ["spear", "water"]);
+  // "caught" is not a hazard: in a level with `caught` (only 1-3), a card's
+  // "!" sends Rubik back to the checkpoint. No contact or hitbox decides it.
+  assert.deepEqual([...new Set(kills)].sort(), ["caught", "spear", "water"]);
+  assert.match(src, /if \(g\.level\.caught\) die\(g, "caught"\);/);
+  assert.deepEqual(LEVELS.filter((l) => l.caught).map((l) => l.id), ["1-3"]);
   // The spear-up tell is drawn from the same rule that refuses the stomp.
   const game = readFileSync(path.join(demo, "game.mjs"), "utf8");
   assert.match(game, /M\.stompable\(game, guard\)\) return;/);
-  report(t, "C4 kill sources", "spear (lunge frames only), water; body contact knocks back; a raised spear pops; cones only alert");
+  report(t, "C4 kill sources", "spear (lunge frames only), water; 1-3 sends a spotted Rubik back (caught); body contact knocks back; a raised spear pops");
 });
 
 // ================================================ D. expression and ceiling

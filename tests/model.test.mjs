@@ -102,7 +102,7 @@ test("World 1 is six levels in order, each with 3 stickers, a start face and an 
   for (const level of LEVELS) {
     assert.equal(level.map.length, B.ROWS, level.id);
     for (const row of level.map) assert.equal(row.length, level.cols, level.id);
-    assert.ok(level.cols >= 100 && level.cols <= 170, `${level.id}: ${level.cols} columns`);
+    assert.ok(level.cols >= 100 && level.cols <= 180, `${level.id}: ${level.cols} columns`);
     assert.deepEqual(level.stickers.map((s) => s.id), [1, 2, 3], level.id);
     assert.ok(level.checkpoints.length >= 2, `${level.id}: a start face and a midpoint`);
     assert.ok(Math.abs(level.checkpoints[0].x - level.spawn.x) < 60, `${level.id}: start face at the spawn`);
@@ -223,10 +223,11 @@ test("routes are plain JSON [seconds, input] arrays of ordinary actions; legacy 
 });
 test("checkpoints: at most 12 s of baseline route time apart wherever Rubik can die; respawn takes 0.45 s", () => {
   for (const id of LEVEL_IDS) {
-    // 1-3 has no water and no spears: nothing to retry, so its checkpoints
-    // are only the start and the midpoint (the brief's "fewer checkpoints").
+    // A level with no water, no spears and no catch would have nothing to
+    // retry (only a start and a midpoint); 1-3's catch sends Rubik back, so
+    // its checkpoints follow the 12 s rule like any other level's.
     const level = getLevel(id),
-      deadly = level.map[B.WATER_ROW].includes("~") || level.spears !== false;
+      deadly = level.map[B.WATER_ROW].includes("~") || level.spears !== false || !!level.caught;
     if (!deadly) {
       assert.equal(level.checkpoints.length, 2, `${id}: start + midpoint`);
       continue;
@@ -399,16 +400,49 @@ test("1-3: green can't climb the 4-tile wall (white can); cards only warn and pu
   const wall = { start: { x: 61 * T, feet: 16 * T }, top: 12 * T, past: 65 * T + 8 };
   assert.equal(anyReaches("1-3", { ...wall, form: "green" }, jumpFamily({ maxTakeoff: 100 })), false);
   assert.equal(anyReaches("1-3", { ...wall, form: "white" }, jumpFamily({ maxTakeoff: 100, air: true })), true);
-  // spears: false - a white Rubik who rams a corridor card is bumped back, never killed.
+  // spears: false, caught: true - a white Rubik who rams a corridor card is
+  // bumped back and spotted, and its "!" catches him: back to the checkpoint.
+  // No spear before 1-5.
   const g = fresh("1-3");
   g.player.color = "white";
   const c = only(g, "corridor-b");
   Object.assign(c, { x: c.min, dir: -1, state: "calm", turning: 0 });
   place(g, c.x - 52, c.floor, { color: "white" }); // just right of the 1-tile step
-  ticks(g, seconds(8), { right: true });
-  assert.ok(events(g, "bump").length >= 3, "rammed three times");
-  assert.equal(g.deaths, 0, "no spear before 1-5");
+  ticks(g, seconds(2), { right: true });
+  assert.ok(events(g, "bump").length >= 1, "rammed");
+  assert.deepEqual(events(g, "die").map((e) => e.reason), ["caught"], "caught, not speared");
   assert.equal(events(g, "windup").length, 0);
+  ticks(g, seconds(1));
+  assert.equal(g.phase, "playing");
+  assert.equal(g.player.x + g.player.w / 2, g.level.checkpoints[0].x, "back at the checkpoint");
+});
+test("1-3 caught: '?' is the warning, '!' sends Rubik back; leaving the cone in time breaks the lock", () => {
+  const setup = () => {
+    const g = fresh("1-3"),
+      c = only(g, "lookout");
+    Object.assign(c, { state: "calm", dir: -1, turning: 0, turnClock: 0, fixed: true });
+    place(g, c.x - 150, c.floor, { color: "white" }); // on the wall top, in its cone
+    return { g, c };
+  };
+  // Seen and staying: "?" at 0.25 s, then "!" at 0.6 s is a catch.
+  const a = setup();
+  ticks(a.g, seconds(0.3));
+  assert.equal(a.c.state, "suspect");
+  a.g.player.color = "green"; // a swap after the "?" doesn't fool it
+  ticks(a.g, seconds(0.4));
+  assert.deepEqual(events(a.g, "die").map((e) => e.reason), ["caught"]);
+  // Seen, then out of its cone (dropping off the wall's lip) before the "!": no catch.
+  const b = setup();
+  ticks(b.g, seconds(0.3));
+  place(b.g, 62 * T, 16 * T, { color: "green" });
+  ticks(b.g, seconds(2));
+  assert.equal(events(b.g, "die").length, 0);
+  assert.equal(b.g.spotted, 0);
+  // A green Rubik walking into a card that is locked on is blocked, not let through.
+  const d = setup();
+  ticks(d.g, seconds(0.3));
+  d.g.player.color = "green";
+  assert.ok(d.c.locked);
 });
 test("1-3: the glade card hums at green Rubik and walks through him; white gets the green-card hint", () => {
   const g = fresh("1-3"),
@@ -825,9 +859,9 @@ test("every card has a job, proved on the routes; cards that did no work are gon
   // The cards revision five removed (no route ever engaged them, or they only
   // crowded the vault room) stay gone.
   const ids = (id) => getLevel(id).guards.map((c) => c.id);
-  for (const [id, gone] of [["1-2", ["chain-a", "chain-b"]], ["1-3", ["corridor-a"]], ["1-6", ["burst-a", "burst-b"]]])
+  for (const [id, gone] of [["1-2", ["chain-a", "chain-b"]], ["1-3", ["corridor-a", "floor"]], ["1-4", ["island"]], ["1-6", ["burst-a", "burst-b"]]])
     for (const card of gone) assert.ok(!ids(id).includes(card), `${id} ${card}`);
-  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 31);
+  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 29);
 });
 test("no stacked cards: two cards on one floor keep 2+ tiles between their bodies, unless a declared pair", () => {
   for (const level of LEVELS)

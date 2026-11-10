@@ -1193,7 +1193,7 @@ function handleEvents() {
         burst(e.x, e.y, 26, "#ff4b3a", 260, 0.8, 5, 300);
         break;
       case "die":
-        fx.death = { ...game.deathAt, age: 0 };
+        fx.death = { ...game.deathAt, age: 0, reason: e.reason };
         break;
       case "respawn":
         snapCamera();
@@ -2029,6 +2029,9 @@ function drawPlayer() {
       t = d.age,
       y = d.y + M.PLAYER.h - 300 * t + 900 * t * t;
     drawRubik(d.color, 160, 96, wx(d.x + M.PLAYER.w / 2), wy(y), d.direction, 1, t * 5 * d.direction);
+    // 1-3's catch is not a death: the card raised the alarm, so say so over
+    // the hop (Rubik is sent back to the checkpoint).
+    if (d.reason === "caught") text("caught!", wx(d.x + M.PLAYER.w / 2), wy(d.y) - 18, 32, "#ffd84a", "center");
     return;
   }
   const p = game.player,

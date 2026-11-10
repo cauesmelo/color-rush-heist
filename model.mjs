@@ -707,6 +707,11 @@ function alertGuard(g, guard, counted = true) {
   if (counted && !wasAware) {
     g.spotted++;
     event(g, "spotted", guard.x, guard.floor - GUARD.h, { guard: guard.id });
+    // Caught (level.caught, 1-3): before 1-5 teaches the spear, a card that
+    // says "!" raises the alarm and Rubik is sent back to the last checkpoint
+    // (Ocarina of Time's castle courtyard: seen = thrown out, no death). The
+    // "?" before it (0.25 s seen) is the warning: 0.35 s to leave the cone.
+    if (g.level.caught) die(g, "caught");
   }
 }
 
@@ -733,11 +738,17 @@ function updateGuard(g, guard, dt) {
     return;
   }
   const playerBox = { x: p.x, y: p.y, w: p.w, h: p.h },
-    inCone = g.phase === "playing" && boxInCone(guard, playerBox, guard.reach);
+    dx = p.x + p.w / 2 - guard.x,
+    // The drawn cone starts 40 px in front of the eyes as a thin sliver, so
+    // a Rubik standing within ~80 px of a card's centre is below it. A card
+    // that has asked "?" follows him there too (right before its face, at
+    // its height): otherwise a locked-on card lost him one step before he
+    // walked into it, and its colour walked through.
+    face = guard.locked && dx * guard.dir > 0 && Math.abs(dx) < CONE.offset + GUARD.w / 2 + p.w && p.y < guard.floor && p.y + p.h > guard.floor - GUARD.h,
+    inCone = g.phase === "playing" && (boxInCone(guard, playerBox, guard.reach) || face);
   // Leaving the cone breaks a lock; inside it, a locked card sees any colour.
   if (!inCone || guard.state === "calm") guard.locked = false;
-  const sees = inCone && (canSee(guard, p.color) || guard.locked),
-    dx = p.x + p.w / 2 - guard.x;
+  const sees = inCone && (canSee(guard, p.color) || guard.locked);
   guard.sees = sees;
   // Presentation hint: a cone sweeping over a disguised Rubik makes the card
   // hum ("♪") instead of reacting, so the disguise is visibly working.
@@ -770,8 +781,13 @@ function updateGuard(g, guard, dt) {
         if (guard.turning <= 0) guard.dir *= -1;
       } else if (guard.mode === "sentry") {
         // A `fixed` sentry holds its facing (a lookout staring one way).
+        // `turnEvery` may be [s facing left, s facing right]: a watch sentry
+        // looks at the spot it guards longer than it looks away (1-3), so a
+        // player who ignores its cone meets its face more often than its back,
+        // while one who reads it waits at most one short look-away.
         if (!guard.fixed) guard.turnClock += dt;
-        if (guard.turnClock >= (guard.turnEvery || 3)) {
+        const every = Array.isArray(guard.turnEvery) ? guard.turnEvery[guard.dir < 0 ? 0 : 1] : guard.turnEvery || 3;
+        if (guard.turnClock >= every) {
           guard.turnClock = 0;
           guard.turning = GUARD.lookBack;
         }
@@ -1019,7 +1035,11 @@ function guardContacts(g, prevBottom) {
     }
     if (!overlaps(p, box)) continue;
     if (guard.state === "drained" || guard.state === "stunned") continue;
-    if (p.color === guard.kind) continue; // disguised: they let you through
+    // Disguised: a card lets its own colour through, unless it is locked on
+    // (it watched him swap, so it still sees him): then its body blocks him
+    // like any other colour's. Before this a cone-blind player could take a
+    // "?" as white, swap, and walk straight through the card that asked.
+    if (p.color === guard.kind && !guard.sees) continue;
     if (p.color === "red" && p.dashTime > 0) {
       // Red dash knocks a card aside and refunds the dash (M5/M7 power).
       guard.state = "stunned";

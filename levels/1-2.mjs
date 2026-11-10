@@ -7,9 +7,11 @@
  * high if jump is held (195 px over the card's floor), a short hop if not. A
  * card that FACES Rubik raises its spear (drawn): landing on it pops him away.
  *
- * introduce: a slow card patrols a dry pit below the start cliff; its cone is
- *            in the pit, so Rubik watches from above and drops on its back.
- *            The held bounce clears the pit's far rim.
+ * introduce: a slow card patrols a dry pit 6 tiles below the start cliff; its
+ *            cone is in the pit, so Rubik watches from above and drops on its
+ *            back. A rock lip over the cliff's end means walking off is the
+ *            only way on (no jump across), and the far rim is 6 tiles up: only
+ *            the stomp's held bounce (or bounce + air jump) gets out.
  * develop:   a chain of lookouts on 1-tile islands over water, all staring
  *            ahead (fixed, facing the way Rubik travels): bounce from back to
  *            back. A checkpoint stands right before the chain.
@@ -54,10 +56,16 @@ export default defineLevel({
   tint: null,
   build({ fill, ground, ledge, water, back }) {
     fill(0, 2, 0, 21);
-    // --- Introduce (3-32): a slow card in a dry pit -------------------------
-    ground(3, 12, 12); // start cliff, 4 tiles over the pit floor
-    ground(13, 26, 16); // the pit (dry): fall in and the double jump climbs out
-    ground(27, 32, 12); // far rim: the held bounce clears it
+    // --- Introduce (3-32): a slow card in a dry pit (13-20) -----------------
+    ground(3, 12, 12); // start cliff, 6 tiles over the pit floor
+    // A rock lip over the cliff's end and the pit's near edge, 2 tiles above
+    // the cliff top: no jump (coyote included) gets out from under it, and it
+    // is 6 rows thick, so no double jump goes over it. The only way on is
+    // walking off the edge: the drop onto the card's back. Revision five's
+    // open pit was double-jumped edge to edge (the critic's bot: 31/31).
+    fill(9, 14, 4, 9);
+    ground(13, 20, 18); // the pit (dry), 6 tiles deep: no double jump climbs out
+    ground(21, 32, 12); // far rim: only the stomp's held bounce (or bounce + air jump) reaches it
     // --- Develop (33-70): lookouts on islands over water --------------------
     water(33, 62);
     for (const col of [38, 45, 52, 58]) ground(col, col, 16); // 1-tile islands, 4 below the rim
@@ -93,13 +101,13 @@ export default defineLevel({
     { id: "green", x: px(124) + 16, floor: px(18), get: "green" },
   ],
   stickers: [
-    { id: 1, x: px(21), y: 296, line: "main", note: "over the pit: the first bounce's peak (hold jump)" },
+    { id: 1, x: px(19) + 28, y: 350, line: "main", note: "over the pit: the first bounce's peak (hold jump; a tap tops out 24 px below it)" },
     { id: 2, x: px(75), y: 296, line: "off", note: "on the 8-tile ledge: stomp from behind, air jump, drift left" },
     { id: 3, x: px(61) + 16, y: 228, line: "mastery", note: "the slab over the last island: held bounce + air jump" },
   ],
   guards: [
     // A slow patrol: it walks at 60% pace and turns with a readable look-back.
-    { id: "pit", job: "gate", kind: "green", mode: "patrol", pace: 0.6, x: px(16) + 16, floor: px(16), dir: 1, min: px(15) + 16, max: px(24) + 16 },
+    { id: "pit", job: "gate", kind: "green", mode: "patrol", pace: 0.6, x: px(16) + 16, floor: px(18), dir: 1, min: px(14) + 16, max: px(18) + 16 },
     lookout("isle-a", 38, 16),
     lookout("isle-b", 45, 16),
     lookout("isle-c", 52, 16),

@@ -16,6 +16,8 @@ import * as B from "./levels/builder.mjs";
 import { LEVELS, getLevel } from "./levels/index.mjs";
 import * as C from "./campaign.mjs";
 import { FixedStep } from "./loop.mjs";
+import { PAL, FORM, installCss, ditherOn, nearestColour } from "./pixel-ui.mjs";
+import { createUiDraw } from "./ui-draw.mjs";
 
 const W = 960,
   H = 540,
@@ -608,6 +610,7 @@ function togglePause(force) {
 }
 function showPanel(name) {
   for (const el of ui.pauseCard.querySelectorAll("[data-panel]")) el.hidden = el.dataset.panel !== name;
+  snapCard();
   const first = ui.pauseCard.querySelector(`[data-panel="${name}"] button, [data-panel="${name}"] a`);
   if (name !== "menu" && first) first.focus({ preventScroll: true });
 }
@@ -989,28 +992,57 @@ function getInput() {
 }
 const portrait = () => matchMedia("(orientation: portrait) and (max-width: 820px)").matches;
 const touchPadsShown = () => coarsePointer || inputMode === "touch";
-/** Integer scaling where possible: the 960x540 surface is shown at 1x, 2x, 3x
- * when the window allows (crisp, square pixels), otherwise fitted below 1x.
- * Portrait phones use the CSS column layout instead. */
+/** Integer scaling where possible: the 960x540 surface is shown at a whole
+ * number of DEVICE pixels per canvas pixel (1x, 2x, 3x...; on a 2x display
+ * that is 960 CSS px for 2 device px per pixel), so every pixel is a crisp
+ * square and the DOM's art-pixel unit (--ap) lands on the device grid. When the
+ * window cannot hold 1x it is fitted below 1x and the browser's
+ * nearest-neighbour scaling applies (hard edges, uneven pixel sizes; a known
+ * limit, UI_STYLE.md). Portrait phones use the CSS column layout instead. */
 function fitSurface() {
   const surface = $("surface"),
-    stage = $("stage");
+    stage = $("stage"),
+    dpr = window.devicePixelRatio || 1,
+    /** Whole device px per canvas px for a box of css px, else the fractional fit. */
+    scaleFor = (cssW, cssH) => {
+      const k = Math.min((cssW * dpr) / W, (cssH * dpr) / H);
+      return k >= 1 ? Math.floor(k) : k;
+    },
+    cssWidth = (k) => (W * k) / dpr;
   if (document.fullscreenElement) {
-    const k = Math.min(innerWidth / W, innerHeight / H);
-    stage.style.width = Math.floor(W * (k >= 1 ? Math.floor(k) : k)) + "px";
+    stage.style.width = cssWidth(scaleFor(innerWidth, innerHeight)) + "px";
     surface.style.width = "";
-    return;
+    return setUnit();
   }
   stage.style.width = "";
   if (portrait() && touchPadsShown()) {
     surface.style.width = "";
-    return;
+    return setUnit();
   }
   const embedded = document.documentElement.classList.contains("itch-embed"),
     pad = embedded ? 0 : 16;
-  let k = Math.min((innerWidth - pad * 2) / W, (innerHeight - pad * 2) / H);
-  if (k < 1) k = Math.min(innerWidth / W, innerHeight / H); // drop the margin before shrinking
-  surface.style.width = Math.floor(W * (k >= 1 ? Math.floor(k) : k)) + "px";
+  let k = scaleFor(innerWidth - pad * 2, innerHeight - pad * 2);
+  if (k < 1) k = scaleFor(innerWidth, innerHeight); // drop the margin before shrinking
+  surface.style.width = cssWidth(k) + "px";
+  setUnit();
+}
+/** --ap: one art pixel in CSS px (the stage is 480 art px wide); every DOM
+ * length in style.css is a whole number of it. */
+function setUnit() {
+  const w = $("stage").getBoundingClientRect().width || W;
+  document.documentElement.style.setProperty("--ap", w / (W / 2) + "px");
+  snapCard();
+}
+/** The pause card's height is a whole, even number of art px, so it centres on
+ * the grid (an odd height would sit half an art pixel off). */
+function snapCard() {
+  const card = ui.pauseCard;
+  if (!card || card.hidden) return;
+  const ap = parseFloat(document.documentElement.style.getPropertyValue("--ap")) || 2;
+  card.style.height = "auto";
+  const natural = card.getBoundingClientRect().height;
+  card.style.height = "";
+  card.style.setProperty("--card-h", String(Math.min(262, Math.ceil(natural / ap / 2) * 2)));
 }
 addEventListener("resize", fitSurface);
 document.addEventListener("fullscreenchange", fitSurface);
@@ -1458,122 +1490,102 @@ function updateFx(dt) {
 }
 
 // ---------------------------------------------------------------- drawing --
-function text(str, x, y, size = 32, color = "#fff", align = "left", outline = "#1b1420") {
-  ctx.font = `${size}px monogram, ui-monospace, monospace`;
-  ctx.textAlign = align;
-  ctx.textBaseline = "alphabetic";
-  x = Math.round(x);
-  y = Math.round(y);
-  if (outline) {
-    const o = size >= 48 ? 4 : 2;
-    ctx.fillStyle = outline;
-    for (const [dx, dy] of [[-o, 0], [o, 0], [0, -o], [0, o], [-o, -o], [o, o], [-o, o], [o, -o], [0, o + (size >= 48 ? 2 : 1)]]) ctx.fillText(str, x + dx, y + dy);
-  }
-  ctx.fillStyle = color;
-  ctx.fillText(str, x, y);
-}
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.roundRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h), r);
-}
+/** The world's own palette of the three forms (the UI uses pixel-ui.mjs FORM). */
 const COLORS = { white: "#f3f0e4", green: "#5fbf3a", red: "#e8382c" };
-/** Color glyphs so form is never told by color alone (Xbox AG 103): white
- * is a square, green a triangle, red a diamond (the touch pads' shapes too).
- * `outline` rims a filled glyph in ink, so a green or red glyph on a light
- * disc keeps its edge when hue and brightness collapse (protanopia,
- * deuteranopia, achromatopsia: red #e8382c and green #5fbf3a fall to similar
- * olive or grey; checked with Chrome's emulated vision deficiencies). */
-function glyph(color, x, y, s = 12, ink = "#1b1420", outline = null) {
-  ctx.save();
-  ctx.translate(Math.round(x), Math.round(y));
-  ctx.fillStyle = ink;
-  ctx.strokeStyle = ink;
-  ctx.lineWidth = Math.max(2, s / 5);
-  ctx.lineJoin = "miter";
-  if (color === "white") ctx.strokeRect(-s / 2 + 1, -s / 2 + 1, s - 2, s - 2);
-  else {
-    ctx.beginPath();
-    if (color === "green") {
-      ctx.moveTo(0, -s / 2);
-      ctx.lineTo(s / 2, s / 2);
-      ctx.lineTo(-s / 2, s / 2);
-    } else {
-      ctx.moveTo(0, -s / 2 - 1);
-      ctx.lineTo(s / 2 + 1, 0);
-      ctx.lineTo(0, s / 2 + 1);
-      ctx.lineTo(-s / 2 - 1, 0);
-    }
-    ctx.closePath();
-    if (outline) {
-      ctx.strokeStyle = outline;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    ctx.fill();
-  }
-  ctx.restore();
-}
-/** The colour badge every colour mechanic wears: a cream disc with an ink rim
- * and the colour's glyph. Cards wear their own colour (the one they can't
- * see) at the corner; Rubik wears his current form at the back of his head;
- * red-only stones wear red's. Shape, not hue, is what tells them apart. */
-function badge(color, x, y, r = 9) {
-  ctx.save();
-  ctx.fillStyle = "#1b1420";
-  ctx.beginPath();
-  ctx.arc(Math.round(x), Math.round(y), r + 1.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  ctx.beginPath();
-  ctx.arc(Math.round(x), Math.round(y), r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  glyph(color, x, y, Math.round(r * 1.15), color === "white" ? "#1b1420" : COLORS[color], "#1b1420");
-}
-/** Uno-style form card: white rounded border, colored field, tilted oval. */
-function formCard(color, x, y, w, h, keyLabel, angle = 0, alpha = 1) {
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.translate(x + w / 2, y + h / 2);
-  ctx.rotate(angle);
-  ctx.fillStyle = "rgba(10,8,14,0.55)";
-  roundRect(-w / 2 + 3, -h / 2 + 4, w, h, 7);
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  roundRect(-w / 2, -h / 2, w, h, 7);
-  ctx.fill();
-  ctx.fillStyle = color === "white" ? "#cfcbbe" : COLORS[color];
-  roundRect(-w / 2 + 4, -h / 2 + 4, w - 8, h - 8, 4);
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  ctx.beginPath();
-  ctx.ellipse(0, 0, w * 0.32, h * 0.36, 0.5, 0, Math.PI * 2);
-  ctx.fill();
-  glyph(color, 0, 0, w * 0.32, color === "white" ? "#6f6a5e" : COLORS[color], "#1b1420");
-  ctx.restore();
-  if (keyLabel) {
-    const kx = x + w / 2 + Math.cos(angle) * 0,
-      ky = y + h + 14;
-    keycap(keyLabel, kx, ky, alpha);
-  }
-}
-function keycap(label, x, y, alpha = 1, size = 16) {
-  ctx.save();
-  ctx.globalAlpha *= alpha;
-  ctx.font = `${size}px monogram, monospace`;
-  const w = Math.max(18, ctx.measureText(label).width + 10);
-  ctx.fillStyle = "#1b1420";
-  roundRect(x - w / 2, y - 12, w, 18, 4);
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  roundRect(x - w / 2 + 1, y - 13, w - 2, 16, 3);
-  ctx.fill();
-  ctx.fillStyle = "#1b1420";
-  ctx.textAlign = "center";
-  ctx.fillText(label, Math.round(x), Math.round(y));
-  ctx.restore();
-}
+/** Every UI element is drawn by ui-draw.mjs on the art-pixel grid (UI_STYLE.md);
+ * game.mjs only supplies the state it reads. The `let` variables are getters so
+ * the module always sees the live value. */
+const pix = createUiDraw({
+  ctx,
+  M,
+  C,
+  img,
+  derived,
+  fx,
+  cam,
+  map,
+  dazeMax,
+  settings,
+  GET_CARDS,
+  MAP_NODES,
+  getLevel,
+  play: (name) => play(name),
+  fmtTime: (t) => fmtTime(t),
+  wx: (x) => wx(x),
+  wy: (y) => wy(y),
+  drawRubik: (...a) => drawRubik(...a),
+  get game() {
+    return game;
+  },
+  get save() {
+    return save;
+  },
+  get LV() {
+    return LV;
+  },
+  get screen() {
+    return screen;
+  },
+  get screenTime() {
+    return screenTime;
+  },
+  get clock() {
+    return clock;
+  },
+  get reducedMotion() {
+    return reducedMotion;
+  },
+  get inputMode() {
+    return inputMode;
+  },
+  get hudInset() {
+    return hudInset;
+  },
+  get colorAmount() {
+    return colorAmount;
+  },
+});
+/** World-anchored UI helpers: canvas px in, the 2 px art grid out. */
+const badge = (color, x, y) => pix.badge(color, Math.round(x / 2), Math.round(y / 2));
+const keycap = (label, x, y) => pix.keycapCentered(label, x, y);
+const worldText = (str, x, y, color) => pix.text(str, Math.round(x / 2), Math.round(y / 2), { color, align: "center" });
 
+/** The backdrop regains colour with the campaign as an ordered DITHER, never a
+ * blend: a texture whose art pixels are the grey original except where the
+ * Bayer pattern at `level`/16 takes the colorized one (UI_STYLE.md: no alpha
+ * blends). Each level's texture is built once and the last few are kept. */
+const mixCache = new Map();
+function mixTexture(base, colour, level) {
+  const [c, x] = makeCanvas(base.width, base.height, true),
+    [, y] = makeCanvas(base.width, base.height, true);
+  x.drawImage(base, 0, 0);
+  y.drawImage(colour, 0, 0);
+  const a = x.getImageData(0, 0, c.width, c.height),
+    b = y.getImageData(0, 0, c.width, c.height);
+  for (let j = 0; j < c.height; j++)
+    for (let i = 0; i < c.width; i++)
+      if (ditherOn(i, j, level)) {
+        const p = (j * c.width + i) * 4;
+        if (b.data[p + 3]) a.data.set(b.data.subarray(p, p + 4), p);
+      }
+  x.putImageData(a, 0, 0);
+  return c;
+}
+function backdrop(kind) {
+  const level = Math.min(16, Math.max(0, Math.round(colorAmount * 16))),
+    grey = kind === "sky" ? img.sky : img.forest,
+    colour = kind === "sky" ? derived.skyColor : derived.forestColor;
+  if (level <= 0) return grey;
+  if (level >= 16) return colour;
+  const key = kind + level;
+  let tex = mixCache.get(key);
+  if (!tex) {
+    tex = mixTexture(grey, colour, level);
+    mixCache.set(key, tex);
+    if (mixCache.size > 6) mixCache.delete(mixCache.keys().next().value);
+  }
+  return tex;
+}
 function drawBackground() {
   ctx.fillStyle = derived.skyFill;
   ctx.fillRect(0, 0, W, H);
@@ -1581,35 +1593,19 @@ function drawBackground() {
     by = Math.round((maxCamY - cam.y) * 0.35);
   // bg1-sky continues the drained sky above bg1 (originally at y = -268).
   const sx = -((cam.x * 0.15) % 2880);
-  for (const ox of [0, 2880]) {
-    ctx.drawImage(img.sky, Math.round(sx + ox), by - 902, 2880, 902);
-    if (colorAmount > 0.01) {
-      ctx.globalAlpha = colorAmount;
-      ctx.drawImage(derived.skyColor, Math.round(sx + ox), by - 902, 2880, 902);
-      ctx.globalAlpha = 1;
-    }
-  }
-  for (const ox of [0, W]) {
-    ctx.drawImage(img.forest, Math.round(bx + ox), by, W, H);
-    if (colorAmount > 0.01) {
-      ctx.globalAlpha = colorAmount;
-      ctx.drawImage(derived.forestColor, Math.round(bx + ox), by, W, H);
-      ctx.globalAlpha = 1;
-    }
-  }
+  for (const ox of [0, 2880]) ctx.drawImage(backdrop("sky"), Math.round(sx + ox), by - 902, 2880, 902);
+  for (const ox of [0, W]) ctx.drawImage(backdrop("forest"), Math.round(bx + ox), by, W, H);
   ctx.fillStyle = derived.groundFill;
   if (by + H < H) ctx.fillRect(0, by + H, W, H - by - H);
   // The red the cards stole glows from the vault, far beyond the trees, so the
-  // goal is visible from the first frame without an arrow or label.
-  // Playtest (rev 4): a hard-edged beam with a core line and a floating base
-  // ring read as a laser/glitch hanging in the sky. It is now a soft light
-  // pillar "screen"-blended over the backdrop: wide feathered column, no core
-  // line, brightest where it meets the far treeline (bg1's canopy band sits
-  // at y≈190–260 of the 2x art) and fading upward, like light rising from
-  // behind the forest. The 0.075 parallax keeps it reading as very distant;
-  // it lands centred over the vault room when the camera reaches it.
-  // Each level brings the beacon closer (level.beacon 0..1): a faint speck on
-  // the horizon in 1-1, the full pillar over the vault in 1-6.
+  // goal is visible from the first frame without an arrow or label. It is a
+  // light pillar rising from behind the treeline (the canopy band sits at
+  // y~190-260 of the 2x art): three columns of dithered red that thin out
+  // upward, and a flat glow pooled on the canopy. The 0.075 parallax keeps it
+  // reading as very distant; it lands centred over the vault room when the
+  // camera reaches it. Each level brings the beacon closer (level.beacon
+  // 0..1): a faint speck in 1-1, the full pillar over the vault in 1-6. It is
+  // drawn after the time-of-day tint (below) so the tint never recolours it.
   const tint = TINTS[LV.tint];
   if (tint) {
     ctx.save();
@@ -1625,46 +1621,16 @@ function drawBackground() {
       base = by + 236,
       pulse = (reducedMotion ? 0.85 : 0.8 + Math.sin(clock * 2) * 0.2) * (0.35 + 0.65 * near);
     if (gx > -90 && gx < W + 90) {
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      // feathered column: horizontal falloff × vertical fade
-      for (const [half0, alpha] of [
-        [44, 0.1],
-        [22, 0.16],
-        [9, 0.2],
-      ]) {
-        const half = Math.max(3, Math.round(half0 * (0.3 + 0.7 * near)));
-        const v = ctx.createLinearGradient(0, base, 0, base - 300);
-        v.addColorStop(0, `rgba(230,70,50,${alpha * pulse})`);
-        v.addColorStop(1, "rgba(230,70,50,0)");
-        ctx.fillStyle = v;
-        ctx.fillRect(gx - half, base - 300, half * 2, 300);
-      }
-      // glow pooled on the canopy where the light "emerges"
-      const g = ctx.createRadialGradient(gx, base, 0, gx, base, 90);
-      g.addColorStop(0, `rgba(240,90,60,${0.35 * pulse})`);
-      g.addColorStop(1, "rgba(240,90,60,0)");
-      ctx.fillStyle = g;
-      ctx.save();
-      ctx.translate(gx, base);
-      ctx.scale(1, 0.4);
-      ctx.translate(-gx, -base);
-      ctx.fillRect(gx - 90, base - 90, 180, 180);
-      ctx.restore();
-      // a few motes drifting up (static under reduced motion)
-      for (let i = 0; i < 5; i++) {
-        const t = reducedMotion ? (i + 0.5) / 5 : (clock * 0.12 + i / 5) % 1,
-          sy = base - t * 240;
-        ctx.fillStyle = `rgba(255,200,180,${(1 - t) * 0.5 * pulse})`;
-        ctx.fillRect(gx - 6 + ((i * 7) % 12), Math.round(sy), 2, 2);
-      }
-      ctx.restore();
+      const half = [44, 22, 9].map((h) => Math.max(1, Math.round((h * (0.3 + 0.7 * near)) / 2)));
+      pix.beacon(Math.round(gx / 2), Math.round(base / 2), pulse, half);
     }
   }
 }
 /** Time of day per level, multiplied over the backdrop only (tiles, cards and
  * Rubik keep their true colors): 1-4 a storm, 1-5 dusk, 1-6 night. */
 const TINTS = { storm: "#a9b6cf", dusk: "#f3c39b", night: "#8d88b8" };
+/** Snap a canvas coordinate to the 2 px art grid. */
+const even = (v) => Math.round(v / 2) * 2;
 const wx = (x) => Math.round(x - cam.x),
   wy = (y) => Math.round(y - cam.y);
 function drawChunks(list) {
@@ -1685,17 +1651,17 @@ function drawTiles() {
     const x = wx(tx * T),
       sx = 288 + (tx % 2) * 16;
     ctx.drawImage(img.tiles, sx, frame * 32 + 7, 16, 25, x, top + 14, T, 50);
-    ctx.fillStyle = "rgba(24,70,170,0.35)";
-    ctx.fillRect(x, top + 6, T, 58);
-    ctx.fillStyle = "#3d7fe0";
+    // A deeper tint as a navy dither (no translucent fill), then the surface:
+    // a blue band, two drifting light pixels and a foam line, all on the grid.
+    pix.scrimPx(5, PAL.navy, x, top + 6, T, 58);
+    ctx.fillStyle = PAL.blue;
     ctx.fillRect(x, top + 6, T, 8);
-    // ripple: two light pixels drifting along each tile, plus foam dashes
     const phase = reducedMotion ? 0 : clock * 40 + tx * 13;
-    ctx.fillStyle = "#bfeaff";
-    ctx.fillRect(x + Math.floor(phase % 32), top + 6 + (Math.floor(phase / 8) % 2) * 2, 8, 2);
-    ctx.fillRect(x + Math.floor((phase * 0.6 + 16) % 32), top + 10, 4, 2);
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.fillRect(x, top + 4 + Math.round(Math.sin((tx + (reducedMotion ? 0 : clock * 3)) * 1.3) * 1.5), T, 2);
+    ctx.fillStyle = PAL.mist;
+    ctx.fillRect(x + even(phase % 32), top + 6 + (Math.floor(phase / 8) % 2) * 2, 8, 2);
+    ctx.fillRect(x + even((phase * 0.6 + 16) % 32), top + 10, 4, 2);
+    ctx.fillStyle = PAL.white;
+    ctx.fillRect(x, top + 4 + even(Math.sin((tx + (reducedMotion ? 0 : clock * 3)) * 1.3) * 1.5), T, 2);
   }
 }
 function drawStones() {
@@ -1709,21 +1675,7 @@ function drawStones() {
     // red diamond on the stone's olive centre vanished under protanopia and
     // deuteranopia: red and olive are the confusion pair).
     ctx.drawImage(img.tiles, 128, 32, 32, 32, x, y, 64, 64);
-    ctx.strokeStyle = "#3a0b0b";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(x + 10, y + 6);
-    ctx.lineTo(x + 26, y + 24);
-    ctx.lineTo(x + 20, y + 38);
-    ctx.lineTo(x + 38, y + 50);
-    ctx.lineTo(x + 34, y + 60);
-    ctx.moveTo(x + 26, y + 24);
-    ctx.lineTo(x + 48, y + 18);
-    ctx.lineTo(x + 58, y + 30);
-    ctx.stroke();
-    ctx.strokeStyle = game.stolen ? "#ff6a50" : "#b8463a";
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    pix.crack(x, y, game.stolen ? PAL.rose : PAL.redDark);
     badge("red", x + 32, y + 32, 9);
   }
 }
@@ -1749,26 +1701,31 @@ function drawDoorCue() {
     right = wx(x0 + 2 * T),
     floor = wy(y1);
   if (right < -40 || sx > W + 120) return;
-  const pulse = reducedMotion ? 0.8 : 0.55 + Math.sin(clock * 5) * 0.35;
-  ctx.strokeStyle = `rgba(255,96,72,${pulse.toFixed(3)})`;
-  ctx.lineWidth = 3;
-  ctx.strokeRect(sx - 2, wy(y0) - 2, 2 * T + 4, y1 - y0 + 4);
-  // Streaks at Rubik's body height, flowing left into the seal.
+  // The seal's frame pulses between two reds in 2 px lines (no alpha); streaks
+  // at Rubik's body height flow left into it, blinking instead of fading.
+  ctx.fillStyle = reducedMotion || Math.sin(clock * 5) > 0 ? PAL.rose : PAL.red;
+  const fx0 = even(sx - 4),
+    fy0 = even(wy(y0) - 4),
+    fw = 2 * T + 8,
+    fh = y1 - y0 + 8;
+  ctx.fillRect(fx0, fy0, fw, 4);
+  ctx.fillRect(fx0, fy0 + fh - 4, fw, 4);
+  ctx.fillRect(fx0, fy0, 4, fh);
+  ctx.fillRect(fx0 + fw - 4, fy0, 4, fh);
   for (let i = 0; i < 3; i++) {
     const t = reducedMotion ? 0.5 : (clock * 0.9 + i / 3) % 1,
-      len = 22 - i * 5,
+      len = 20 - i * 4,
       px0 = right + 10 + (1 - t) * 70,
-      py0 = floor - 46 + i * 13;
-    ctx.globalAlpha = reducedMotion ? 0.75 : Math.sin(t * Math.PI) * 0.85;
-    ctx.fillStyle = i === 1 ? "#ffd0c4" : "#ffffff";
-    ctx.fillRect(Math.round(px0), Math.round(py0), len, 3);
-    ctx.fillRect(Math.round(px0), Math.round(py0 - 3), 4, 3);
+      py0 = floor - 46 + i * 14;
+    if (!reducedMotion && Math.sin(t * Math.PI) < 0.3) continue;
+    ctx.fillStyle = i === 1 ? PAL.mist : PAL.white;
+    ctx.fillRect(even(px0), even(py0), len, 2);
+    ctx.fillRect(even(px0), even(py0 - 4), 4, 2);
   }
-  ctx.globalAlpha = 1;
   // The sign, in the HUD's own keycap language, once REVERSE has said it.
   if (fx.reverse < 0 && !(fx.reverseDelay > 0) && !fx.get) {
     const bob = reducedMotion ? 0 : Math.round(Math.sin(clock * 3) * 2);
-    keycap(inputMode === "touch" ? "DASH" : "Shift", sx + T, wy(y0) + 38 + bob, 1, 16);
+    keycap(inputMode === "touch" ? "DASH" : "Shift", sx + T, wy(y0) + 38 + bob);
   }
 }
 function drawCheckpoints() {
@@ -1781,45 +1738,38 @@ function drawCheckpoints() {
       y = wy(cp.floor);
     if (x < -60 || x > W + 60) return;
     const active = game.checkpointIndex === index,
-      fill = active ? COLORS[game.snapshot?.color || "white"] : null;
+      fill = active ? FORM[game.snapshot?.color || "white"] : null;
     // A chalk 3x3 cube face (the cutout shape) on a stick: home-made, not a
     // platform. It fills with Rubik's color when it is his current checkpoint.
-    ctx.fillStyle = "#c9b48a";
-    ctx.fillRect(x - 2, y - 30, 4, 30);
-    ctx.fillStyle = "#6b5a3e";
-    ctx.fillRect(x - 2, y - 30, 1, 30);
-    for (let i = 0; i < 9; i++) {
-      const cx = x - 16 + (i % 3) * 11,
-        cy = y - 64 + Math.floor(i / 3) * 11;
-      if (fill) {
-        ctx.fillStyle = fill;
-        ctx.fillRect(cx + 1, cy + 1, 9, 9);
-      }
-      ctx.strokeStyle = active ? "#ffffff" : "rgba(244,240,226,0.72)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(cx + 1, cy + 1, 9, 9);
-    }
+    ctx.fillStyle = PAL.mist;
+    ctx.fillRect(even(x - 2), y - 32, 4, 32);
+    ctx.fillStyle = PAL.stone;
+    ctx.fillRect(even(x - 2), y - 32, 2, 32);
+    chalkFace(x, y - 50, 12, fill, active);
   });
 }
-/** A chalk 3x3 cube face drawn with `cell` px squares (the checkpoint and
- * goal art language: the cutout's shape, home-made, never a platform). */
+/** A chalk 3x3 cube face on the 2 px grid: `cell` canvas px per cell (even),
+ * 2 px chalk lines, `fill` a palette colour, "dim" (a dithered dark wash) or
+ * null. scaleX flips it in stepped widths (never a fractional scale). */
 function chalkFace(x, y, cell, fill, bright, scaleX = 1) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scaleX, 1);
-  const size = cell * 3 + 2;
+  const k = Math.max(0.25, Math.round(scaleX * 4) / 4),
+    cw = Math.max(2, Math.round((cell * k) / 2) * 2),
+    left = even(x - 1.5 * cw),
+    top = even(y - 1.5 * cell);
   for (let i = 0; i < 9; i++) {
-    const cx = -size / 2 + (i % 3) * cell,
-      cy = -size / 2 + Math.floor(i / 3) * cell;
-    if (fill) {
-      ctx.fillStyle = typeof fill === "function" ? fill(i) : fill;
-      ctx.fillRect(cx + 1, cy + 1, cell - 2, cell - 2);
+    const cx = left + (i % 3) * cw,
+      cy = top + Math.floor(i / 3) * cell;
+    if (fill === "dim") pix.dimWash(cx, cy, cw, cell);
+    else if (fill) {
+      ctx.fillStyle = fill;
+      ctx.fillRect(cx, cy, cw, cell);
     }
-    ctx.strokeStyle = bright ? "#ffffff" : "rgba(244,240,226,0.78)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(cx + 1, cy + 1, cell - 2, cell - 2);
+    ctx.fillStyle = bright ? PAL.white : PAL.cream;
+    ctx.fillRect(cx, cy, cw, 2);
+    ctx.fillRect(cx, cy + cell - 2, cw, 2);
+    ctx.fillRect(cx, cy, Math.min(2, cw), cell);
+    ctx.fillRect(cx + cw - Math.min(2, cw), cy, Math.min(2, cw), cell);
   }
-  ctx.restore();
 }
 /** The goal face: the checkpoint face at 2x on a taller stick. Touching it
  * flips it and fills it with Rubik's current color. */
@@ -1829,23 +1779,17 @@ function drawGoal() {
   const x = wx(goal.x),
     y = wy(goal.floor);
   if (x < -80 || x > W + 80) return;
-  ctx.fillStyle = "#c9b48a";
-  ctx.fillRect(x - 3, y - 64, 6, 64);
-  ctx.fillStyle = "#6b5a3e";
-  ctx.fillRect(x - 3, y - 64, 2, 64);
+  ctx.fillStyle = PAL.mist;
+  ctx.fillRect(even(x - 3), y - 64, 6, 64);
+  ctx.fillStyle = PAL.stone;
+  ctx.fillRect(even(x - 3), y - 64, 2, 64);
   const won = game.phase === "won",
     k = won ? fx.goal : 0,
     flip = reducedMotion ? 1 : Math.cos(k * Math.PI * 2),
     bob = reducedMotion || won ? 0 : Math.round(Math.sin(clock * 2.2) * 2);
-  if (!won) {
-    // a soft halo so the goal reads from afar, without words
-    const g = ctx.createRadialGradient(x, y - 100 + bob, 4, x, y - 100 + bob, 70);
-    g.addColorStop(0, "rgba(255,240,190,0.28)");
-    g.addColorStop(1, "rgba(255,240,190,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(x - 70, y - 170, 140, 140);
-  }
-  chalkFace(x, y - 100 + bob, 22, won && k > 0.25 ? COLORS[fx.goalColor || game.player.color] : "rgba(20,16,26,0.35)", won, Math.max(0.08, Math.abs(flip)));
+  // A dithered halo so the goal reads from afar, without words.
+  if (!won) pix.glow(Math.round(x / 2), Math.round((y - 100 + bob) / 2), 32, 32, 5, PAL.cream);
+  chalkFace(x, y - 100 + bob, 22, won && k > 0.25 ? FORM[fx.goalColor || game.player.color] : "dim", won, Math.max(0.08, Math.abs(flip)));
 }
 /** 1-4's stray storm swirl: rubik_storm frames 1-3 at 2x over a stump. */
 /** Storm wisps at the lip of every gap 1-4's main line dashes: the swirl's
@@ -1855,17 +1799,17 @@ function drawDashMarks() {
     const x = wx(mark.x),
       y = wy(mark.floor);
     if (x < -120 || x > W + 60) continue;
+    // Storm wisps drifting along the gap: they blink in and out (no fading).
     for (let i = 0; i < 3; i++) {
       const t = reducedMotion ? 0.5 : (clock * 0.9 + i / 3) % 1,
-        len = 22 - i * 5,
+        len = 22 - i * 4,
         sx = x + 6 + t * 70,
-        sy = y - 46 - i * 13;
-      ctx.globalAlpha = reducedMotion ? 0.75 : Math.sin(t * Math.PI) * 0.85;
-      ctx.fillStyle = i === 1 ? "#cfe3ff" : "#ffffff";
-      ctx.fillRect(Math.round(sx), Math.round(sy), len, 3);
-      ctx.fillRect(Math.round(sx + len - 4), Math.round(sy - 3), 4, 3);
+        sy = y - 46 - i * 14;
+      if (!reducedMotion && Math.sin(t * Math.PI) < 0.3) continue;
+      ctx.fillStyle = i === 1 ? PAL.mist : PAL.white;
+      ctx.fillRect(even(sx), even(sy), len, 2);
+      ctx.fillRect(even(sx + len - 4), even(sy - 4), 4, 2);
     }
-    ctx.globalAlpha = 1;
   }
 }
 function drawPickups() {
@@ -1874,11 +1818,7 @@ function drawPickups() {
     const x = wx(pickup.x),
       y = wy(pickup.y) + (reducedMotion ? 0 : Math.round(Math.sin(clock * 3) * 4));
     if (x < -60 || x > W + 60) continue;
-    const g = ctx.createRadialGradient(x, y, 4, x, y, 46);
-    g.addColorStop(0, "rgba(255,255,255,0.55)");
-    g.addColorStop(1, "rgba(200,220,255,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(x - 46, y - 46, 92, 92);
+    pix.glow(Math.round(x / 2), Math.round(y / 2), 23, 23, 8, PAL.mist);
     const f = 1 + (reducedMotion ? 0 : Math.floor(clock * 10) % 3);
     ctx.drawImage(img.storm, f * 32, 0, 32, 32, x - 32, y - 32, 64, 64);
   }
@@ -1899,11 +1839,9 @@ function drawVault() {
   const pulse = reducedMotion ? 0.8 : 0.65 + Math.sin(clock * 3) * 0.25,
     open = fx.vaultOpen;
   if (!game.stolen || open < 1) {
-    const g = ctx.createRadialGradient(x + v.w / 2, y + v.h / 2, 6, x + v.w / 2, y + v.h / 2, 150);
-    g.addColorStop(0, `rgba(255,60,40,${(game.stolen ? 0.9 * (1 - open) : 0.55) * pulse})`);
-    g.addColorStop(1, "rgba(255,60,40,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(x - 110, y - 110, v.w + 220, v.h + 200);
+    // The vault's red glow: a dithered pool (its strength pulses in steps).
+    const strength = (game.stolen ? 0.9 * (1 - open) : 0.55) * pulse;
+    pix.glow(Math.round((x + v.w / 2) / 2), Math.round((y + v.h / 2) / 2), 75, 75, Math.round(16 * strength), PAL.red);
   }
   // dais: the thin slab's ends and middle, top 12 source px, at 2x
   for (let i = 0; i < 4; i++) ctx.drawImage(img.tiles, (i === 0 ? 12 : i === 3 ? 17 : 13 + i) * 16, 0, 16, 12, x - 18 + i * 32, floor - 24, 32, 24);
@@ -1916,10 +1854,9 @@ function drawVault() {
       dw = 56,
       dh = 56,
       k = reducedMotion ? 1 : open;
-    ctx.fillStyle = "#14080c";
+    ctx.fillStyle = PAL.void;
     ctx.fillRect(dx, dy, dw, dh);
-    ctx.fillStyle = `rgba(255,70,50,${0.5 * (1 - k * 0.6)})`;
-    ctx.fillRect(dx + 4, dy + 4, dw - 8, dh - 8);
+    pix.scrimPx(Math.round(8 * (1 - k * 0.6)), PAL.red, dx + 4, dy + 4, dw - 8, dh - 8);
     const width = Math.max(6, Math.round(dw * Math.cos(k * 1.3)));
     ctx.drawImage(img.vault, 2, 3, 14, 14, dx - (dw - width) * 0.15, dy, width, dh);
   }
@@ -1930,52 +1867,21 @@ function drawOrbs() {
       y = wy(orb.y);
     if (x < -40 || x > W + 40) continue;
     if (orb.respawn > 0) {
-      ctx.strokeStyle = "rgba(255,255,255,0.25)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x, y, 14 * (1 - orb.respawn / M.WORLD.orbRespawn) + 4, 0, Math.PI * 2);
-      ctx.stroke();
+      // Recharging: a ring that grows back, in grey (a hollow, not a faded, orb).
+      pix.ring(x, y, 14 * (1 - orb.respawn / M.WORLD.orbRespawn) + 6, 14 * (1 - orb.respawn / M.WORLD.orbRespawn) + 6, PAL.stone, 2);
       continue;
     }
     // rubik_storm.png frames 1-3, cropped to their 20x20 centre, at 2x, in a
-    // soft ring so it reads as a pickup (round, unlike square stickers).
+    // ring so it reads as a pickup (round, unlike square stickers).
     const f = 1 + (reducedMotion ? 0 : Math.floor(clock * 8) % 3),
-      bob = reducedMotion ? 0 : Math.sin(clock * 3) * 3,
-      ring = reducedMotion ? 0.5 : 0.35 + Math.sin(clock * 5) * 0.15;
-    ctx.fillStyle = `rgba(255,255,255,${ring * 0.35})`;
-    ctx.beginPath();
-    ctx.arc(x, y + bob, 26, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = `rgba(255,255,255,${ring + 0.2})`;
-    ctx.lineWidth = 2;
-    ctx.stroke();
+      bob = reducedMotion ? 0 : Math.round(Math.sin(clock * 3) * 1.5) * 2;
+    pix.glow(Math.round(x / 2), Math.round((y + bob) / 2), 13, 13, 5, PAL.white);
+    pix.ring(x, y + bob, 26, 26, PAL.white, 2);
     ctx.drawImage(img.storm, f * 32 + 6, 6, 20, 20, x - 20, y - 20 + bob, 40, 40);
   }
 }
 function drawSticker(x, y, size, glint) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-0.12);
-  ctx.fillStyle = "#1b1420";
-  ctx.fillRect(-size / 2 - 2, -size / 2 - 2, size + 4, size + 4);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(-size / 2, -size / 2, size, size);
-  ctx.fillStyle = "#ffcf2e";
-  ctx.fillRect(-size / 2 + 3, -size / 2 + 3, size - 6, size - 6);
-  // peeled corner: the shape differs from round orbs and cones
-  ctx.fillStyle = "#fff4c2";
-  ctx.beginPath();
-  ctx.moveTo(size / 2 - 7, size / 2);
-  ctx.lineTo(size / 2, size / 2 - 7);
-  ctx.lineTo(size / 2, size / 2);
-  ctx.closePath();
-  ctx.fill();
-  if (glint >= 0 && glint < 1) {
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    const gx = -size / 2 + glint * size;
-    ctx.fillRect(gx, -size / 2 + 3, 3, size - 6);
-  }
-  ctx.restore();
+  pix.sticker(Math.round(x / 2), Math.round(y / 2), Math.round(size / 2), glint);
 }
 function drawStickers() {
   for (const s of game.stickers) {
@@ -1984,11 +1890,10 @@ function drawStickers() {
       y = wy(s.y);
     if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
     const bob = reducedMotion ? 0 : Math.round(Math.sin(clock * 2.6 + s.id) * 3);
-    // Already in the save from an earlier run: a faint outline (NSMB's
+    // Already in the save from an earlier run: a hollow outline (NSMB's
     // collected star coins), still worth touching for this run's tally.
-    if (s.owned) ctx.globalAlpha = 0.38;
-    drawSticker(x, y + bob, 20, reducedMotion || s.owned ? -1 : ((clock * 0.6 + s.id * 0.37) % 1.6) / 0.6);
-    ctx.globalAlpha = 1;
+    if (s.owned) pix.stickerOutline(Math.round(x / 2), Math.round((y + bob) / 2), 10);
+    else drawSticker(x, y + bob, 20, reducedMotion ? -1 : ((clock * 0.6 + s.id * 0.37) % 1.6) / 0.6);
   }
 }
 const SHEETS = {
@@ -2084,172 +1989,16 @@ function guardFrame(guard, sheet) {
       return [2, 0];
   }
 }
-function bubble(x, y, label, opts = {}) {
-  const w = opts.w || 34,
-    h = opts.h || 34;
-  ctx.save();
-  ctx.translate(Math.round(x), Math.round(y));
-  ctx.fillStyle = "#1b1420";
-  roundRect(-w / 2 - 2, -h - 2, w + 4, h + 4, 9);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(-6, -2);
-  ctx.lineTo(0, 10);
-  ctx.lineTo(6, -2);
-  ctx.fill();
-  ctx.fillStyle = opts.fill || "#fbf9f2";
-  roundRect(-w / 2, -h, w, h, 8);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(-4, -1);
-  ctx.lineTo(0, 7);
-  ctx.lineTo(4, -1);
-  ctx.fill();
-  if (label) text(label, 0, -h / 2 + 10, 32, opts.ink || "#1b1420", "center", null);
-  ctx.restore();
-}
-/** The windup telegraph: the exact ground the coming strike sweeps
- * (M.strikeZone: the drawn spear's band, from the card's front to the tip at
- * the end of its travel). Hazard hatching plus an arrowhead for the sweep's
- * direction, so it never relies on hue; it fades in over the windup (`k`
- * 0..1) and the hatch crawls toward the sweep. Reduced motion: steady. */
-function drawStrikeZone(guard, k) {
-  const z = M.strikeZone(guard);
-  if (z.w <= 0) return;
-  const x0 = wx(z.x),
-    y0 = wy(z.y),
-    w = Math.round(z.w),
-    h = Math.round(z.h),
-    a = reducedMotion ? 0.8 : 0.3 + 0.6 * Math.min(1, k * 1.4);
-  ctx.save();
-  ctx.globalAlpha = a;
-  ctx.fillStyle = "#1b1420";
-  ctx.fillRect(x0 - 2, y0 - 2, w + 4, h + 4);
-  ctx.fillStyle = "#fbe9e2";
-  ctx.fillRect(x0, y0, w, h);
-  ctx.beginPath();
-  ctx.rect(x0, y0, w, h);
-  ctx.clip();
-  ctx.strokeStyle = "#c0281e";
-  ctx.lineWidth = 4;
-  const crawl = reducedMotion ? 0 : ((clock * 48) % 14) * guard.dir;
-  ctx.beginPath();
-  for (let sx = x0 - h - 14; sx < x0 + w + 14; sx += 14) {
-    // Stripes lean the way the strike goes.
-    ctx.moveTo(sx + crawl, y0 + h);
-    ctx.lineTo(sx + crawl + guard.dir * h, y0);
-  }
-  ctx.stroke();
-  ctx.restore();
-  // The far end: an ink arrowhead pointing along the sweep.
-  const tipX = guard.dir > 0 ? x0 + w + 2 : x0 - 2,
-    cy = y0 + h / 2;
-  ctx.globalAlpha = a;
-  ctx.fillStyle = "#1b1420";
-  ctx.beginPath();
-  ctx.moveTo(tipX + guard.dir * 12, cy);
-  ctx.lineTo(tipX, cy - h / 2 - 6);
-  ctx.lineTo(tipX, cy + h / 2 + 6);
-  ctx.closePath();
-  ctx.fill();
-  // A dashed ink line on the floor under the strip: where to not stand.
-  const floor = wy(guard.floor);
-  for (let sx = 0; sx < w; sx += 12) ctx.fillRect(x0 + sx, floor - 3, Math.min(7, w - sx), 3);
-  ctx.globalAlpha = 1;
-}
-/** The recovery's stomp invitation: a bobbing arrow onto the card's head and
- * a ring around the head (the card is open: no body damage, stompable). */
-function openMarker(x, top) {
-  const b = reducedMotion ? 0 : Math.abs(Math.sin(clock * 7)) * 6,
-    y = top - 26 - b;
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = "#1b1420";
-  ctx.beginPath();
-  ctx.ellipse(x, top + 2, 24, 7, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "#ffd84a";
-  ctx.stroke();
-  ctx.fillStyle = "#1b1420";
-  ctx.beginPath();
-  ctx.moveTo(x, y + 14);
-  ctx.lineTo(x - 13, y - 2);
-  ctx.lineTo(x - 5, y - 2);
-  ctx.lineTo(x - 5, y - 14);
-  ctx.lineTo(x + 5, y - 14);
-  ctx.lineTo(x + 5, y - 2);
-  ctx.lineTo(x + 13, y - 2);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = "#ffd84a";
-  ctx.beginPath();
-  ctx.moveTo(x, y + 9);
-  ctx.lineTo(x - 8, y);
-  ctx.lineTo(x - 2, y);
-  ctx.lineTo(x - 2, y - 11);
-  ctx.lineTo(x + 2, y - 11);
-  ctx.lineTo(x + 2, y);
-  ctx.lineTo(x + 8, y);
-  ctx.closePath();
-  ctx.fill();
-}
-/** Dazed: stars circling, inside a ring that empties as the daze runs out
- * (full at the daze's start), so what the state is and when it ends are
- * both on screen. Under reduced motion the stars stand still; the ring stays. */
-function dazeRing(guard, x, y) {
-  const max = dazeMax.get(guard.id) ?? M.ENEMY.charger.daze,
-    left = Math.max(0, Math.min(1, guard.timer / max)),
-    r = 22;
-  ctx.lineWidth = 7;
-  ctx.strokeStyle = "#1b1420";
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "#4a3f4e";
-  ctx.stroke();
-  ctx.strokeStyle = "#ffe066";
-  ctx.beginPath();
-  ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + left * Math.PI * 2);
-  ctx.stroke();
-  for (let i = 0; i < 3; i++) {
-    const a = (reducedMotion ? 0 : clock * 4) + (i * Math.PI * 2) / 3;
-    drawStar(x + Math.cos(a) * 12, y + Math.sin(a) * 5);
-  }
-}
 /** The charger's armour, drawn in code over its head (card-local space,
  * left-facing): an iron cap with a horn, so the heavy type reads by its
  * silhouette as well as by its pace; its colour badge stays as it is. */
 function chargerHelmet() {
   // Card-local px: the drawn card's top edge is ~84 px above its feet and
   // its face centre ~4 px forward of the body centre (measured on the red
-  // sheet's idle and walk frames).
-  const y = -80;
-  ctx.fillStyle = "#1b1420";
-  ctx.beginPath();
-  ctx.ellipse(-2, y, 24, 14, 0, Math.PI, 0);
-  ctx.fill();
-  ctx.fillRect(-30, y - 3, 56, 7);
-  ctx.beginPath();
-  ctx.moveTo(-14, y - 10);
-  ctx.lineTo(-30, y - 32);
-  ctx.lineTo(-2, y - 14);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = "#8d8796";
-  ctx.beginPath();
-  ctx.ellipse(-2, y - 1, 19, 10, 0, Math.PI, 0);
-  ctx.fill();
-  ctx.fillRect(-27, y - 1, 50, 3);
-  ctx.fillStyle = "#c9c4cf";
-  ctx.fillRect(-12, y - 9, 10, 3);
-  ctx.fillStyle = "#fbf9f2";
-  ctx.beginPath();
-  ctx.moveTo(-13, y - 12);
-  ctx.lineTo(-25, y - 27);
-  ctx.lineTo(-5, y - 14);
-  ctx.closePath();
-  ctx.fill();
+  // sheet's idle and walk frames). The cap is a 30 x 20 art-px sprite (pixel-ui
+  // kit) drawn at 2x in the card's own transform: its centre column is the
+  // old ellipse's centre (-2 px) and its brim sits at the old y = -80.
+  ctx.drawImage(pix.helmet(), -2 - 30, -80 - 24, 60, 40);
 }
 /** A defeated card for M.GUARD.defeatTime (0.5 s), then nothing (it has no
  * body from the first tick). A stomp flattens it and it bursts into paper
@@ -2263,10 +2012,10 @@ function drawDefeat(guard, sheet, x, floor) {
   const k = t / T,
     image = guard.kind === "red" ? img.cardRed : img.cardGreen,
     src = [0, 6 * sheet.cw, 0, sheet.cw, sheet.ch];
+  // The fade-out is a blink (whole frames), never a blend.
   const card = (alpha) => {
-    ctx.globalAlpha = alpha;
+    if (alpha < 0.55 && Math.floor(clock * 24) % 2) return;
     ctx.drawImage(image, src[1], src[2], src[3], src[4], -sheet.cx * 2, -sheet.feet * 2, sheet.cw * 2, sheet.ch * 2);
-    ctx.globalAlpha = 1;
   };
   ctx.save();
   if (reducedMotion) {
@@ -2289,20 +2038,12 @@ function drawDefeat(guard, sheet, x, floor) {
   }
   ctx.restore();
   if (guard.defeatHow === "knock" && !reducedMotion) return;
-  // The ring poof at the body's centre.
+  // The ring poof at the body's centre: two pixel ellipses that grow, then blink out.
   const rk = reducedMotion ? 0.5 : Math.min(1, t / (T * 0.8)),
     r = 24 + rk * 70,
     cy = floor - 40;
-  ctx.globalAlpha = 1 - k;
-  ctx.lineWidth = 10 * (1 - rk) + 3;
-  ctx.strokeStyle = "#1b1420";
-  ctx.beginPath();
-  ctx.ellipse(x, cy, r, r * 0.6, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.lineWidth = Math.max(1, 6 * (1 - rk) + 1);
-  ctx.strokeStyle = "#fbf9f2";
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+  if (k > 0.6 && Math.floor(clock * 24) % 2) return;
+  pix.ring(x, cy, r, r * 0.6, PAL.cream, Math.max(1, Math.round(4 * (1 - rk)) + 1));
 }
 function drawGuard(guard) {
   if (guard.state === "away") return; // escape-only card, not here yet
@@ -2313,19 +2054,14 @@ function drawGuard(guard) {
   if (guard.state === "defeated") return drawDefeat(guard, sheet, x, floor);
   const e = enemyOf(guard),
     windK = guard.state === "windup" ? Math.max(0, Math.min(1, 1 - guard.timer / e.windup)) : 0;
-  if (guard.state === "windup") drawStrikeZone(guard, windK);
+  if (guard.state === "windup") pix.strikeZone(guard, windK);
   const image = guard.state === "drained" ? derived.cardGrey : guard.kind === "red" ? img.cardRed : img.cardGreen,
     [row, col] = guardFrame(guard, sheet),
     dw = sheet.cw * 2,
     dh = sheet.ch * 2;
   if (guard.absorb && guard.state !== "drained" && !game.unlocked.green) {
     // The glowing card holds Rubik's green: it pulses, unlike its neighbours.
-    const a = reducedMotion ? 0.4 : 0.3 + Math.sin(clock * 4) * 0.12,
-      g = ctx.createRadialGradient(x, floor - 44, 6, x, floor - 44, 80);
-    g.addColorStop(0, `rgba(127,208,75,${a})`);
-    g.addColorStop(1, "rgba(127,208,75,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(x - 80, floor - 124, 160, 160);
+    pix.glow(Math.round(x / 2), Math.round((floor - 44) / 2), 40, 40, reducedMotion ? 6 : 5 + Math.round(Math.sin(clock * 4) * 2), PAL.lime);
   }
   // The windup shake (motion: off under reduced motion; the lean stays).
   const jitter = guard.state === "windup" && !reducedMotion ? Math.round(Math.sin(clock * 75) * (1 + windK * 1.5)) : 0;
@@ -2360,26 +2096,18 @@ function drawGuard(guard) {
   // still searching after a stun: a "?" there read as "it suspects me" (the
   // red vault guard beside red Rubik after the theft, user playtest).
   const humming = guard.disguiseSeen && ["calm", "suspect", "search"].includes(guard.state);
-  if (["suspect", "search"].includes(guard.state) && !humming) bubble(x, head + bob, "?", { fill: "#ffe3b0" });
-  else if (guard.state === "windup") bubble(x + jitter, head - 4, "!!", { fill: "#ff8a7a", w: 46, h: 38 });
-  else if (["alert", "lunge"].includes(guard.state)) bubble(x, head + bob, "!", { fill: "#ffb3a6" });
-  else if (guard.state === "recover") openMarker(x, floor - M.GUARD.h - (guard.type === "charger" ? 14 : 0));
-  else if (guard.state === "stunned") dazeRing(guard, x, head - 8);
+  if (["suspect", "search"].includes(guard.state) && !humming) pix.bubble(x, head + bob, "?", { fill: PAL.lemon });
+  else if (guard.state === "windup") pix.bubble(x + jitter, head - 4, "!!", { fill: PAL.red, w: 23, h: 19 });
+  else if (["alert", "lunge"].includes(guard.state)) pix.bubble(x, head + bob, "!", { fill: PAL.rose });
+  else if (guard.state === "recover") pix.openMarker(x, floor - M.GUARD.h - (guard.type === "charger" ? 14 : 0));
+  else if (guard.state === "stunned") pix.dazeRing(guard, x, head - 8);
   else if (humming) {
     // Humming: the cone is on Rubik but he wears their color (a drawn note;
     // the pixel font has no music glyph).
-    bubble(x, head + bob, "", { w: 30, h: 30 });
-    ctx.fillStyle = "#1b1420";
-    ctx.fillRect(x + 2, head + bob - 25, 3, 13);
-    ctx.fillRect(x + 2, head + bob - 25, 8, 3);
-    ctx.fillRect(x - 4, head + bob - 14, 8, 6);
+    const b = pix.bubble(x, head + bob, "", { w: 15, h: 15 });
+    pix.note(b.x + 3, b.y + 3);
   }
-  if (guard.state === "calm" && guard.turning > 0 && guard.turning < M.GUARD.lookBack) text("…", x, head + 6, 32, "#fbf9f2", "center");
-}
-function drawStar(x, y) {
-  ctx.fillStyle = "#ffe066";
-  ctx.fillRect(Math.round(x) - 1, Math.round(y) - 4, 2, 8);
-  ctx.fillRect(Math.round(x) - 4, Math.round(y) - 1, 8, 2);
+  if (guard.state === "calm" && guard.turning > 0 && guard.turning < M.GUARD.lookBack) worldText("…", x, head + 6, PAL.cream);
 }
 function playerFrame(p) {
   if (p.storm > 0) {
@@ -2420,7 +2148,7 @@ function drawPlayer() {
     drawRubik(d.color, 160, 96, wx(d.x + M.PLAYER.w / 2), wy(y), d.direction, 1, t * 5 * d.direction);
     // 1-3's catch is not a death: the card raised the alarm, so say so over
     // the hop (Rubik is sent back to the checkpoint).
-    if (d.reason === "caught") text("caught!", wx(d.x + M.PLAYER.w / 2), wy(d.y) - 18, 32, "#ffd84a", "center");
+    if (d.reason === "caught") worldText("caught!", wx(d.x + M.PLAYER.w / 2), wy(d.y) - 18, PAL.lemon);
     return;
   }
   const p = game.player,
@@ -2481,557 +2209,24 @@ function drawPlayer() {
 }
 function drawParticles() {
   for (const q of fx.particles) {
+    // Particles are opaque squares on the 2 px grid; the last third of a life
+    // blinks out instead of fading.
     const a = 1 - q.age / q.life;
-    ctx.globalAlpha = Math.max(0, a);
-    if (q.debris) ctx.drawImage(img.tiles, q.debris[0], q.debris[1], 8, 8, wx(q.x) - 8, wy(q.y) - 8, 16, 16);
+    if (a < 0.3 && Math.floor(clock * 24 + q.age * 7) % 2) continue;
+    if (q.debris) ctx.drawImage(img.tiles, q.debris[0], q.debris[1], 8, 8, even(wx(q.x) - 8), even(wy(q.y) - 8), 16, 16);
     else if (q.spin) {
       // Confetti: a paper slip turning over (its width follows the spin).
-      ctx.save();
-      ctx.translate(wx(q.x), wy(q.y));
-      ctx.rotate(q.rot);
-      ctx.fillStyle = "#1b1420";
-      const w = Math.max(2, Math.abs(Math.cos(q.rot * 1.7)) * q.size + 2);
-      ctx.fillRect(-w / 2 - 1, -3, w + 2, 6);
-      ctx.fillStyle = q.color;
-      ctx.fillRect(-w / 2, -2, w, 4);
-      ctx.restore();
+      const w = Math.max(2, Math.round((Math.abs(Math.cos(q.rot * 1.7)) * q.size + 2) / 2) * 2);
+      ctx.fillStyle = PAL.ink;
+      ctx.fillRect(even(wx(q.x) - w / 2 - 2), even(wy(q.y) - 4), w + 4, 8);
+      ctx.fillStyle = nearestColour(q.color);
+      ctx.fillRect(even(wx(q.x) - w / 2), even(wy(q.y) - 2), w, 4);
     } else {
-      ctx.fillStyle = q.color;
-      ctx.fillRect(wx(q.x) - q.size / 2, wy(q.y) - q.size / 2, q.size, q.size);
+      ctx.fillStyle = nearestColour(q.color);
+      const size = Math.max(2, even(q.size));
+      ctx.fillRect(even(wx(q.x) - size / 2), even(wy(q.y) - size / 2), size, size);
     }
   }
-  ctx.globalAlpha = 1;
-}
-function drawPopups() {
-  for (const q of fx.popups) {
-    const k = q.age / q.life,
-      rise = reducedMotion ? 0 : 34 * Math.min(1, k * 1.6),
-      // A pop on arrival (scale is motion: reduced motion shows it at size).
-      size = reducedMotion ? q.size : Math.round(q.size * (k < 0.12 ? 1 + (0.12 - k) * 3 : 1));
-    ctx.globalAlpha = k > 0.7 ? Math.max(0, 1 - (k - 0.7) / 0.3) : 1;
-    const x = wx(q.x) - (q.heart ? 12 : 0),
-      y = wy(q.y) - rise;
-    text(q.label, x, y, size, q.color, "center");
-    if (q.heart) heartIcon(x + 26, y - 18, 2, "full");
-    ctx.globalAlpha = 1;
-  }
-}
-/** The five contextual bubbles (at most two per level). Each shows device-matched glyphs only:
- * keycaps on a keyboard, the on-screen button's look on touch. */
-const HINTS = {
-  move: { keys: ["<", ">"], touch: ["<", ">"] },
-  // 1-1's twist: the jump key twice ("jump, jump" - white's air jump).
-  airjump: { keys: ["Space", "Space"], touch: ["JUMP", "JUMP"] },
-  // 1-2: after the first spear-up, a card with an arrow dropping onto its back.
-  behind: { keys: [], touch: [], art: "behind" },
-  white: { keys: ["Z"], touch: [], chip: "white", thought: true },
-  green: { keys: ["X"], touch: [], chip: "green" },
-  dash: { keys: ["Shift"], touch: ["DASH"], dash: true },
-};
-function bigKey(label, x, y) {
-  // 30 px keycap; arrows are drawn, not typed (the pixel font has no arrows).
-  ctx.font = "32px monogram, monospace";
-  const arrow = label === "<" || label === ">",
-    w = arrow ? 34 : Math.max(34, Math.round(ctx.measureText(label).width) + 16);
-  ctx.fillStyle = "#1b1420";
-  roundRect(x, y - 30 + 3, w, 30, 6);
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  roundRect(x + 2, y - 30, w - 4, 28, 5);
-  ctx.fill();
-  ctx.fillStyle = "#1b1420";
-  if (arrow) {
-    const cx = x + w / 2,
-      cy = y - 16,
-      d = label === "<" ? -1 : 1;
-    ctx.beginPath();
-    ctx.moveTo(cx + d * 7, cy);
-    ctx.lineTo(cx - d * 5, cy - 8);
-    ctx.lineTo(cx - d * 5, cy + 8);
-    ctx.closePath();
-    ctx.fill();
-  } else {
-    ctx.textAlign = "center";
-    ctx.fillText(label, Math.round(x + w / 2), Math.round(y - 8));
-  }
-  return w;
-}
-function drawHint() {
-  const id = game.hint;
-  if (!id || screen !== "play" || game.phase !== "playing") return;
-  const hint = HINTS[id],
-    p = game.player,
-    labels = inputMode === "touch" ? hint.touch : hint.keys;
-  ctx.font = "32px monogram, monospace";
-  let w = 20;
-  for (const label of labels) w += (label.length > 1 ? ctx.measureText(label).width + 16 : 34) + 8;
-  if (hint.chip) w += 34;
-  if (hint.dash) w += 34;
-  if (hint.art) w += 64;
-  const x = wx(p.x + p.w / 2),
-    y = wy(p.y) - 16;
-  ctx.save();
-  ctx.globalAlpha = Math.min(1, game.hintAge * 4);
-  if (hint.thought) {
-    ctx.fillStyle = "#1b1420";
-    ctx.beginPath();
-    ctx.arc(x - 8, y + 2, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#fbf9f2";
-    ctx.beginPath();
-    ctx.arc(x - 8, y + 2, 4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  bubble(x, y - 8, "", { w, h: 46 });
-  let cx = x - w / 2 + 10;
-  if (hint.chip) {
-    formCard(hint.chip, cx, y - 50, 26, 36, null);
-    cx += 34;
-  }
-  for (const label of labels) cx += bigKey(label, cx, y - 16) + 8;
-  if (hint.dash) {
-    ctx.fillStyle = "#1b1420";
-    for (let i = 0; i < 3; i++) ctx.fillRect(cx + i * 4, y - 40 + i * 8, 26 - i * 6, 4);
-  }
-  if (hint.art === "behind") {
-    // A card facing right (its spear at the front) and an arrow curving
-    // down onto its back: stomp from behind.
-    ctx.fillStyle = COLORS.green;
-    ctx.fillRect(cx + 30, y - 38, 18, 26);
-    ctx.fillStyle = "#1b1420";
-    ctx.fillRect(cx + 50, y - 46, 2, 30);
-    ctx.beginPath();
-    ctx.moveTo(cx + 51, y - 52);
-    ctx.lineTo(cx + 56, y - 44);
-    ctx.lineTo(cx + 46, y - 44);
-    ctx.fill();
-    ctx.strokeStyle = "#1b1420";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(cx + 6, y - 46);
-    ctx.quadraticCurveTo(cx + 22, y - 54, cx + 32, y - 42);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx + 34, y - 38);
-    ctx.lineTo(cx + 26, y - 44);
-    ctx.lineTo(cx + 36, y - 47);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-/** A pixel heart, 7 x 6 cells at `s` px per cell, centred on (cx, cy), with a
- * one-cell ink outline. Full and empty differ by fill AND shape (colour-blind
- * safe): a full heart is solid red with a highlight; an empty one is a dark,
- * cracked heart whose right half is knocked a cell aside along a zigzag. */
-const HEART = [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."];
-const heartCells = HEART.flatMap((row, y) => [...row].map((c, x) => (c === "#" ? [x, y] : null)).filter(Boolean));
-const crackLeft = ([x, y]) => x < 3 || (x === 3 && y % 2 === 0);
-function heartIcon(cx, cy, s, state) {
-  const ox = Math.round(cx - 3.5 * s),
-    oy = Math.round(cy - 3 * s),
-    cells = state === "empty" ? heartCells.map((c) => (crackLeft(c) ? c : [c[0] + 1, c[1] + 1])) : heartCells;
-  ctx.fillStyle = "#1b1420";
-  for (const [x, y] of cells) ctx.fillRect(ox + (x - 1) * s, oy + (y - 1) * s, s * 3, s * 3);
-  for (const [x, y] of cells) {
-    ctx.fillStyle = state === "empty" ? "#3a3040" : x === 1 && y === 1 ? "#ffb3a6" : y >= 3 ? "#b8261c" : COLORS.red;
-    ctx.fillRect(ox + x * s, oy + y * s, s, s);
-  }
-}
-/** Hearts, top left under the form cards (which end at y ~70): 3 px cells,
- * 26 px apart, so the row ends at x ~95, clear of the dash pad (x >= 80 only
- * from y 26-62) and its Shift keycap (x >= 106). A lost heart splits and its
- * halves fall (the row shakes); a regained one pops in with sparkles; the
- * last heart beats. Reduced motion: the change is instant and the row still. */
-const HUD_HEARTS = { x: 30, y: 92, step: 26, s: 3 };
-function drawHearts(p) {
-  const { x, y, step, s } = HUD_HEARTS,
-    shake = fx.hudShake > 0 && !reducedMotion ? Math.sin(fx.hudShake * 70) * 4 * (fx.hudShake / 0.35) : 0;
-  for (let i = 0; i < M.WORLD.hearts; i++) {
-    const hx = x + i * step + shake,
-      full = i < p.hp,
-      anim = fx.hearts.find((h) => h.i === i && h.age >= 0);
-    if (anim?.kind === "gain" && full && !reducedMotion) {
-      const k = Math.min(1, anim.age / 0.25);
-      ctx.save();
-      ctx.translate(hx, y);
-      ctx.scale(1.6 - 0.6 * k, 1.6 - 0.6 * k);
-      heartIcon(0, 0, s, "full");
-      ctx.restore();
-      for (let j = 0; j < 4; j++) {
-        const a = j * 1.57 + anim.age * 6,
-          r = 12 + anim.age * 30;
-        if (anim.age < 0.45) drawStar(hx + Math.cos(a) * r, y + Math.sin(a) * r);
-      }
-      continue;
-    }
-    const beat = full && p.hp === 1 && !reducedMotion ? 1 + 0.1 * Math.max(0, Math.sin(clock * 7)) : 1;
-    ctx.save();
-    ctx.translate(hx, y);
-    ctx.scale(beat, beat);
-    heartIcon(0, 0, s, full ? "full" : "empty");
-    ctx.restore();
-    if (anim?.kind === "loss" && !reducedMotion) {
-      // The lost heart shatters: its two halves tumble out and fade.
-      const k = anim.age / 0.6;
-      ctx.globalAlpha = 1 - k;
-      for (const side of [-1, 1]) {
-        ctx.save();
-        ctx.translate(hx + side * (4 + k * 16), y + k * k * 40);
-        ctx.rotate(side * k * 1.6);
-        ctx.beginPath();
-        ctx.rect(side < 0 ? -14 : 0, -14, 14, 28);
-        ctx.clip();
-        heartIcon(0, 0, s, "full");
-        ctx.restore();
-      }
-      ctx.globalAlpha = 1;
-    }
-  }
-  // CHAIN meter while a chain is alive (2+): the count and one pip per link
-  // up to the heart it pays (the 3rd pip is a heart), then gold.
-  if (p.chain >= 2) {
-    const mx = 16,
-      my = y + 22,
-      paid = p.chain >= M.WORLD.chainHeal;
-    ctx.fillStyle = "#1b1420";
-    roundRect(mx - 2, my - 2, 104, 36, 8);
-    ctx.fill();
-    ctx.fillStyle = paid ? "#5a3c08" : "#2b2230";
-    roundRect(mx, my, 100, 32, 7);
-    ctx.fill();
-    text("CHAIN", mx + 8, my + 14, 16, "#cfc6d6", "left", null);
-    text(`x${p.chain}`, mx + 92, my + 25, 32, paid ? "#ffd84a" : "#fbf9f2", "right", null);
-    for (let i = 0; i < M.WORLD.chainHeal; i++) {
-      const px = mx + 12 + i * 15,
-        py = my + 23;
-      if (i === M.WORLD.chainHeal - 1) heartIcon(px + 2, py, 2, i < p.chain ? "full" : "empty");
-      else {
-        ctx.fillStyle = "#1b1420";
-        ctx.fillRect(px - 5, py - 4, 10, 8);
-        ctx.fillStyle = i < p.chain ? "#fbf9f2" : "#4a3f4e";
-        ctx.fillRect(px - 4, py - 3, 8, 6);
-      }
-    }
-  }
-}
-function drawHud() {
-  const p = game.player,
-    forms = ["white", "green", "red"].filter((c) => game.unlocked[c]);
-  // In the portrait crop the canvas is wider than the view: pull the HUD in.
-  ctx.save();
-  ctx.translate(hudInset, 0);
-  // Form cards: the current form in front, unlocked others fanned behind.
-  const others = forms.filter((c) => c !== p.color);
-  const shake = fx.locked > 0 && !reducedMotion ? Math.sin(fx.locked * 60) * 3 : 0;
-  others.forEach((color, i) => {
-    const deal = fx.chipDeal[color] || 0;
-    formCard(color, 46 + i * 26 + shake + deal * 60, 18 - deal * 40, 34, 48, keyFor(color), 0.16 + i * 0.12, 0.88 - deal);
-  });
-  const deal = fx.chipDeal[p.color] || 0;
-  formCard(p.color, 16 + shake, 14 - deal * 30, 40, 56, keyFor(p.color), -0.05, 1);
-  // After DASH GET: a storm streak by the form cards, and a Shift (or DASH)
-  // keycap for the first 3 dashes of 1-4. State itself stays on Rubik.
-  if (game.dashUnlocked) {
-    const deal = fx.chipDeal.dash || 0,
-      dx = 18 + forms.length * 26 + 36 + deal * 50,
-      dy = 26 - deal * 30;
-    ctx.globalAlpha = 1 - deal * 0.8;
-    ctx.fillStyle = "rgba(10,8,14,0.55)";
-    roundRect(dx + 2, dy + 3, 36, 36, 8);
-    ctx.fill();
-    ctx.fillStyle = "#fbf9f2";
-    roundRect(dx, dy, 36, 36, 8);
-    ctx.fill();
-    ctx.fillStyle = p.dashCharge > 0 || p.grounded ? "#1b1420" : "#a9a1ae";
-    for (let i = 0; i < 3; i++) ctx.fillRect(dx + 7 + i * 4, dy + 9 + i * 7, 22 - i * 6, 4);
-    ctx.globalAlpha = 1;
-    if (LV.id === "1-4" && game.dashes < 3 && inputMode !== "touch") keycap("Shift", dx + 18, dy + 52);
-  }
-  drawHearts(p);
-  ctx.restore();
-  ctx.save();
-  ctx.translate(-hudInset, 0);
-  // Sticker strip: this level's three slots, top right under the buttons.
-  // Solid = taken this run; faint = already in the save from an earlier run.
-  const fx0 = W - 16 - 84,
-    fy0 = 54;
-  ctx.fillStyle = "#1b1420";
-  roundRect(fx0 - 2, fy0 - 2, 88, 34, 8);
-  ctx.fill();
-  ctx.fillStyle = "#2b2230";
-  roundRect(fx0, fy0, 84, 30, 7);
-  ctx.fill();
-  game.stickers.forEach((st, i) => {
-    const sx = fx0 + 5 + i * 26,
-      sy = fy0 + 4;
-    ctx.fillStyle = st.collected ? "#ffcf2e" : st.owned ? "rgba(255,207,46,0.28)" : "#463b4a";
-    roundRect(sx, sy, 22, 22, 4);
-    ctx.fill();
-    if (st.collected) {
-      ctx.fillStyle = "#fff4c2";
-      ctx.fillRect(sx + 3, sy + 3, 7, 4);
-    } else if (st.owned) {
-      ctx.strokeStyle = "#ffcf2e";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(sx + 1, sy + 1, 20, 20);
-    }
-  });
-  let below = fy0 + 58;
-  // The "Quick" stamp, shown as the seal it awards: its seconds count down
-  // while it can still be earned; at zero the seal greys and is struck
-  // through (medal only - nothing fails, the escape goes on).
-  if (game.stolen && game.theftTime !== null && LV.par !== null) {
-    const left = Math.max(0, LV.par - ((game.finishTime ?? game.time) - game.theftTime)),
-      on = left > 0,
-      cx = W - 16 - 84 + 22,
-      cy = below + 8;
-    ctx.fillStyle = on ? COLORS.red : "#4a3f4e";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 18, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = on ? "#fbf9f2" : "#7a6f80";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 3]);
-    ctx.beginPath();
-    ctx.arc(cx, cy, 14, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    text(on ? String(Math.ceil(left)) : "-", cx, cy + 8, 16, "#ffffff", "center", on ? "#5a0e0a" : null);
-    text("Quick", cx + 26, cy + 8, 16, on ? "#fbf9f2" : "#7a6f80", "left", on ? "#1b1420" : null);
-    if (!on) {
-      ctx.fillStyle = "#7a6f80";
-      ctx.fillRect(cx + 24, cy + 1, 44, 2);
-    }
-    below += 40;
-  }
-  if (settings.timer) text(fmtTime(game.time), W - 16, below + 4, 32, "#fbf9f2", "right");
-  ctx.restore();
-  ctx.save();
-  ctx.translate(hudInset, 0);
-  // During the getaway, a small home arrow at the left edge until home is on
-  // screen (the chalk cube face is the home marker).
-  if (game.stolen && game.phase !== "won" && LV.home && LV.home.x1 < cam.x) {
-    const a = reducedMotion ? 1 : 0.75 + Math.sin(clock * 6) * 0.25,
-      y = H / 2 - 22;
-    ctx.globalAlpha = a;
-    ctx.fillStyle = "#1b1420";
-    roundRect(10, y - 2, 64, 48, 10);
-    ctx.fill();
-    ctx.fillStyle = "#fbf9f2";
-    roundRect(12, y, 60, 44, 9);
-    ctx.fill();
-    ctx.fillStyle = COLORS.red;
-    ctx.beginPath();
-    ctx.moveTo(18, y + 22);
-    ctx.lineTo(32, y + 10);
-    ctx.lineTo(32, y + 34);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "#1b1420";
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 9; i++) ctx.strokeRect(38 + (i % 3) * 9, y + 9 + Math.floor(i / 3) * 9, 8, 8);
-    ctx.globalAlpha = 1;
-  }
-  ctx.restore();
-}
-// No key glyph while white is the only form (1-1, 1-2): nothing to switch to.
-const keyFor = (color) => (inputMode === "touch" || !game.unlocked.green ? null : { white: "Z", green: "X", red: "C" }[color]);
-/** The level card: "1-3" at 64 px, the name at 32 px and three sticker
- * slots on an Uno-style card over the dimmed first frame (1 s; 0.5 s once
- * the level is cleared). Any key skips it. */
-function drawIntro() {
-  const card = fx.intro;
-  if (!card) return;
-  const t = card.age,
-    out = card.skipped ? Math.min(1, t * 6) : Math.max(0, (t - card.dur) / 0.4),
-    a = Math.max(0, Math.min(1, t / 0.12, 1 - out));
-  if (a <= 0) return;
-  ctx.save();
-  ctx.globalAlpha = a;
-  ctx.fillStyle = "rgba(10,8,14,0.45)";
-  ctx.fillRect(0, 0, W, H);
-  const cw = 300,
-    ch = 190,
-    x = W / 2 - cw / 2,
-    y = H / 2 - ch / 2 - 30,
-    rec = C.levelRecord(save, LV.id);
-  ctx.translate(W / 2, y + ch / 2);
-  ctx.rotate(reducedMotion ? 0 : -0.04 + (1 - Math.min(1, t / 0.25)) * -0.12);
-  ctx.translate(-W / 2, -(y + ch / 2));
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
-  roundRect(x + 6, y + 8, cw, ch, 18);
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  roundRect(x, y, cw, ch, 18);
-  ctx.fill();
-  ctx.fillStyle = "#2b1f2e";
-  roundRect(x + 8, y + 8, cw - 16, ch - 16, 12);
-  ctx.fill();
-  text(LV.id, W / 2, y + 74, 64, "#ffcf2e", "center", "#000");
-  text(LV.name, W / 2, y + 112, 32, "#ffffff", "center", "#000");
-  LV.stickers.forEach((st, i) => {
-    const sx = W / 2 - 40 + i * 28;
-    ctx.fillStyle = rec.stickers.includes(st.id) ? "#ffcf2e" : "#463b4a";
-    roundRect(sx, y + 132, 22, 22, 4);
-    ctx.fill();
-  });
-  ctx.restore();
-}
-/** GET card: hit-stop, then the new color at 4x with its key and a caption,
- * held for the model's 1.2 s GET freeze; the form card is then dealt into
- * the HUD (chipDeal). */
-function drawGetCard() {
-  const get = fx.get;
-  if (!get) return;
-  const info = GET_CARDS[get.ability],
-    t = get.age,
-    a = Math.max(0, Math.min(1, t / 0.12, (M.WORLD.hitstop.get + 0.1 - t) / 0.15)),
-    pop = reducedMotion ? 1 : Math.min(1, 0.6 + t * 3);
-  ctx.save();
-  ctx.globalAlpha = a;
-  ctx.fillStyle = "rgba(10,8,14,0.5)";
-  ctx.fillRect(0, 0, W, H);
-  // 420 x 250: narrow enough for the portrait crop; the caption has its own
-  // band under the portrait so it never runs into the circle.
-  const color = get.ability === "dash" ? "white" : get.ability,
-    cw = 420,
-    ch = 250,
-    x = W / 2 - cw / 2,
-    y = H / 2 - ch / 2 - 20;
-  ctx.translate(W / 2, H / 2 - 20);
-  ctx.scale(pop, pop);
-  ctx.translate(-W / 2, -(H / 2 - 20));
-  ctx.fillStyle = "#fbf9f2";
-  roundRect(x, y, cw, ch, 20);
-  ctx.fill();
-  ctx.fillStyle = get.ability === "dash" ? "#3d4f7a" : COLORS[color];
-  roundRect(x + 10, y + 10, cw - 20, ch - 20, 14);
-  ctx.fill();
-  ctx.fillStyle = "rgba(251,249,242,0.9)";
-  ctx.beginPath();
-  ctx.ellipse(x + 104, y + 98, 74, 78, -0.4, 0, Math.PI * 2);
-  ctx.fill();
-  // Rubik at 4x in the new color (dash: the storm frames).
-  ctx.imageSmoothingEnabled = false;
-  if (get.ability === "dash") {
-    const f = 1 + (reducedMotion ? 0 : Math.floor(clock * 10) % 3);
-    ctx.drawImage(img.storm, f * 32, 0, 32, 32, x + 40, y + 34, 128, 128);
-  } else ctx.drawImage(img[color], (Math.floor(clock * 4) % 2) * 32, 0, 32, 32, x + 40, y + 30, 128, 128);
-  text(info.title, x + 296, y + 78, 48, "#ffffff", "center", "#000");
-  if (get.ability === "dash") {
-    if (inputMode === "touch") dashPill(x + 260, y + 136);
-    else bigKey(info.key, x + 258, y + 136);
-  } else {
-    formCard(color, x + 244, y + 100, 30, 42, null);
-    if (inputMode !== "touch") bigKey(info.key, x + 288, y + 136);
-  }
-  ctx.fillStyle = "rgba(10,8,14,0.35)";
-  roundRect(x + 18, y + 188, cw - 36, 44, 10);
-  ctx.fill();
-  text(info.caption, W / 2, y + 218, 32, "#ffffff", "center", "#000");
-  ctx.restore();
-}
-/** Uno REVERSE card sweeping across: the theft's turning point. */
-function drawReverse() {
-  if (fx.reverse < 0 || fx.get) return;
-  // Never over Rubik: the card and the caption take the half of the screen
-  // he isn't in (the cards are held still meanwhile, model.mjs theftCalm).
-  const rubikY = wy(game.player.y + M.PLAYER.h / 2),
-    low = rubikY < H / 2,
-    t = fx.reverse / 1.1,
-    x = reducedMotion ? W / 2 : W + 160 - (W + 320) * Math.min(1, t * 1.15),
-    y = low ? H - 150 : 150;
-  ctx.save();
-  ctx.globalAlpha = reducedMotion ? 1 : Math.min(1, (1 - t) * 4);
-  ctx.translate(x, y);
-  ctx.rotate(-0.12);
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
-  roundRect(-118, -78, 244, 164, 16);
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  roundRect(-124, -84, 248, 168, 16);
-  ctx.fill();
-  ctx.fillStyle = COLORS.red;
-  roundRect(-114, -74, 228, 148, 10);
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 92, 52, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  // two arrows chasing each other
-  ctx.strokeStyle = COLORS.red;
-  ctx.fillStyle = COLORS.red;
-  ctx.lineWidth = 8;
-  for (const s of [1, -1]) {
-    ctx.beginPath();
-    ctx.arc(0, 0, 30, s > 0 ? Math.PI * 1.1 : Math.PI * 0.1, s > 0 ? Math.PI * 1.9 : Math.PI * 0.9);
-    ctx.stroke();
-    const ax = s * 26,
-      ay = s * 12;
-    ctx.beginPath();
-    ctx.moveTo(ax + s * 12, ay - s * 2);
-    ctx.lineTo(ax - s * 4, ay - s * 14);
-    ctx.lineTo(ax - s * 6, ay + s * 8);
-    ctx.fill();
-  }
-  ctx.restore();
-  if (fx.reverse < 1.1) text("REVERSE!", x, y + 120, 48, "#ffffff", "center", "#000000");
-  // The goal, stated once, after the card has swept by: run home; red dash
-  // breaks the cracked stones.
-  if (fx.reverse > 0.95) {
-    const a = Math.min(1, (fx.reverse - 0.95) * 5, (2.6 - fx.reverse) * 3);
-    ctx.globalAlpha = Math.max(0, a);
-    const by = low ? H - 150 : 88; // the caption block's top
-    text("Run home!", W / 2, by + 40, 48, "#ffffff", "center", "#000000");
-    const touch = inputMode === "touch",
-      rowW = touch ? 300 : 320,
-      rx = W / 2 - rowW / 2;
-    ctx.fillStyle = "rgba(27,20,32,0.8)";
-    roundRect(rx - 10, by + 52, rowW + 20, 52, 12);
-    ctx.fill();
-    formCard("red", rx, by + 56, 30, 42, null);
-    text("+", rx + 46, by + 88, 32, "#fbf9f2", "center", null);
-    const kw = touch ? dashPill(rx + 60, by + 94) : bigKey("Shift", rx + 60, by + 94);
-    text("breaks stones", rx + 72 + kw, by + 88, 32, "#fbf9f2", "left", null);
-    ctx.globalAlpha = 1;
-  }
-}
-function dashPill(x, y) {
-  ctx.font = "32px monogram, monospace";
-  const w = Math.round(ctx.measureText("DASH").width) + 18;
-  ctx.fillStyle = "rgba(251,249,242,0.35)";
-  roundRect(x, y - 30, w, 30, 10);
-  ctx.fill();
-  ctx.strokeStyle = "#1b1420";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = "#fbf9f2";
-  ctx.textAlign = "center";
-  ctx.fillText("DASH", x + w / 2, y - 8);
-  return w;
-}
-/** The original cutout.png iris: a Rubik-face hole, scaled with the original
- * shader's curve s = 2^(10t-10)*5 (t=1 closed, t=0 open). */
-function drawIris(t, cx = W / 2, cy = H / 2) {
-  if (t <= 0) return;
-  if (t >= 1 || reducedMotion) {
-    if (t >= 0.5) {
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, W, H);
-    }
-    return;
-  }
-  const s = Math.pow(2, 10 * t - 10) * 5;
-  if (!derived.iris) derived.iris = makeCanvas(W, H);
-  const [c, x] = derived.iris;
-  x.globalCompositeOperation = "source-over";
-  x.fillStyle = "#000";
-  x.fillRect(0, 0, W, H);
-  x.globalCompositeOperation = "destination-out";
-  const w = W / s,
-    h = H / s;
-  x.drawImage(img.cutout, cx - w / 2, cy - h / 2, w, h);
-  ctx.drawImage(c, 0, 0);
 }
 function drawWorld() {
   ctx.save();
@@ -3052,60 +2247,11 @@ function drawWorld() {
   for (const guard of game.guards) drawGuard(guard);
   drawPlayer();
   drawParticles();
-  drawPopups();
-  drawHint();
+  pix.drawPopups();
+  pix.drawHint();
   ctx.restore();
 }
-function drawFlash() {
-  // The hit's screen-edge flash: a red frame that fades in 0.4 s (an edge,
-  // not the whole screen, so the play stays readable through it).
-  if (fx.edge > 0) {
-    const a = Math.min(1, fx.edge / 0.4) * 0.55,
-      d = 46;
-    for (const [x0, y0, x1, y1, rx, ry, rw, rh] of [[0, 0, 0, d, 0, 0, W, d], [0, H, 0, H - d, 0, H - d, W, d], [0, 0, d, 0, 0, 0, d, H], [W, 0, W - d, 0, W - d, 0, d, H]]) {
-      const g = ctx.createLinearGradient(x0, y0, x1, y1);
-      g.addColorStop(0, `rgba(232,56,44,${a})`);
-      g.addColorStop(1, "rgba(232,56,44,0)");
-      ctx.fillStyle = g;
-      ctx.fillRect(rx, ry, rw, rh);
-    }
-  }
-  if (fx.flash <= 0) return;
-  ctx.globalAlpha = Math.min(0.5, fx.flash);
-  ctx.fillStyle = fx.flashColor;
-  ctx.fillRect(0, 0, W, H);
-  ctx.globalAlpha = 1;
-}
-
 // ------------------------------------------------------- front-end screens --
-function drawBoot() {
-  ctx.fillStyle = "#0b0a10";
-  ctx.fillRect(0, 0, W, H);
-  // A small spinning 3x3 cube face while the art loads.
-  ctx.save();
-  ctx.translate(W / 2, H / 2);
-  ctx.rotate(reducedMotion ? 0 : clock * 2.5);
-  const palette = ["#f3f0e4", "#5fbf3a", "#e8382c", "#3a7bd5", "#ffcf2e", "#f08a24", "#f3f0e4", "#5fbf3a", "#e8382c"];
-  for (let i = 0; i < 9; i++) {
-    ctx.fillStyle = palette[(i + Math.floor(clock * 3)) % 9];
-    ctx.fillRect(-21 + (i % 3) * 14, -21 + Math.floor(i / 3) * 14, 12, 12);
-  }
-  ctx.restore();
-}
-function drawTitle() {
-  ctx.drawImage(img.title, 0, 0, W, H);
-  // On touch screens "press any key" is wrong: an opaque pixel plate covers
-  // the baked line (source y 184-198 -> 368-396 at 2x) and says tap.
-  if (inputMode === "touch") {
-    ctx.fillStyle = "#0b1226";
-    roundRect(W / 2 - 300, 356, 600, 52, 10);
-    ctx.fill();
-    ctx.strokeStyle = "#fbf9f2";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    text("Tap to start", W / 2, 394, 48, "#ffffff", "center", "#000000");
-  }
-}
 const STORY = { drain: 0.8, black: 0.35, panel: 1.8, first: 1.15, hold: 1.4 };
 const PANELS = [
   ["q1", 135, 78],
@@ -3123,13 +2269,11 @@ function drawStory() {
     { start, end, close } = storyTimes();
   if (t < STORY.drain + STORY.black) {
     // The theft told in-world: the title forest is drained to bg1's grey,
-    // the logo fading with its colors, then the comic's black page.
+    // the logo fading with its colors, then the comic's black page. Each
+    // cross-fade is an ordered dither (pixels switch, colours never blend).
     ctx.drawImage(img.title, 0, 0, W, H);
-    ctx.globalAlpha = Math.min(1, t / STORY.drain);
-    ctx.drawImage(img.forest, 0, 0, W, H);
-    ctx.globalAlpha = Math.max(0, Math.min(1, (t - STORY.drain) / STORY.black));
-    ctx.drawImage(img.black, 0, 0, W, H);
-    ctx.globalAlpha = 1;
+    pix.ditherDraw(img.forest, Math.round(Math.min(1, t / STORY.drain) * 16), 0, 0, 480, 270, 0, 0, W, H);
+    pix.ditherDraw(img.black, Math.round(Math.max(0, Math.min(1, (t - STORY.drain) / STORY.black)) * 16), 0, 0, 480, 270, 0, 0, W, H);
     return;
   }
   ctx.drawImage(img.black, 0, 0, W, H);
@@ -3138,367 +2282,14 @@ function drawStory() {
       age = t - at;
     if (age < 0) return;
     const image = img[key],
-      k = reducedMotion ? 1 : Math.min(1, age / 0.18),
-      scale = 2 * (0.92 + 0.08 * k);
-    ctx.globalAlpha = k;
-    ctx.drawImage(image, Math.round(x * 2 - (image.width * scale) / 2), Math.round(y * 2 - (image.height * scale) / 2), Math.round(image.width * scale), Math.round(image.height * scale));
-    ctx.globalAlpha = 1;
+      k = reducedMotion ? 1 : Math.min(1, age / 0.18);
+    // Each panel dissolves in at its own 2x size, placed on the 2 px grid (its
+    // centre was at an odd canvas pixel for the odd-sized panels).
+    pix.ditherDraw(image, Math.round(k * 16), 0, 0, image.width, image.height, Math.round(x - image.width / 2) * 2, Math.round(y - image.height / 2) * 2, image.width * 2, image.height * 2);
   });
-  text("▸▸", W - 18, H - 14, 32, "#fbf9f2", "right");
-  if (t >= end) drawIris(Math.min(1, (t - end) / 0.8));
+  pix.drawStorySkip();
+  if (t >= end) pix.iris(Math.min(1, (t - end) / 0.8));
   if (t >= close) startLevel(C.WORLD1[0], { skipIntro: false });
-}
-/** The ending: the colorized forest, red Rubik home, and end_game.png framed
- * as the comic's last page. The original line "That's it by now." is
- * covered by a plate reading "That's it for now." (the asset is untouched),
- * and one more line says what comes next. */
-function drawEnding() {
-  ctx.drawImage(derived.forestColor, 0, 0, W, H);
-  ctx.fillStyle = "rgba(14,10,20,0.45)";
-  ctx.fillRect(0, 0, W, H);
-  const fw = 480,
-    fh = 270,
-    fx0 = W / 2 - fw / 2,
-    fy0 = 60;
-  ctx.fillStyle = "#fbf9f2";
-  roundRect(fx0 - 12, fy0 - 12, fw + 24, fh + 24, 14);
-  ctx.fill();
-  ctx.drawImage(img.ending, fx0, fy0, fw, fh); // exactly 1x: the page itself
-  ctx.fillStyle = "#000000";
-  ctx.fillRect(fx0 + 168, fy0 + 166, 150, 22);
-  text("That's it for now.", W / 2, fy0 + 184, 16, "#ffffff", "center", null);
-  drawRubik("red", (Math.floor(clock * 4) % 2) * 32, 0, fx0 - 60, fy0 + fh + 4, 1, 1);
-  drawRubik("green", (Math.floor(clock * 4 + 1) % 2) * 32, 0, fx0 + fw + 60, fy0 + fh + 4, -1, 1);
-  text("World 2: Blue Mountains - coming soon", W / 2, fy0 + fh + 70, 32, "#ffffff", "center", "#000");
-  text(`${C.stickerTotal(save)}/${C.TOTAL_STICKERS} stickers`, W / 2, fy0 + fh + 104, 16, "#ffcf2e", "center", null);
-  if (screenTime > 1.2) text(inputMode === "touch" ? "tap to continue" : "any key to continue", W / 2, H - 18, 16, "#cfc6d6", "center", null);
-  drawIris(Math.max(0, 1 - screenTime / 0.8));
-}
-/** Card panel shared by the tally screens. */
-function panel(px, py, pw, ph) {
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  roundRect(px + 6, py + 8, pw, ph, 22);
-  ctx.fill();
-  ctx.fillStyle = "#fbf9f2";
-  roundRect(px, py, pw, ph, 22);
-  ctx.fill();
-  ctx.fillStyle = "#2b1f2e";
-  roundRect(px + 8, py + 8, pw - 16, ph - 16, 16);
-  ctx.fill();
-}
-/** A stamp: a small round seal, colored when earned, a grey outline when not. */
-function stamp(label, got, x, y) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-0.12);
-  ctx.fillStyle = got ? COLORS.red : "#3a3040";
-  ctx.beginPath();
-  ctx.arc(0, 0, 30, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = got ? "#fbf9f2" : "#6a5f70";
-  ctx.lineWidth = 3;
-  ctx.setLineDash([5, 4]);
-  ctx.beginPath();
-  ctx.arc(0, 0, 25, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.restore();
-  text(label, x, y + 8, 16, got ? "#ffffff" : "#8a7f90", "center", got ? "#5a0e0a" : null);
-}
-/** Level clear: time and best, stickers flying into their slots (0.15 s
- * each, with a sound), stamps; Continue (default) or Retry. */
-function drawResults() {
-  ctx.drawImage(colorAmount > 0.01 ? derived.forestColor : img.forest, 0, 0, W, H);
-  ctx.fillStyle = "rgba(14,10,20,0.55)";
-  ctx.fillRect(0, 0, W, H);
-  const r = fx.result || { time: game.finishTime ?? game.time, best: null, stickers: game.stickers.map((x) => ({ id: x.id, got: x.collected, owned: x.owned })), unseen: null, takedown: null, quick: null };
-  const px = 170,
-    py = 52,
-    pw = 620,
-    ph = 380;
-  panel(px, py, pw, ph);
-  text(`World 1 - ${LV.id}`, W / 2, py + 34, 16, "#cfc6d6", "center", null);
-  text(`${LV.name}: clear!`, W / 2, py + 76, 48, "#ffffff", "center", "#000");
-  // Rubik in the color he finished in, on his chalk face.
-  ctx.fillStyle = "#3d3042";
-  roundRect(px + 60, py + 196, 100, 14, 7);
-  ctx.fill();
-  drawRubik(game.player.color, (Math.floor(clock * 4) % 2) * 32, 0, px + 110, py + 202, 1, 1);
-  const rows = [
-    ["Time", fmtTime(r.time ?? 0), r.newBest && !r.firstClear ? "best!" : ""],
-    ["Best", r.best === null ? "-" : fmtTime(r.best), ""],
-  ];
-  if (game.escapeTime !== null) rows.push(["Getaway", fmtTime(game.escapeTime), ""]);
-  rows.push(["Hearts lost", String(r.hits ?? 0), r.hits === 0 ? "none!" : ""]);
-  rows.push(["Best chain", r.chainN >= 2 ? `x${r.chainN}` : "-", ""]);
-  // 30 px rows: five (1-6, with the getaway) still end above the stickers.
-  rows.forEach(([k, v, note], i) => {
-    text(k, px + 210, py + 128 + i * 30, 32, "#cfc6d6", "left", null);
-    text(v, px + 420, py + 128 + i * 30, 32, "#ffffff", "right", null);
-    if (note) text(note, px + 430, py + 128 + i * 30, 32, "#ffcf2e", "left", null);
-  });
-  // Stickers fly into their slots one by one.
-  r.stickers.forEach((st, i) => {
-    const sx = px + 214 + i * 70,
-      sy = py + 262,
-      land = 0.35 + i * 0.15,
-      k = reducedMotion ? 1 : Math.max(0, Math.min(1, (screenTime - land) / 0.15));
-    ctx.fillStyle = "#1b1420";
-    roundRect(sx - 4, sy - 4, 56, 56, 9);
-    ctx.fill();
-    ctx.fillStyle = "#463b4a";
-    roundRect(sx, sy, 48, 48, 7);
-    ctx.fill();
-    if (st.got || st.owned) {
-      if (!st.got) ctx.globalAlpha = 0.4; // owned from an earlier run
-      drawSticker(sx + 24, sy + 24 - (1 - k) * 60, 40, -1);
-      ctx.globalAlpha = 1;
-    }
-    if (st.got && k > 0 && k < 1 && !st.pinged) {
-      st.pinged = true;
-      play("tally");
-    }
-  });
-  const got = r.stickers.filter((x) => x.got || x.owned).length;
-  text(`${got}/3`, px + 452, py + 296, 32, "#ffcf2e", "left", null);
-  // Stamps where this level can award them, in one column: Ghost (never
-  // spotted) and Takedown (every card put down) compete; Quick is 1-6's par.
-  const sx = px + 530;
-  let sy = py + 130;
-  if (r.unseen !== null) {
-    stamp("Ghost", r.unseen, sx, sy);
-    sy += 82;
-  }
-  if (r.takedown) {
-    stamp("Takedown", r.takedown.got, sx, sy);
-    // The tally under it: this run, and the best one saved.
-    text(`${r.takedown.n}/${r.takedown.of}${r.takedown.best > r.takedown.n ? ` (best ${r.takedown.best})` : ""}`, sx, sy + 48, 16, r.takedown.got ? "#ffcf2e" : "#cfc6d6", "center", null);
-    sy += 92;
-  }
-  if (r.quick !== null) {
-    stamp("Quick", r.quick, sx, sy);
-    sy += 82;
-  }
-  if (r.chain) {
-    stamp("Chain", r.chain.got, sx, sy);
-    text(`${r.chainN}/${r.chain.par}${r.chain.best > r.chainN ? ` (best ${r.chain.best})` : ""}`, sx, sy + 48, 16, r.chain.got ? "#ffcf2e" : "#cfc6d6", "center", null);
-  }
-  if (r.assisted && (r.unseen !== null || r.takedown || r.quick !== null || r.chain)) text("Slow spotting: no stamps", sx, py + ph - 62, 16, "#cfc6d6", "center", null);
-  if (r.unlocked) text(`${r.unlocked} is open!`, W / 2, py + ph - 26, 32, "#9be36a", "center", null);
-}
-/** World clear: the old results screen, retitled, with world totals and the
- * three world medals, then one caption in the comic's style. */
-function drawWorldClear() {
-  ctx.drawImage(derived.forestColor, 0, 0, W, H);
-  ctx.fillStyle = "rgba(14,10,20,0.5)";
-  ctx.fillRect(0, 0, W, H);
-  const px = 120,
-    py = 18,
-    pw = 720,
-    ph = 412;
-  panel(px, py, pw, ph);
-  text("World 1 - Green Forest: clear!", W / 2, py + 40, 32, "#cfc6d6", "center", null);
-  text("You got your red back!", W / 2, py + 86, 48, "#ffffff", "center", "#000");
-  ctx.fillStyle = "#3d3042";
-  roundRect(px + 60, py + 196, 100, 14, 7);
-  ctx.fill();
-  drawRubik("red", (Math.floor(clock * 4) % 2) * 32, 0, px + 110, py + 202, 1, 1);
-  const total = C.stickerTotal(save),
-    rows = [
-      ["Stickers", `${total}/${C.TOTAL_STICKERS}`],
-      ["Levels", `${C.WORLD1.filter((id) => C.isCleared(save, id)).length}/${C.WORLD1.length}`],
-      ["Getaway", fmtTime(game.escapeTime ?? 0)],
-    ];
-  rows.forEach(([k, v], i) => {
-    text(k, px + 220, py + 142 + i * 36, 32, "#cfc6d6", "left", null);
-    text(v, px + 470, py + 142 + i * 36, 32, "#ffffff", "right", null);
-  });
-  // Six little faces: each level's sticker count.
-  C.WORLD1.forEach((id, i) => {
-    const rec = C.levelRecord(save, id);
-    chalkFace(px + 540 + (i % 3) * 52, py + 150 + Math.floor(i / 3) * 56, 14, (k) => (k < rec.stickers.length ? "#ffcf2e" : "#463b4a"), rec.stickers.length === 3);
-  });
-  const medals = C.worldMedals(save),
-    list = [
-      ["Full face", medals.fullFace, `all ${C.TOTAL_STICKERS} stickers`],
-      ["Ghost", medals.ghost, "Ghost on 1-3, 1-5, 1-6"],
-      ["Quick getaway", medals.quickGetaway, `home in ${getLevel("1-6").par} s`],
-    ];
-  list.forEach(([name, got, how], i) => {
-    const appear = Math.max(0, Math.min(1, (screenTime - 0.4 - i * 0.35) / 0.3)),
-      cx = px + 140 + i * 220,
-      cy = py + 296,
-      flip = reducedMotion ? 1 : Math.abs(Math.cos((1 - appear) * Math.PI * 0.5));
-    if (appear <= 0) return;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(Math.max(0.05, flip), 1);
-    ctx.fillStyle = got ? "#fbf9f2" : "#4a3f4e";
-    roundRect(-100, -40, 200, 84, 10);
-    ctx.fill();
-    ctx.fillStyle = got ? COLORS.red : "#2b2230";
-    roundRect(-94, -34, 188, 72, 6);
-    ctx.fill();
-    ctx.restore();
-    if (flip > 0.6) {
-      text(name, cx, cy - 6, 32, got ? "#ffffff" : "#9a8fa0", "center", got ? "#5a0e0a" : null);
-      text(got ? "earned!" : how, cx, cy + 26, 32, got ? "#ffe066" : "#9a8fa0", "center", got ? "#5a0e0a" : null);
-    }
-  });
-  // One narration box, the comic's caption style, after the medals.
-  if (screenTime > 1.6) {
-    const a = reducedMotion ? 1 : Math.min(1, (screenTime - 1.6) / 0.4);
-    ctx.globalAlpha = a;
-    ctx.fillStyle = "#1b1420";
-    ctx.fillRect(W / 2 - 320, py + ph - 66, 640, 44);
-    ctx.fillStyle = "#f6efd9";
-    ctx.fillRect(W / 2 - 317, py + ph - 63, 634, 38);
-    text("Green and red are back. Blue is up in the mountains.", W / 2, py + ph - 36, 32, "#1b1420", "center", null);
-    ctx.globalAlpha = 1;
-  }
-}
-/** The world map: a side view built from bg1-sky over bg1 that regains color
- * with every clear, a path of slab cells, six chalk-face nodes (1-6 is the
- * vault under the red beacon), Rubik walking node to node. */
-function drawMap() {
-  const amount = C.forestColor(save);
-  ctx.fillStyle = derived.skyFill;
-  ctx.fillRect(0, 0, W, H);
-  // bg1-sky continues bg1 upward: its bottom 20 rows fill the 40 px band the
-  // forest (shifted down 40 px) leaves at the top, both at exactly 2x.
-  ctx.drawImage(img.sky, 0, 431, 480, 20, 0, 0, 960, 40);
-  if (amount > 0.01) {
-    ctx.globalAlpha = amount;
-    ctx.drawImage(derived.skyColor, 0, 431, 480, 20, 0, 0, 960, 40);
-    ctx.globalAlpha = 1;
-  }
-  ctx.drawImage(img.forest, 0, 40, W, H);
-  if (amount > 0.01) {
-    ctx.globalAlpha = amount;
-    ctx.drawImage(derived.forestColor, 0, 40, W, H);
-    ctx.globalAlpha = 1;
-  }
-  ctx.fillStyle = derived.groundFill;
-  ctx.fillRect(0, 40 + H - 2, W, 4);
-  // The red beacon rises behind the vault node until World 1 is clear.
-  const vault = MAP_NODES[MAP_NODES.length - 1];
-  if (!C.worldClear(save)) {
-    const pulse = reducedMotion ? 0.85 : 0.8 + Math.sin(clock * 2) * 0.2;
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    for (const [half, alpha] of [
-      [40, 0.12],
-      [18, 0.2],
-      [7, 0.24],
-    ]) {
-      const v = ctx.createLinearGradient(0, vault.y - 20, 0, vault.y - 360);
-      v.addColorStop(0, `rgba(230,70,50,${alpha * pulse})`);
-      v.addColorStop(1, "rgba(230,70,50,0)");
-      ctx.fillStyle = v;
-      ctx.fillRect(vault.x - half, vault.y - 360, half * 2, 340);
-    }
-    ctx.restore();
-  }
-  text("World 1", W / 2, 46, 32, "#fbf9f2", "center", "#000");
-  text("Green Forest", W / 2, 88, 48, "#ffffff", "center", "#000");
-  // Path: slab cells (atlas row 0, cells 12-17, top 12 source px) at 2x, one
-  // continuous strip; segments to locked nodes are faint, and a newly opened
-  // segment draws in over 0.6 s.
-  const first = MAP_NODES[0].x - 48,
-    last = MAP_NODES[MAP_NODES.length - 1].x + 48,
-    cells = Math.round((last - first) / 32);
-  for (let j = 0; j < cells; j++) {
-    const x = first + j * 32,
-      seg = Math.max(0, Math.min(MAP_NODES.length - 2, Math.floor((x + 16 - MAP_NODES[0].x) / 140))),
-      to = seg + 1,
-      revealing = map.reveal && map.reveal.to === to,
-      reached = x + 16 <= MAP_NODES[0].x + 4 || C.isUnlocked(save, MAP_NODES[to].id),
-      along = (x + 16 - MAP_NODES[seg].x) / 140,
-      lit = revealing ? along <= Math.min(1, map.reveal.age / 0.6) : reached;
-    ctx.globalAlpha = lit ? 1 : 0.35;
-    const cell = j === 0 ? 12 : j === cells - 1 ? 17 : 13 + (j % 4);
-    ctx.drawImage(img.tiles, cell * 16, 0, 16, 12, x, MAP_NODES[0].y, 32, 24);
-  }
-  ctx.globalAlpha = 1;
-  // Nodes: chalk faces on sticks; locked ones are a faint outline, open ones
-  // bob, cleared ones are filled with the color Rubik finished in.
-  MAP_NODES.forEach((node, i) => {
-    const rec = C.levelRecord(save, node.id),
-      open = C.isUnlocked(save, node.id) && !(map.reveal && map.reveal.to === i),
-      bob = open && !rec.clear && !reducedMotion ? Math.round(Math.sin(clock * 3 + i) * 3) : 0,
-      x = node.x,
-      y = node.y - 82 + bob,
-      full = rec.stickers.length === 3;
-    ctx.globalAlpha = open ? 1 : 0.4;
-    ctx.fillStyle = "#c9b48a";
-    ctx.fillRect(x - 2, y + 28, 4, node.y - y - 28);
-    if (full) {
-      // A 3/3 level gets a gold rim on its node (Celeste's lesson).
-      ctx.strokeStyle = "#ffcf2e";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(x - 31, y - 31, 62, 62);
-    }
-    if (i === MAP_NODES.length - 1) {
-      // The vault node: cofre.png at 2x.
-      ctx.drawImage(img.vault, x - 23, y - 20, 46, 40);
-      if (rec.clear) {
-        ctx.fillStyle = "rgba(232,56,44,0.55)";
-        ctx.fillRect(x - 15, y - 13, 30, 28);
-      }
-    } else chalkFace(x, y, 17, rec.clear ? COLORS[rec.color || "white"] : open ? "rgba(20,16,26,0.5)" : null, open && i === map.cursor);
-    ctx.globalAlpha = 1;
-    text(node.id, x, y - 38, 16, open ? "#fbf9f2" : "#bdb4c2", "center", "#1b1420");
-    // Three sticker pips under the path, and a red seal for any stamp.
-    for (let k = 0; k < 3; k++) {
-      ctx.fillStyle = rec.stickers.includes(k + 1) ? "#ffcf2e" : open ? "rgba(27,20,32,0.75)" : "rgba(27,20,32,0.35)";
-      roundRect(x - 23 + k * 16, node.y + 32, 12, 12, 3);
-      ctx.fill();
-    }
-    if (rec.unseen || rec.takedown || rec.quick || rec.chain) {
-      ctx.fillStyle = COLORS.red;
-      ctx.beginPath();
-      ctx.arc(x + 34, y - 26, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#fbf9f2";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-  });
-  // Rubik walks node to node on the path (his 2x run row).
-  const a = MAP_NODES[map.from],
-    b = MAP_NODES[map.cursor],
-    k = map.walk,
-    rx = a.x + (b.x - a.x) * k,
-    walking = k < 1,
-    dir = b.x >= a.x ? 1 : -1,
-    color = C.isCleared(save, "1-6") ? "red" : C.isCleared(save, "1-2") ? "green" : "white";
-  drawRubik(color, walking ? (Math.floor(clock * 12) % 4) * 32 : (Math.floor(clock * 4) % 2) * 32, walking ? 64 : 0, rx + 34, a.y + 2 - (walking && !reducedMotion ? Math.abs(Math.sin(k * Math.PI)) * 10 : 0), dir, 1);
-  // HUD: owned forms (top left) and the world's sticker total (top right).
-  const forms = ["white", "green", "red"].filter((c) => c === "white" || (c === "green" && C.isCleared(save, "1-2")) || (c === "red" && C.isCleared(save, "1-6")));
-  forms.forEach((c, i) => formCard(c, 16 + i * 30, 14, 34, 48, null, -0.05 + i * 0.12, 1));
-  ctx.fillStyle = "#1b1420";
-  roundRect(W - 16 - 124, 54, 124, 36, 8);
-  ctx.fill();
-  drawSticker(W - 16 - 104, 72, 20, -1);
-  text(`${C.stickerTotal(save)}/${C.TOTAL_STICKERS}`, W - 24, 82, 32, "#ffcf2e", "right", null);
-  // Bottom panel: the selected level.
-  const level = getLevel(C.WORLD1[map.cursor]),
-    rec = C.levelRecord(save, level.id),
-    py = 470;
-  ctx.fillStyle = "rgba(27,20,32,0.86)";
-  roundRect(150, py, 660, 60, 12);
-  ctx.fill();
-  text(`${level.id}  ${level.name}`, 170, py + 28, 32, "#ffffff", "left", null);
-  text(level.idea, 170, py + 52, 16, "#cfc6d6", "left", null);
-  text(rec.best === null ? "" : `best ${fmtTime(rec.best)}`, 640, py + 28, 32, "#cfc6d6", "right", null);
-  for (let i = 0; i < 3; i++) {
-    ctx.fillStyle = rec.stickers.includes(i + 1) ? "#ffcf2e" : "#463b4a";
-    roundRect(656 + i * 26, py + 10, 20, 20, 4);
-    ctx.fill();
-  }
-  const touch = inputMode === "touch",
-    prompt = map.prompt > 0 ? "locked" : touch ? "tap again: play" : "Enter: play";
-  text(prompt, 790, py + 52, 16, map.prompt > 0 ? "#ff9b8a" : "#ffcf2e", "right", null);
 }
 function fmtTime(t) {
   return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}.${Math.floor((t % 1) * 10)}`;
@@ -3555,25 +2346,25 @@ function frame(now) {
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.imageSmoothingEnabled = false;
-  if (!assetsReady) return drawBoot();
-  if (screen === "title") return drawTitle();
+  if (!assetsReady) return pix.drawBoot();
+  if (screen === "title") return pix.drawTitle();
   if (screen === "story") return drawStory();
-  if (screen === "ending") return drawEnding();
-  if (screen === "results") return drawResults();
-  if (screen === "world") return drawWorldClear();
+  if (screen === "ending") return pix.drawEnding();
+  if (screen === "results") return pix.drawResults();
+  if (screen === "world") return pix.drawWorldClear();
   if (screen === "map") {
-    drawMap();
-    return drawIris(fx.iris);
+    pix.drawMap();
+    return pix.iris(fx.iris);
   }
   drawWorld();
-  drawHud();
-  drawReverse();
-  drawGetCard();
-  drawFlash();
+  pix.drawHud();
+  pix.drawReverse();
+  pix.drawGetCard();
+  pix.drawFlash();
   // The win iris closes on Rubik himself; the opening iris is screen-centred.
-  if (game.phase === "won") drawIris(fx.iris, wx(game.player.x + M.PLAYER.w / 2), wy(game.player.y + M.PLAYER.h / 2));
-  else drawIris(fx.iris);
-  drawIntro(); // the level card sits on top while the iris opens behind it
+  if (game.phase === "won") pix.iris(fx.iris, wx(game.player.x + M.PLAYER.w / 2), wy(game.player.y + M.PLAYER.h / 2));
+  else pix.iris(fx.iris);
+  pix.drawIntro(); // the level card sits on top while the iris opens behind it
 }
 
 // ---------------------------------------------------------------- QA API ---
@@ -3677,6 +2468,28 @@ window.__game = {
     if (options.render !== false) render();
     return getState();
   },
+  /** QA (the pixel audit): every opaque colour of the runtime-derived world
+   * textures (colorized forest and sky, darkened tiles, cones, tinted sheets,
+   * the sampled fills), as 0xRRGGBB integers. Those are the colours the world
+   * may legitimately show under the UI; the audit allows them in addition to
+   * the UI palette and the original art. */
+  worldColours() {
+    const set = new Set(),
+      take = (value) => {
+        if (value instanceof HTMLCanvasElement) {
+          const [c, x] = makeCanvas(value.width, value.height, true);
+          x.drawImage(value, 0, 0);
+          const d = x.getImageData(0, 0, c.width, c.height).data;
+          for (let i = 0; i < d.length; i += 4) if (d[i + 3] === 255) set.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+        } else if (typeof value === "string") {
+          const m = value.match(/rgb\((\d+),(\d+),(\d+)\)/);
+          if (m) set.add((m[1] << 16) | (m[2] << 8) | +m[3]);
+        } else if (Array.isArray(value)) value.forEach(take);
+        else if (value && typeof value === "object" && !(value instanceof Map)) Object.values(value).forEach(take);
+      };
+    take(derived);
+    return [...set];
+  },
   get model() {
     return game;
   },
@@ -3687,6 +2500,7 @@ window.__game = {
 };
 
 // ------------------------------------------------------------------- boot --
+installCss(); // the DOM's pixel sprites, baked by the same painters as the canvas UI
 syncMotion();
 syncSettingsLabels();
 fitSurface();

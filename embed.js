@@ -7,9 +7,8 @@ if (embedded) document.documentElement.classList.add("itch-embed");
 const surface = document.querySelector("main");
 if (surface) {
   const button = document.createElement("button");
-  button.className = "itch-fullscreen";
+  button.className = "icon-btn itch-fullscreen";
   button.type = "button";
-  button.textContent = "⤢";
   button.title = "Toggle fullscreen";
   button.setAttribute("aria-label", "Toggle fullscreen");
   button.addEventListener("click", async () => {

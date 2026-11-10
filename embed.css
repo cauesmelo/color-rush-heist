@@ -1,6 +1,8 @@
 /* Standalone preview: plain green page, the 960x540 game centred, nothing
  * else. Inside an itch.io iframe (or ?embed=1) the same game fills the frame,
- * letterboxed on the same green so standalone and iframe canvases match. */
+ * letterboxed on the same green so standalone and iframe canvases match.
+ * Lengths are in --ap (one art pixel; style.css), so the fullscreen button
+ * sits on the same pixel grid as the rest of the UI. */
 html,
 body {
   background: #168546;
@@ -18,7 +20,7 @@ body {
   width: 100vw;
   height: 100dvh;
   aspect-ratio: auto;
-  background: #000;
+  background: var(--ink);
 }
 #surface:fullscreen .stage {
   inset: 0;
@@ -30,8 +32,8 @@ body {
 /* Fullscreen sits in the game's own top-right button group. */
 .itch-fullscreen {
   position: absolute;
-  top: max(8px, 1.3cqw);
-  right: max(8px, 1.3cqw);
+  top: calc(var(--ap) * 6);
+  right: calc(var(--ap) * 6);
   z-index: 6;
 }
 [data-screen="story"] .itch-fullscreen,

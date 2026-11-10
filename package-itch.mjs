@@ -18,7 +18,7 @@ async function runtimeFiles(folder, prefix = '') {
     if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue;
     const name = prefix + entry.name;
     if (entry.isDirectory()) {
-      if (prefix || ['assets', 'vendor'].includes(entry.name)) out.push(...await runtimeFiles(path.join(folder, entry.name), name + '/'));
+      if (prefix || ['assets', 'vendor', 'levels'].includes(entry.name)) out.push(...await runtimeFiles(path.join(folder, entry.name), name + '/'));
     } else if (!excluded.has(name) && (prefix || /\.(html|css|js|mjs|json|md|txt)$/i.test(name))) out.push(name);
   }
   return out;

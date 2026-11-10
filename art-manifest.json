@@ -242,361 +242,361 @@
  {
   "file": "tiles/Tile_01.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "cea8cfbdb3c056e55bc6fb0ba905fe7b86d69dc498e71a9c593f60623cf63b90"
  },
  {
   "file": "tiles/Tile_02.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "a3b02317d4d3fc64b70b8378d933c125e925939da2dd1ddae1ef7b197a2e1a3d"
  },
  {
   "file": "tiles/Tile_03.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "19e49081427cf5d49c5e60bebfb938d6ef1d182649f813286418c95aee09a680"
  },
  {
   "file": "tiles/Tile_04.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "d70554d9639195b9b614cdc67a344eb60c549535ca66c085fca82d17c87d18bb"
  },
  {
   "file": "tiles/Tile_05.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "9642643e01e2318e1e868fcf123855b0c8585c391977661c53e7d314c7b95103"
  },
  {
   "file": "tiles/Tile_06.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "42d9b818ba508e98e149f03214d87ce211be77b7351b8ca68de086d309961825"
  },
  {
   "file": "tiles/Tile_07.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "404e54ec9bfcca6f92008a6659dc11ba4fbf8cbe35842a9a4249e8d4063b6fe1"
  },
  {
   "file": "tiles/Tile_08.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "f62fe7e404e4e18a65f70f54187c3e4be95f7558c0b1c319eedd43080854d545"
  },
  {
   "file": "tiles/Tile_09.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "fff6d1ab3f52a897f770f5f6cb4dfd82726f6893849046b0ba897bbc1f759504"
  },
  {
   "file": "tiles/Tile_10.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "4fba8e81fc5df960d0a4f002b9b044d16db73b1620d4fc9f374150b4a16e26ff"
  },
  {
   "file": "tiles/Tile_11.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "9e6b710b1d040886ceccb61c006d063b94c26f48047551338509556759e8c1af"
  },
  {
   "file": "tiles/Tile_12.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "b2475a57091e777044bee27db8de05e4b79a6d1fadd4eab92dbc8acb91743246"
  },
  {
   "file": "tiles/Tile_13.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "df680a2dfb19319420f11ec29ba626ca63f1b5bdc2b3088125e1c87cf0cd6ae9"
  },
  {
   "file": "tiles/Tile_14.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "5335e89cc8b8e03a534922e49203a4c2b6a915e60acc8fad0e880dddb3e33a35"
  },
  {
   "file": "tiles/Tile_15.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "7737044e13e66e299650bf725ff195d2eb662db8ea610bc794ace083a255a391"
  },
  {
   "file": "tiles/Tile_16.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "7105b66e9dd2b82c8007c16341c376e34b936a5b75da70d7aef39ac397a1cc3a"
  },
  {
   "file": "tiles/Tile_17.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "efd78fd355cd2b36abe4cbbe98b7e28ea83f98a748267b6a7ec9149ef6fc7b05"
  },
  {
   "file": "tiles/Tile_18.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "bceff1693dc1b9aac3195a79b95ae1f6049a60b71b2baccf7e2e4fa47c8547ff"
  },
  {
   "file": "tiles/Tile_19.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "1b638bd782412b3f02054deae4b456b1dce404bc3b9813b5f54ce6b19e5c52ab"
  },
  {
   "file": "tiles/Tile_20.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "608a4ee2627c2effc143930fca050b488f0eb3b074d90831eafc052429c1e9d2"
  },
  {
   "file": "tiles/Tile_21.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "a7368cdbabb0957b5cd097fb7c07ad6536c42e554538c5979f6503e6077f9f58"
  },
  {
   "file": "tiles/Tile_22.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "28d13ca9891a571adaddf6035096b87a38d71ea1bcf7a4bee0050725f31f3999"
  },
  {
   "file": "tiles/Tile_23.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "bdd686b7c4fe1d45b0174aebdf5ff0b5470063fdb8ad8717a32a12c8ec2f78a3"
  },
  {
   "file": "tiles/Tile_24.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "99c210a510c94383a95ca545c9f53e942c249e096a86322c1b9111ca2ce1b2bc"
  },
  {
   "file": "tiles/Tile_25.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "e381949a6abf25e8f9c25d4cf318a82ba02ed9e8876d2cedfeff11135b70489a"
  },
  {
   "file": "tiles/Tile_26.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "f07c9898e59593e552bc7b96cd8f54488af8caa09e83344e4afa36474f794b85"
  },
  {
   "file": "tiles/Tile_27.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "30a535cc525963149f087fcca4c3e10e49fc9696e654ebf088c5070284daa1e8"
  },
  {
   "file": "tiles/Tile_28.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "16a36b8d959a0ec0de1801c18b325c97863c3b872171d6e7e004c172210a8f51"
  },
  {
   "file": "tiles/Tile_29.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "7fa844c86f92af68db65852e2f2f1ada34bf0fb327a0705bda2be6b211791f0c"
  },
  {
   "file": "tiles/Tile_30.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "ca21538d9b7b84d961fab611347ba4a051c04c30aba006d8c53bacf4dd5c0c63"
  },
  {
   "file": "tiles/Tile_31.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "f2ed20898324d475dfc9fa54b33974b734fb68056f58dcadf6010a1e7eae01f8"
  },
  {
   "file": "tiles/Tile_32.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "03a143921d855e66f4da3582273756ab982830077df3ffcfd077c35a1c3aa1ef"
  },
  {
   "file": "tiles/Tile_33.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "7f1cd17552403d600f182a95e1f1d9090ce9a04551eca9f6c9ae7979d70c910b"
  },
  {
   "file": "tiles/Tile_34.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "104c4b756a40600094f400df0d6d53efe9a000d1ab56398971b92eceaeeb4b9b"
  },
  {
   "file": "tiles/Tile_35.png",
-  "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "use": "screen",
+  "where": "Pixel-identical slice of Tileset.png; drawn darkened as the vault pillar strip (1-6)",
   "sha256": "bf102d85347c8054f662bb3fadb877522e576a080c2e682ec0e5ba0fec33fe61"
  },
  {
   "file": "tiles/Tile_36.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "e0ab0f0b50db8f64cb5633bc0b4686fb320a29f70e7718ac77da1951bc2a056f"
  },
  {
   "file": "tiles/Tile_37.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "6c6371263a780cc65da5a47adc1d618bb78ffc817ccd4750e7ae4c4cdcd54ac8"
  },
  {
   "file": "tiles/Tile_38.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "4ceea579712fcdee9680c59f8d1d5f050f73d52e0d2b136e1947b9fd8b393e25"
  },
  {
   "file": "tiles/Tile_39.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "99b1aa65aa0ab25a2bc3d5f43a4cbefae4453bcf6973a4efdd21cc9eeb8f0286"
  },
  {
   "file": "tiles/Tile_40.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "1053b1aa471708648e3d05e4a4374535d578779b9f4026f2ad73de5fd3654218"
  },
  {
   "file": "tiles/Tile_41.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "c1666833e76d1bdeb13e4d03df45ae7a2bb9286192b3f864bab0683a4c17b3eb"
  },
  {
   "file": "tiles/Tile_42.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "94d48d50aee9fe84a93c943a535948ed3901d8193a5290ef4f7e4de0c0a00bba"
  },
  {
   "file": "tiles/Tile_43.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "4b94901808c98842bf9f9c951e6c616c6e5fa6923b615a0f2506f2fd83315ba4"
  },
  {
   "file": "tiles/Tile_44.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "2711bad24c917d9a05a6767cdd44d96e6dc93800773dde9d2cd0705881de654a"
  },
  {
   "file": "tiles/Tile_45.png",
-  "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "use": "screen",
+  "where": "Pixel-identical slice of Tileset.png; drawn darkened as the vault pillar strip (1-6)",
   "sha256": "a7c63ea6abe60651b198dfb1d6812075770927a9d9ae0110813b5f35d8f9a23a"
  },
  {
   "file": "tiles/Tile_46.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "c55bb3a2662a1f81dc48a0415d03212d8dcccbb5ba29041c9417686716395fa3"
  },
  {
   "file": "tiles/Tile_47.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "a81a02af0df7fbcf537ba32877b1c0bfd46128619d0a59e2ee489c7ee7b965b4"
  },
  {
   "file": "tiles/Tile_48.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "a28f9c4b26389de4ae86f93f3e99f6bfd7a6f6139fe24bceff4a73cbcf2db419"
  },
  {
   "file": "tiles/Tile_49.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "6fa31ba4bdc09e5069695b152fe4832ad0fbaf0c2a0eb1edddb98991ef467bb1"
  },
  {
   "file": "tiles/Tile_50.png",
   "use": "screen",
-  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas",
+  "where": "Pixel-identical slice of Tileset.png; drawn from the atlas in the World 1 maps or the world-map path",
   "sha256": "ac3ddae91a400eb20d47f942da8fb052adc0a2da53528dcc20ffe155a75a8982"
  },
  {
   "file": "tiles/Tile_51.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "aab6d696ca169f396d65feba50dd69519365077807a0318f331044271cf88c29"
  },
  {
   "file": "tiles/Tile_52.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "6bd237bf1943009e7f155aaa4c11100172c30b5c74df2ab6334973428f1180b4"
  },
  {
   "file": "tiles/Tile_53.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "df6446123aea118d1df9d29f1bf82ca7c4d3ddd2b147e8814ef71cb02069c7ad"
  },
  {
   "file": "tiles/Tile_54.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "3562524952806556513f8e1eebf230ff80a2efe8daa55c6dcc0387e703d43861"
  },
  {
   "file": "tiles/Tile_55.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "ab96c3b1142a9b282ef21e83d3a8702b7a8604cc2ecd4ce325498ba07de5bef3"
  },
  {
   "file": "tiles/Tile_56.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "abd625d8708b2f0c32ab7fdcfd68761895f43f735e44dcd6278f62a455673849"
  },
  {
   "file": "tiles/Tile_57.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "03fa54e36bbb9fa9f8e29cc8a7ee2d5406cc7d5ecb91d4185a23702cf572ef75"
  },
  {
   "file": "tiles/Tile_58.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "fc18b7278670f69c76b9931c067814d7c852d09d31b220fd5bca180b47132677"
  },
  {
   "file": "tiles/Tile_59.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "ff02730a8bb37016487f66f7817c7e8abbf36bc206fc5fd44cefd40d72eebed9"
  },
  {
   "file": "tiles/Tile_60.png",
   "use": "archive",
-  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in Stage 1",
+  "where": "Pixel-identical slice of Tileset.png; this region is not drawn in World 1",
   "sha256": "5e55617ad0a52e5c4c333d89531df64eddd19da0ea623180bfb84abf771480a9"
  },
  {

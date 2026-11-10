@@ -1,37 +1,30 @@
 /** Color Rush Heist: pure deterministic simulation (no DOM, no images).
  *
  * Units: world pixels and seconds, fixed 120 Hz steps (advance/update). Y points
- * down. One tile = 32 px = one original 16 px cell at 2x (see level.mjs).
+ * down. One tile = 32 px = one original 16 px cell at 2x (levels/builder.mjs).
  *
- * Story logic of the stage: Rubik starts colorless (white = double jump),
- * stomps a dozing card to absorb its green (disguise among green cards), takes
- * red from the vault by touching it, and runs the same forest in REVERSE
- * (red dash smashes sealed stones and knocks cards aside) back to his home cliff.
- * A card can't see its own color: green cards see white/red, red enforcers see
- * white/green. Being seen escalates "?" -> "!" -> charge -> spear lunge; body
- * contact only knocks Rubik back. Only spears and water kill.
+ * One game = one level of World 1 (`createGame(level, options)`). A level is
+ * plain frozen data (levels/*.mjs): its map, cards, stickers, checkpoints, a
+ * fixed ability kit and how it ends (a goal face, or the vault + the run home).
+ * The campaign (order, unlocks, save) lives in campaign.mjs; this file never
+ * touches storage.
+ *
+ * Story logic of World 1: Rubik starts colorless (white = double jump), learns
+ * to bounce on dozing cards, absorbs green from a glowing card (GREEN GET: a
+ * disguise among green cards), catches a stray storm swirl (DASH GET), and in
+ * the last level takes red from the vault by touching it (RED GET) and runs the
+ * same forest in REVERSE (red dash smashes sealed stones and knocks cards aside)
+ * back to the level's start. A card can't see its own color: green cards see
+ * white/red, red enforcers see white/green. Being seen escalates "?" -> "!" ->
+ * charge -> spear lunge; body contact only knocks Rubik back. Only spears and
+ * water kill.
  */
-import {
-  TILE,
-  COLS,
-  ROWS,
-  WATER_ROW,
-  MAP,
-  STONES,
-  GUARDS,
-  STICKERS,
-  ORBS,
-  CHECKPOINTS,
-  SPAWN,
-  VAULT,
-  HOME,
-  HINT_ZONES,
-} from "./level.mjs";
+import { TILE, ROWS, WATER_ROW } from "./levels/builder.mjs";
+import { getLevel } from "./levels/index.mjs";
 
 export const WORLD = Object.freeze({
   tile: TILE,
-  width: COLS * TILE,
-  height: ROWS * TILE,
+  height: ROWS * TILE, // every level is 22 rows; widths differ (level.width)
   viewportWidth: 960,
   viewportHeight: 540,
   gravity: 1180, // px/s^2
@@ -55,7 +48,9 @@ export const WORLD = Object.freeze({
   respawnDelay: 0.45,
   respawnGrace: 0.75,
   bumpGrace: 0.6,
-  hitstop: { stomp: 0.06, smash: 0.09, knock: 0.09, theft: 0.25 },
+  // get: the ability GET card (Mega Man's "weapon get") freezes the world for
+  // 1.2 s; it is part of the simulation so routes replay identically.
+  hitstop: { stomp: 0.06, smash: 0.09, knock: 0.09, theft: 0.25, get: 1.2 },
   orbRespawn: 2.5,
 });
 
@@ -125,25 +120,32 @@ export const CONE = Object.freeze({
   step: 8, // wall-truncation probe step (px along the cone)
 });
 
-const STONE_CELLS = new Map();
-STONES.forEach((stone, index) => {
-  for (let dy = 0; dy < 2; dy++)
-    for (let dx = 0; dx < 2; dx++)
-      STONE_CELLS.set(`${stone.x + dx},${stone.y + dy}`, index);
-});
+/** Sealed stones are 2x2 tiles; a per-level lookup from tile to stone index
+ * (cached per frozen level object, so every game of a level shares it). */
+const stoneCellCache = new WeakMap();
+function stoneCells(level) {
+  let cells = stoneCellCache.get(level);
+  if (!cells) {
+    cells = new Map();
+    level.stones.forEach((stone, index) => {
+      for (let dy = 0; dy < 2; dy++)
+        for (let dx = 0; dx < 2; dx++) cells.set(`${stone.x + dx},${stone.y + dy}`, index);
+    });
+    stoneCellCache.set(level, cells);
+  }
+  return cells;
+}
 
-/** "Quick getaway" par: the QA baseline escape (17.7 s, tests/routes.mjs) x 1.5. */
-export const MEDAL_PAR_ESCAPE = 27;
-
-const tileChar = (tx, ty) =>
-  ty < 0 || ty >= ROWS ? "." : tx < 0 || tx >= COLS ? "#" : MAP[ty][tx];
+/** Tile character; outside the level's columns counts as wall, above it as air. */
+export const tileChar = (g, tx, ty) =>
+  ty < 0 || ty >= ROWS ? "." : tx < 0 || tx >= g.level.cols ? "#" : g.level.map[ty][tx];
 export function stoneAt(g, tx, ty) {
-  const index = STONE_CELLS.get(`${tx},${ty}`);
+  const index = stoneCells(g.level).get(`${tx},${ty}`);
   return index === undefined ? null : g.stones[index];
 }
 /** Solid for movement and sight: ground tiles and unbroken stones. */
 export function blocked(g, tx, ty) {
-  if (tileChar(tx, ty) === "#") return true;
+  if (tileChar(g, tx, ty) === "#") return true;
   const stone = stoneAt(g, tx, ty);
   return !!stone && !stone.broken;
 }
@@ -190,6 +192,8 @@ function makePlayer(x, floor, color, direction) {
 function makeGuard(spec) {
   return {
     ...spec,
+    // Inbound: escape-only cards are "away" (not drawn, no body). Dozing cards
+    // sleep; `trampoline` ones (1-2) sleep forever and only ever bounce Rubik.
     state: spec.escapeOnly ? "away" : spec.mode === "sleep" ? "asleep" : "calm",
     bumps: 0,
     timer: 0,
@@ -204,8 +208,28 @@ function makeGuard(spec) {
   };
 }
 
-export function createGame() {
-  return {
+/** Every teaching bubble in World 1. A level lists the (at most two) it may
+ * show; the campaign passes the saved states in, so nothing is taught twice. */
+export const HINT_IDS = Object.freeze(["move", "airjump", "white", "green", "dash"]);
+
+/** A new game of one level.
+ * @param level  a level object (levels/*.mjs) or its id ("1-3"); default 1-1.
+ * @param options.hints  saved hint states ({ move: "done", ... }): "done" and
+ *   "shown" bubbles never trigger again (a "shown" one may still be re-offered
+ *   once after three deaths at its checkpoint).
+ * @param options.owned  sticker numbers already in the save: drawn as faint
+ *   outlines; touching one again counts for this run's tally only.
+ * The kit (forms, start form, dash) comes from the level and is the same on
+ * every replay, so sticker gates and QA routes stay valid. */
+export function createGame(level = "1-1", options = {}) {
+  const lv = typeof level === "string" ? getLevel(level) : level;
+  if (!lv) throw new Error(`Unknown level ${level}`);
+  const kit = lv.kit,
+    owned = new Set(options.owned || []),
+    hints = Object.fromEntries(HINT_IDS.map((id) => [id, "pending"]));
+  for (const id of HINT_IDS) if (["shown", "done"].includes(options.hints?.[id])) hints[id] = options.hints[id];
+  const g = {
+    levelId: lv.id,
     phase: "ready",
     time: 0,
     hitstop: 0,
@@ -216,25 +240,31 @@ export function createGame() {
     deathAt: null,
     spotted: 0,
     stomps: 0,
+    bounces: 0,
     smashes: 0,
     knockouts: 0,
     respawns: 0,
+    dashes: 0,
     stolen: false,
     theftTime: null,
     finishTime: null,
     escapeTime: null,
-    unlocked: { white: true, green: false, red: false },
+    unlocked: { white: kit.forms.includes("white"), green: kit.forms.includes("green"), red: kit.forms.includes("red") },
+    dashUnlocked: !!kit.dash,
+    gets: [], // abilities granted in this run, in order (GET moments)
     pendingAbsorb: 0,
     colorCooldown: 0,
-    checkpoint: "home",
+    checkpoint: lv.checkpoints[0].id,
     checkpointIndex: 0,
     snapshot: null,
-    player: makePlayer(SPAWN.x, SPAWN.floor, "white", 1),
-    guards: GUARDS.map(makeGuard),
-    stones: STONES.map((stone) => ({ ...stone, broken: false })),
-    orbs: ORBS.map((orb) => ({ ...orb, respawn: 0 })),
-    stickers: STICKERS.map(({ id, x, y }) => ({ id, x, y, collected: false })),
-    hints: { move: "pending", white: "pending", green: "pending", dash: "pending", back: "pending" },
+    player: makePlayer(lv.spawn.x, lv.spawn.floor, kit.start, lv.spawn.dir ?? 1),
+    guards: lv.guards.map(makeGuard),
+    // sealOnTheft stones are absent inbound and drop into place at the theft.
+    stones: lv.stones.map((stone) => ({ ...stone, broken: !!stone.sealOnTheft })),
+    orbs: lv.orbs.map((orb) => ({ ...orb, respawn: 0 })),
+    pickups: lv.pickups.map((pickup) => ({ ...pickup, taken: false })),
+    stickers: lv.stickers.map(({ id, x, y }) => ({ id, x, y, collected: false, owned: owned.has(id) })),
+    hints,
     hint: null,
     hintAge: 0,
     hintData: { idle: 0, zoneTime: 0, zoneJumps: 0, gapFails: 0, reoffered: {} },
@@ -242,6 +272,10 @@ export function createGame() {
     events: [],
     eventId: 0,
   };
+  // The level is shared, frozen data: non-enumerable so structuredClone /
+  // JSON snapshots of the game never copy (or compare) the whole map.
+  Object.defineProperty(g, "level", { value: lv, enumerable: false });
+  return g;
 }
 
 function event(g, type, x, y, extra = {}) {
@@ -263,7 +297,7 @@ export function startGame(g) {
  * are permanent, unique pickups (taking one twice is impossible). Time, deaths
  * and times-spotted stay cumulative, so dying never cleans a record. */
 function saveCheckpoint(g, index) {
-  const cp = CHECKPOINTS[index];
+  const cp = g.level.checkpoints[index];
   g.checkpoint = cp.id;
   g.checkpointIndex = index;
   g.deathsHere = 0;
@@ -277,10 +311,13 @@ function saveCheckpoint(g, index) {
     ),
     stones: g.stones,
     orbs: g.orbs.map((orb) => ({ ...orb, respawn: 0 })),
+    pickups: g.pickups,
     unlocked: g.unlocked,
+    dashUnlocked: g.dashUnlocked,
     stolen: g.stolen,
     theftTime: g.theftTime,
     stomps: g.stomps,
+    bounces: g.bounces,
     smashes: g.smashes,
     knockouts: g.knockouts,
     color: g.player.color,
@@ -288,12 +325,14 @@ function saveCheckpoint(g, index) {
   if (g.phase === "playing" && g.time > 0) event(g, "checkpoint", cp.x, cp.floor, { id2: cp.id });
 }
 
+/** Rewind to the last checkpoint snapshot. Rubik faces the way the level
+ * continues (home, i.e. left, during the getaway). */
+const RESTORED = ["guards", "stones", "orbs", "pickups", "unlocked", "dashUnlocked", "stolen", "theftTime", "stomps", "bounces", "smashes", "knockouts"];
 export function respawn(g) {
   const s = structuredClone(g.snapshot),
-    cp = CHECKPOINTS[g.checkpointIndex];
-  for (const key of ["guards", "stones", "orbs", "unlocked", "stolen", "theftTime", "stomps", "smashes", "knockouts"])
-    g[key] = s[key];
-  g.player = makePlayer(cp.x - PLAYER.w / 2, cp.floor, s.color, g.stolen ? -1 : 1);
+    cp = g.level.checkpoints[g.checkpointIndex];
+  for (const key of RESTORED) g[key] = s[key];
+  g.player = makePlayer(cp.x - PLAYER.w / 2, cp.floor, s.color, g.stolen ? -1 : cp.dir ?? 1);
   g.phase = "playing";
   g.deathTimer = 0;
   g.hitstop = 0;
@@ -314,7 +353,7 @@ export function die(g, reason) {
   g.deathTimer = WORLD.respawnDelay;
   g.deathReason = reason;
   g.deathAt = { x: p.x, y: p.y, color: p.color, direction: p.direction };
-  if (reason === "water" && inDashZone(p)) g.hintData.gapFails++;
+  if (reason === "water" && inDashZone(g)) g.hintData.gapFails++;
   event(g, "die", p.x, p.y, { reason });
   return true;
 }
@@ -333,15 +372,17 @@ export function switchColor(g, color) {
   g.colorCooldown = WORLD.colorCooldown;
   event(g, "swap", p.x, p.y, { color, air: !p.grounded });
   if (color === "green" && g.hints.green === "shown") g.hints.green = "done";
-  if (g.hints.back === "shown" && g.unlocked.green) g.hints.back = "done";
   if (color === "white" && g.hints.white === "shown") g.hints.white = "done";
   return true;
 }
 
 /** One air dash per airtime (Celeste charge). The ground always restores it;
- * stomps, refill orbs, smashed stones and knocked cards refill it mid-air. */
+ * stomps, refill orbs, smashed stones and knocked cards refill it mid-air.
+ * Before DASH GET (levels 1-1..1-3, and 1-4's first seconds) Shift does
+ * nothing at all: no buzz, no glyph, nothing hints at a move not yet owned. */
 export function dash(g, axis = 0) {
   const p = g.player;
+  if (!g.dashUnlocked) return false;
   if (g.phase !== "playing" || p.dashTime > 0 || p.dashCooldown > 0 || p.knock > 0) return false;
   if (!p.grounded && p.dashCharge <= 0) return false;
   if (!p.grounded) p.dashCharge = 0;
@@ -351,7 +392,8 @@ export function dash(g, axis = 0) {
   p.dashCooldown = WORLD.groundDashDelay;
   p.vy = 0;
   p.rising = false;
-  event(g, "dash", p.x + p.w / 2, p.y + p.h / 2, { direction: p.dashDirection, color: p.color });
+  g.dashes++;
+  event(g, "dash", p.x + p.w / 2, p.y + p.h / 2, { direction: p.dashDirection, color: p.color, air: !p.grounded });
   return true;
 }
 
@@ -428,7 +470,7 @@ function moveY(g, dy, prevBottom) {
   if (dy > 0) {
     const row = Math.floor((p.y + p.h - 0.001) / TILE);
     for (let col = left; col <= right; col++)
-      if (blocked(g, col, row) || (tileChar(col, row) === "=" && prevBottom <= row * TILE + 0.5)) {
+      if (blocked(g, col, row) || (tileChar(g, col, row) === "=" && prevBottom <= row * TILE + 0.5)) {
         p.y = row * TILE - p.h;
         return "floor";
       }
@@ -456,7 +498,10 @@ function onGround(g) {
     row = Math.round(feet / TILE);
   if (Math.abs(feet - row * TILE) > 0.5) return false;
   for (let col = Math.floor(p.x / TILE); col <= Math.floor((p.x + p.w - 0.001) / TILE); col++)
-    if (blocked(g, col, row) || tileChar(col, row) === "=") return true;
+    // A one-way slab only supports a Rubik who isn't rising: jumping up
+    // through one used to count as "grounded" for a tick whenever the feet
+    // crossed its top exactly, silently refreshing the air jump and dash.
+    if (blocked(g, col, row) || (tileChar(g, col, row) === "=" && p.vy >= 0)) return true;
   return false;
 }
 
@@ -560,10 +605,9 @@ function updateGuard(g, guard, dt) {
           guard.state = "suspect";
           guard.lost = 0;
           event(g, "suspect", guard.x, guard.floor - GUARD.h, { guard: guard.id });
-          if (guard.kind === "green" && p.color === "white" && g.unlocked.green && g.hints.green === "pending") showHint(g, "green");
-          // Safety net: white reached a green card without green. Point back
-          // at the dozing card (it stays stompable from the clearing floor).
-          if (guard.kind === "green" && !g.unlocked.green && g.hints.back === "pending") showHint(g, "back");
+          // "green card + X": the first "?" from a green card while white, in
+          // the level that teaches the trade-off (1-3).
+          if (guard.kind === "green" && p.color === "white" && g.unlocked.green && levelHint(g, "green") && g.hints.green === "pending") showHint(g, "green");
         }
         break;
       }
@@ -624,7 +668,9 @@ function updateGuard(g, guard, dt) {
         break;
       }
       const sameFloor = Math.abs(p.y + p.h - guard.floor) < 48;
-      if (sees && sameFloor && Math.abs(dx) <= GUARD.lungeRange && Math.sign(dx) === guard.dir) {
+      // Before 1-5 teaches the full ladder, a card that spots Rubik only
+      // charges and bumps him back (level.spears === false): no spear yet.
+      if (g.level.spears !== false && sees && sameFloor && Math.abs(dx) <= GUARD.lungeRange && Math.sign(dx) === guard.dir) {
         guard.state = "windup";
         guard.timer = GUARD.windup;
         event(g, "windup", guard.x, guard.floor - GUARD.h, { guard: guard.id });
@@ -673,13 +719,15 @@ function stomp(g, guard) {
   p.grounded = false;
   g.hitstop = Math.max(g.hitstop, WORLD.hitstop.stomp);
   refill(g, "stomp");
-  if (guard.state === "drained") {
-    // The grey card stays dazed forever: a springboard home in the escape.
+  if (guard.state === "drained" || (guard.trampoline && guard.state === "asleep")) {
+    // The grey card stays dazed forever, and 1-2's dozing cards never wake:
+    // both are springboards (a bounce, not a stun, so nothing is farmed).
+    g.bounces++;
     event(g, "bounce", guard.x, guard.floor - GUARD.h, { guard: guard.id });
     return;
   }
   if (guard.absorb && !g.unlocked.green) {
-    // M1: the first card holds Rubik's green. It ejects it as a swirl; Rubik
+    // The glowing card holds Rubik's green. It ejects it as a swirl; Rubik
     // absorbs it at the bounce apex so the stomp keeps white's full height.
     guard.state = "drained";
     g.pendingAbsorb = 0.6;
@@ -693,20 +741,30 @@ function stomp(g, guard) {
   event(g, "stomp", guard.x, guard.floor - GUARD.h, { guard: guard.id });
 }
 
+/** A GET moment: the ability is unlocked, the world freezes for the GET card
+ * (1.2 s of hit-stop, part of the simulation) and the checkpoint tied to it
+ * (`get: ability`) is saved, so a death can never take the ability away. */
+function grantAbility(g, ability) {
+  const p = g.player;
+  if (ability === "dash") {
+    g.dashUnlocked = true;
+    p.dashCharge = 1;
+  } else g.unlocked[ability] = true;
+  g.gets.push(ability);
+  g.hitstop = Math.max(g.hitstop, WORLD.hitstop.get);
+  event(g, "get", p.x + p.w / 2, p.y + p.h / 2, { ability });
+  const index = g.level.checkpoints.findIndex((cp) => cp.get === ability);
+  if (index > g.checkpointIndex || (g.stolen && index >= 0)) saveCheckpoint(g, index);
+}
+
 function absorbGreen(g) {
   const p = g.player;
   g.pendingAbsorb = 0;
-  g.unlocked.green = true;
-  if (g.hints.back === "shown") g.hints.back = "done";
-  if (g.hint === "back") g.hint = null;
   p.stormFrom = p.color;
   p.color = "green";
   p.storm = WORLD.storm;
   event(g, "absorb", p.x + p.w / 2, p.y + p.h / 2, { color: "green" });
-  // The absorb is a commitment point: save here so green can never be "lost"
-  // to a death and the drained card can never be drained twice.
-  const index = CHECKPOINTS.findIndex((cp) => cp.id === "clearing");
-  if (index > g.checkpointIndex) saveCheckpoint(g, index);
+  grantAbility(g, "green");
 }
 
 /** Push Rubik out of a card's body to the side he is on (cards are solid to
@@ -770,7 +828,7 @@ function guardContacts(g, prevBottom) {
     event(g, "bump", p.x + p.w / 2, p.y + p.h / 2, { guard: guard.id, bumps: guard.bumps });
     guard.dir = away; // turn to face Rubik
     alertGuard(g, guard);
-    if (guard.bumps >= GUARD.spearOnBump) {
+    if (guard.bumps >= GUARD.spearOnBump && g.level.spears !== false) {
       guard.state = "lunge";
       guard.timer = GUARD.lunge;
       guard.lungeTarget = Math.max(guard.min, Math.min(guard.max, guard.x + guard.dir * GUARD.lungeDistance));
@@ -782,10 +840,10 @@ function guardContacts(g, prevBottom) {
 }
 
 function steal(g) {
-  const p = g.player;
+  const p = g.player,
+    vault = g.level.vault;
   g.stolen = true;
   g.theftTime = g.time;
-  g.unlocked.red = true;
   p.stormFrom = p.color;
   p.color = "red";
   p.storm = WORLD.storm;
@@ -794,8 +852,11 @@ function steal(g) {
   p.dashCooldown = 0;
   p.grace = 1;
   g.hitstop = WORLD.hitstop.theft;
+  // The chamber door slams: the first smash is forced, right here, with
+  // nothing in reach (teach red smash in safety before the run home).
+  for (const stone of g.stones) if (stone.sealOnTheft) stone.broken = false;
   // REVERSE: every card turns to face the route home (toward the vault side),
-  // the two dozing guards behind the vault wake and charge.
+  // the dozing guards behind the vault wake and charge.
   for (const guard of g.guards) {
     if (guard.state === "drained") continue;
     guard.dir = 1;
@@ -812,12 +873,15 @@ function steal(g) {
       guard.turning = 0;
     }
   }
-  event(g, "theft", VAULT.cx, VAULT.floor - VAULT.h / 2);
-  saveCheckpoint(g, CHECKPOINTS.findIndex((cp) => cp.id === "vault"));
+  event(g, "theft", vault.cx, vault.floor - vault.h / 2);
+  grantAbility(g, "red"); // RED GET card, then the REVERSE card (front end)
 }
 
-function inDashZone(p) {
-  return p.x + p.w / 2 > HINT_ZONES.dash.x0 && p.x + p.w / 2 < HINT_ZONES.dash.x1;
+const levelHint = (g, id) => g.level.hints.includes(id);
+function inDashZone(g) {
+  const z = g.level.hintZones.dash,
+    cx = g.player.x + g.player.w / 2;
+  return !!z && levelHint(g, "dash") && cx > z.x0 && cx < z.x1;
 }
 
 function showHint(g, id) {
@@ -828,36 +892,52 @@ function showHint(g, id) {
   event(g, "hint", g.player.x, g.player.y, { hint: id });
 }
 
-/** At most four contextual bubbles, each retired by the success it asks for. */
+/** At most two contextual bubbles per level (level.hints), each retired by the
+ * success it asks for. Zones are level data (level.hintZones). */
 function updateHints(g, dt, input, wasGrounded) {
   const p = g.player,
     h = g.hintData,
+    zones = g.level.hintZones,
     cx = p.x + p.w / 2,
     feet = p.y + p.h;
   g.hintAge += dt;
-  // move: idle 4 s at the start.
-  if (g.hints.move !== "done") {
-    if (Math.abs(cx - (SPAWN.x + PLAYER.w / 2)) > 48) {
+  // move (1-1): idle 4 s at the start.
+  if (levelHint(g, "move") && g.hints.move !== "done") {
+    if (Math.abs(cx - (g.level.spawn.x + PLAYER.w / 2)) > 48) {
       g.hints.move = "done";
     } else if (!input.left && !input.right) {
       h.idle += dt;
       if (h.idle >= 4 && g.hints.move === "pending") showHint(g, "move");
     }
   }
-  // white: green Rubik keeps failing the 4-tile white-only ledge.
-  const z = HINT_ZONES.white;
-  if (g.hints.white !== "done") {
-    if (cx > z.x0 + 192 && feet <= z.top + 1) g.hints.white = "done";
+  // airjump (1-1): at the first 4-tile wall, two single jumps that fall short
+  // and 2 s of trying -> "jump, jump". Done once Rubik stands on top.
+  const a = zones.airjump;
+  if (a && levelHint(g, "airjump") && g.hints.airjump !== "done") {
+    if (cx > a.past && feet <= a.top + 1 && p.grounded) g.hints.airjump = "done";
+    else if (cx > a.x0 && cx < a.x1) {
+      // A ground jump this tick (jumps = 1 and rising); air jumps set jumps = 2.
+      if (input.jump && p.jumps === 1 && p.vy < 0) h.zoneJumps++;
+      if (h.zoneJumps > 0) h.zoneTime += dt;
+      if (h.zoneTime >= 2 && h.zoneJumps >= 2 && g.hints.airjump === "pending") showHint(g, "airjump");
+    }
+  }
+  // white (1-3): green Rubik keeps failing a 4-tile white-only wall.
+  const z = zones.white;
+  if (z && levelHint(g, "white") && g.hints.white !== "done") {
+    if (cx > z.past && feet <= z.top + 1) g.hints.white = "done";
     else if (cx > z.x0 && cx < z.x1 && p.color === "green") {
       if (input.jump) h.zoneJumps++;
       if (h.zoneJumps > 0) h.zoneTime += dt;
       if (h.zoneTime >= 2 && h.zoneJumps >= 1 && g.hints.white === "pending") showHint(g, "white");
     }
   }
-  // dash: two failures at the first big gap (water deaths or the slow rock).
-  if (g.hints.dash !== "done") {
-    if (cx > HINT_ZONES.dash.x1 && feet <= 16 * TILE + 1 && p.grounded) g.hints.dash = "done";
-    else if (!wasGrounded && p.grounded && Math.abs(feet - 18 * TILE) < 1 && cx > 119 * TILE && cx < 123 * TILE) h.gapFails++;
+  // dash (1-4): two failures at the first big gap (water deaths there, or
+  // slow landings on its recovery rock).
+  const d = zones.dash;
+  if (d && levelHint(g, "dash") && g.hints.dash !== "done" && g.dashUnlocked) {
+    if (cx > d.x1 && feet <= d.doneFloor + 1 && p.grounded) g.hints.dash = "done";
+    else if (!wasGrounded && p.grounded && Math.abs(feet - d.rock.floor) < 1 && p.x + p.w > d.rock.x0 && p.x < d.rock.x1) h.gapFails++;
     if (h.gapFails >= 2 && g.hints.dash === "pending") showHint(g, "dash");
   }
   if (g.hint && (g.hints[g.hint] === "done" || g.hintAge > 7)) g.hint = null;
@@ -873,8 +953,16 @@ function interactions(g, dt) {
       ny = Math.max(p.y, Math.min(sticker.y, p.y + p.h));
     if ((nx - sticker.x) ** 2 + (ny - sticker.y) ** 2 < 14 ** 2) {
       sticker.collected = true;
-      event(g, "sticker", sticker.x, sticker.y, { sticker: sticker.id, count: g.stickers.filter((s) => s.collected).length });
+      // `owned` = already in the save from an earlier run: it still counts
+      // for this run's tally, and the campaign keeps it either way.
+      event(g, "sticker", sticker.x, sticker.y, { sticker: sticker.id, count: g.stickers.filter((s) => s.collected).length, owned: sticker.owned });
     }
+  }
+  for (const pickup of g.pickups) {
+    // A GET pickup (1-4's stray storm swirl): touching it grants the ability.
+    if (pickup.taken || (cx - pickup.x) ** 2 + (cy - pickup.y) ** 2 >= 34 ** 2) continue;
+    pickup.taken = true;
+    grantAbility(g, pickup.ability);
   }
   for (const orb of g.orbs) {
     if (orb.respawn > 0) {
@@ -887,14 +975,19 @@ function interactions(g, dt) {
       refill(g, "orb");
     }
   }
-  CHECKPOINTS.forEach((cp, index) => {
-    if (cp.auto) return;
+  const feet = p.y + p.h;
+  g.level.checkpoints.forEach((cp, index) => {
+    if (cp.get) return; // saved by its GET moment, never by touch
     const newer = g.stolen ? index < g.checkpointIndex : index > g.checkpointIndex;
     // A tall trigger column: jumping or dashing over a marker still counts.
-    const feet = p.y + p.h;
     if (newer && Math.abs(cx - cp.x) < 40 && feet <= cp.floor + 1 && feet > cp.floor - 220) saveCheckpoint(g, index);
   });
-  if (!g.stolen && overlaps(p, { x: VAULT.cx - VAULT.w / 2, y: VAULT.floor - VAULT.h, w: VAULT.w, h: VAULT.h })) steal(g);
+  const vault = g.level.vault;
+  if (vault && !g.stolen && overlaps(p, { x: vault.cx - vault.w / 2, y: vault.floor - vault.h, w: vault.w, h: vault.h })) steal(g);
+  // The goal face: an 80 px column from its floor to the sky, so no jump or
+  // dash (7 px per tick) can sail over it and leave the level unfinished.
+  const goal = g.level.goal;
+  if (goal && Math.abs(cx - goal.x) < 40 && feet <= goal.floor + 1) win(g);
 }
 
 export function update(g, dt, input = {}) {
@@ -960,7 +1053,7 @@ export function update(g, dt, input = {}) {
     p.vx = 0;
     if (p.dashTime > 0) p.dashTime = 0;
   }
-  p.x = Math.max(0, Math.min(WORLD.width - p.w, p.x));
+  p.x = Math.max(0, Math.min(g.level.width - p.w, p.x));
   const hit = moveY(g, p.vy * dt, prevBottom);
   // A ceiling bonk starts the fall at once (no apex float under a low roof).
   if (hit) p.vy = hit === "ceiling" ? WORLD.apexBand : 0;
@@ -984,29 +1077,38 @@ export function update(g, dt, input = {}) {
   guardContacts(g, prevBottom);
   if (g.phase !== "playing") return;
   interactions(g, dt);
+  if (g.phase !== "playing") return;
   updateHints(g, dt, input, wasGrounded);
   if (p.y + p.h > WATER_ROW * TILE + 16 || p.y > WORLD.height) die(g, "water");
   if (g.phase !== "playing") return;
-  // Death hints: three deaths at one checkpoint re-offer its bubble once.
-  const cp = CHECKPOINTS[g.checkpointIndex];
-  if (g.deathsHere >= 3 && cp.hint && !g.hintData.reoffered[cp.id] && g.hints[cp.hint] !== "done") {
+  // Death hints: three deaths at one checkpoint re-offer its bubble once (only
+  // a bubble this level teaches, and only if it was never completed).
+  const cp = g.level.checkpoints[g.checkpointIndex];
+  if (g.deathsHere >= 3 && cp.hint && levelHint(g, cp.hint) && !g.hintData.reoffered[cp.id] && g.hints[cp.hint] !== "done") {
     g.hintData.reoffered[cp.id] = true;
     showHint(g, cp.hint);
   }
-  if (g.stolen && p.grounded && Math.abs(p.y + p.h - HOME.floor) < 1 && p.x + p.w / 2 < HOME.x1 && p.x + p.w / 2 > HOME.x0) win(g);
+  const home = g.level.home;
+  if (home && g.stolen && p.grounded && Math.abs(p.y + p.h - home.floor) < 1 && p.x + p.w / 2 < home.x1 && p.x + p.w / 2 > home.x0) win(g);
 }
 
+/** The level is over: a goal face was touched, or (1-6) red Rubik is home.
+ * Level medals keep the old keys: fullFace = all of this level's stickers in
+ * this run, neverSpotted = no "!" (the campaign's "Unseen" stamp, counted only
+ * in levels with awake cards), quickGetaway = the escape beat the par (1-6
+ * only; null elsewhere). */
 function win(g) {
+  if (g.phase !== "playing") return;
   g.phase = "won";
   g.finishTime = g.time;
-  g.escapeTime = g.time - g.theftTime;
-  const stickers = g.stickers.filter((s) => s.collected).length;
+  g.escapeTime = g.stolen ? g.time - g.theftTime : null;
+  const stickers = stickerCount(g);
   g.medals = {
-    fullFace: stickers === 9,
+    fullFace: stickers === g.stickers.length,
     neverSpotted: g.spotted === 0,
-    quickGetaway: g.escapeTime <= MEDAL_PAR_ESCAPE,
+    quickGetaway: g.level.par === null ? null : g.escapeTime !== null && g.escapeTime <= g.level.par,
   };
-  event(g, "win", g.player.x, g.player.y);
+  event(g, "win", g.player.x, g.player.y, { color: g.player.color });
 }
 
 export const stickerCount = (g) => g.stickers.filter((s) => s.collected).length;

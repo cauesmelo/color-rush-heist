@@ -191,23 +191,16 @@ export const SCRIPTS = {
       jumpAt(pl, tx(36) + 8).land(); // hop the cover block
       pl.color("green").to(tx(52) + 4); // green past the P1 patrol
       pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
-      // Over P2's cover; the sentry up here is green too. Down to the post.
-      pl.jump();
-      pl.until((p) => p.p.grounded && p.feet > tx(15), (p) => (p.cx < tx(61) ? { right: true } : {}), 600, "down to the post");
-      // The enforcer (red) sees green: up the step and the perch, drop on it.
-      pl.right();
-      pl.to(tx(62) + 16).stop().wait(0.15);
-      pl.jump().landAt(tx(65)); // the step...
-      pl.jump().landAt(tx(67)); // ...and the perch above the enforcer's cone
-      pl.check(Math.abs(pl.feet - tx(12)) < 1, "on the perch");
-      pl.right().to(tx(68)).stop();
-      pl.until((p) => p.guard("enforcer").dir === 1 && p.guard("enforcer").turning <= 0, {}, 900, "enforcer away");
-      pl.right().hop().steerTo((p) => p.guard("enforcer").x - 10);
-      pl.check(pl.guard("enforcer").state === "stunned", "enforcer stomped");
+      // Behind P2's cover (it cuts the sentry's cone): wait for its back, hop
+      // the cover onto it (a stomp from behind), bounce down to the post.
+      p2Hop(pl);
+      // The enforcer (red) sees green and it is the gate: wait at the post
+      // (the step's riser cuts its cone) for its back, then up the step and
+      // straight onto its back.
+      enforcerStomp(pl);
       pl.until((p) => p.p.grounded, (p) => (p.cx < tx(80) ? { right: true } : {}), 240, "past the enforcer");
-      // Crossing cones: green for the green patrol; stomp the red sentry from
-      // behind once it faces away. Off the perch's end onto the checkpoint block.
-      pl.right().to(tx(83) + 16).land();
+      // Up onto the checkpoint block (its risers cut both floor cones).
+      pl.right().to(tx(82) + 4).jump().landAt(tx(85));
       pl.check(Math.abs(pl.feet - tx(14)) < 1, "on the block");
       pl.to(tx(85)).stop();
       pl.until((p) => p.guard("cross-red").dir === 1 && p.guard("cross-red").turning <= 0, {}, 900, "red away");
@@ -217,10 +210,12 @@ export const SCRIPTS = {
       // the high line: that is the mastery's way).
       pl.landAt(tx(103) + 16);
       pl.check(Math.abs(pl.feet - tx(16)) < 1, "past the red sentry, on the floor");
-      // The goal block: white up its 4-tile face, green again before
-      // landing in the block card's view, then walk through it to the goal.
-      pl.right().to(tx(111) + 16).stop().wait(0.1).right();
-      pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
+      // The goal block: wait below it (as green) for its card's back, white
+      // up the 4-tile face, green again before landing, walk through it.
+      pl.right().to(tx(111) + 16).stop();
+      const blockCard = (p) => p.guard("cross-green");
+      pl.until((p) => blockCard(p).dir === 1 && blockCard(p).turning <= 0, {}, 900, "block card away");
+      pl.right().press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
       pl.check(pl.p.color === "green", "green through the block's card");
       if (pl.g.phase !== "won") pl.to(tx(120));
       pl.check(pl.g.phase === "won", "goal face");
@@ -239,19 +234,12 @@ export const SCRIPTS = {
       jumpAt(pl, tx(36) + 8).land();
       pl.color("green").to(tx(52) + 4);
       pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
-      pl.jump();
-      pl.until((p) => p.p.grounded && p.feet > tx(15), (p) => (p.cx < tx(61) ? { right: true } : {}), 600, "down to the post");
-      pl.right();
-      pl.to(tx(62) + 16).stop().wait(0.15);
-      pl.jump().landAt(tx(65)); // the step...
-      pl.jump().landAt(tx(67)); // ...and the perch above the enforcer's cone
-      pl.check(Math.abs(pl.feet - tx(12)) < 1, "on the perch");
-      pl.right().to(tx(68)).stop();
-      // Sticker 2: stomp the enforcer and ride the bounce onto the far perch.
-      pl.until((p) => p.guard("enforcer").dir === 1 && p.guard("enforcer").turning <= 0, {}, 900, "enforcer away");
-      pl.right().hop().steerTo((p) => p.guard("enforcer").x - 10);
-      pl.right().airJump();
-      pl.until((p) => p.p.grounded, (p) => (p.cx < tx(77) + 16 ? { right: true } : {}), 240, "perch");
+      p2Hop(pl);
+      // Sticker 2: white (behind the riser), the same stomp held, and an air
+      // jump at the bounce's peak onto the high perch behind it.
+      pl.right().to(tx(62) + 16).color("white");
+      enforcerStomp(pl);
+      pl.airJump().landAt(tx(77) + 16);
       pl.check(pl.g.stickers[1].collected, "perch sticker");
       pl.right().to(tx(81) + 8).land();
       pl.to(tx(82) + 4).stop().wait(0.1).jump().landAt(tx(85)); // onto the checkpoint block
@@ -281,6 +269,30 @@ export const SCRIPTS = {
     },
   },
 };
+
+/** 1-5 develop: on P2 behind the cover block (it cuts the sentry's cone),
+ * wait for the sentry to face away, then hop the cover onto its back: the
+ * stomp bounces Rubik down to the post. (Hopping at its face lands on its
+ * raised spear: a stumble since revision five, not a launch.) */
+function p2Hop(pl) {
+  const s = (p) => p.guard("p2");
+  pl.stop();
+  pl.until((p) => s(p).dir === 1 && s(p).turning <= 0 && s(p).turnClock < 0.4, {}, 900, "p2 away");
+  pl.right().jump();
+  pl.until((p) => p.p.grounded && p.feet > tx(15), (p) => (p.cx < tx(61) ? { right: true } : {}), 600, "down to the post");
+}
+
+/** 1-5 twist: wait at the post (behind the step's riser) for the enforcer to
+ * face away, up the step, and a held running jump onto its back. */
+function enforcerStomp(pl) {
+  const e = (p) => p.guard("enforcer");
+  pl.right().to(tx(62) + 16).stop();
+  // Facing away with >= 1.8 s left of its 3 s: enough for the step and the jump.
+  pl.until((p) => e(p).dir === 1 && e(p).turning <= 0 && e(p).turnClock < 1.2, {}, 900, "enforcer away");
+  pl.right().jump().landAt(tx(65) + 8); // up the step
+  pl.right().jump().steerTo((p) => e(p).x - 10);
+  pl.check(e(pl).state === "stunned", "enforcer stomped from behind");
+}
 
 /** 1-6 inbound: corridor in green, white up the ledge, green past the lookout
  * (optionally the swap alcove), the dash crossing, the steps, and the vault. */
@@ -557,13 +569,20 @@ export const EXPERT = {
     pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" }).land();
     pl.jump();
     pl.until((p) => p.p.grounded && p.feet > tx(15), (p) => (p.cx < tx(61) ? { right: true } : {}), 600, "down to the post");
-    pl.right().to(tx(62) + 16).stop().wait(0.15);
-    pl.jump().landAt(tx(65));
-    pl.jump().landAt(tx(67));
-    pl.check(Math.abs(pl.feet - tx(12)) < 1, "on the perch");
-    pl.color("white").right().to(tx(68) + 8).jump().airJump().landAt(tx(77) + 16);
-    pl.check(Math.abs(pl.feet - tx(12)) < 1, "far perch");
-    pl.right().to(tx(81) + 8).land();
+    // No wait for the enforcer's back: white, up the step and one double
+    // jump over it to the floor beyond, timed so it never sees him long enough
+    // (the first timing that stays unseen is kept).
+    const unseen = pl.g.spotted;
+    pl.right().to(tx(62) + 16).color("white");
+    pl.choose(
+      [0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.4, 2.8, 3.2].map((w) => (f) => {
+        f.stop().wait(w).right().jump().landAt(tx(65) + 8);
+        f.right().jump().airJump().landAt(tx(80));
+        f.check(f.feet > tx(15) && f.cx > tx(78), "over the enforcer");
+      }),
+      (f) => f.g.spotted === unseen && f.g.deaths === 0,
+      "over the enforcer",
+    );
     pl.to(tx(82) + 4).jump().landAt(tx(85));
     pl.check(Math.abs(pl.feet - tx(14)) < 1, "on the block");
     pl.right().to(tx(86)).jump().airJump().landAt(tx(89) + 16);

@@ -840,6 +840,18 @@ test("no stacked cards: two cards on one floor keep 2+ tiles between their bodie
   assert.deepEqual(room.filter((c) => !c.escapeOnly).map((c) => c.id), ["vault-guard"]);
   assert.deepEqual(room.filter((c) => c.escapeOnly).map((c) => c.id), ["landing"]);
 });
+test("1-5: the enforcer is the gate - no perch above it; sticker 2's perch only off its back", () => {
+  const level = getLevel("1-5");
+  for (let x = 60; x <= 75; x++) assert.notEqual(level.map[12][x], "=", `no perch at ${x} over the enforcer`);
+  // White from the step (or the floor before it): every jump/air-jump timing
+  // misses the high perch behind the enforcer (a double jump tops out 17 px short).
+  for (const start of [{ x: 62 * T, feet: 16 * T }, { x: 64 * T + 16, feet: 14 * T }, { x: 65 * T + 16, feet: 14 * T }])
+    assert.equal(anyReaches("1-5", { start, form: "white", top: 8 * T, past: 76 * T }, jumpFamily({ maxTakeoff: 60, air: true })), false, `from ${start.x}`);
+  // The mastery route gets there by the held bounce off its back + an air jump.
+  const g = replayTo("1-5", ROUTES["1-5"].mastery, (x) => x.stickers[1].collected);
+  assert.ok(g.stickers[1].collected);
+  assert.ok(events(g, "stomp").some((e) => e.guard === "enforcer"), "after stomping the enforcer");
+});
 test("1-5: the goal block needs white, and its green card stops white: swap to green before landing", () => {
   const goalStep = { start: { x: 108 * T, feet: 16 * T }, top: 12 * T, past: 113 * T + 8 };
   assert.equal(anyReaches("1-5", { ...goalStep, form: "green" }, jumpFamily({ maxTakeoff: 60 })), false, "green can't climb the block");

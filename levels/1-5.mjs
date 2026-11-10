@@ -8,7 +8,13 @@
  * develop:   4-tile steps (white) under a patrol and a turning sentry; 2-tile
  *            blocks cut their cones; the "..." look-back telegraphs each turn.
  * twist:     the old enforcer post: the red card's cone is bright on green
- *            Rubik. Wait out its 3 s turns, stomp it from the perch, or hop.
+ *            Rubik, and it is the gate. Wait behind the step (its riser cuts
+ *            the cone) for it to face away, then run off the step onto its
+ *            back. Revision five removed the perch above it: perch to perch,
+ *            every player skipped the twist. Sticker 2 sits on a perch 8
+ *            tiles up behind it: only the held bounce off its back plus
+ *            white's air jump reaches it (a double jump from the step tops
+ *            out 17 px short).
  * conclude:  each colour is wrong for one card. A red sentry on the floor
  *            sees green: time it or stomp it from behind. Then the goal stands
  *            at the far end of a 4-tile block (a white climb) that a green card
@@ -45,8 +51,7 @@ export default defineLevel({
     // --- Twist (59-82): the enforcer post (old Stage 1, shifted) -------------
     ground(59, 82, 16);
     fill(64, 65, 14, 15); // step up to the perch: its riser shields the post face
-    ledge(66, 69, 12); // perch above the enforcer's cone
-    ledge(76, 79, 12); // perch behind it (sticker 2)
+    ledge(76, 79, 8); // sticker 2's perch: bounce off the enforcer + air jump only
     // --- Conclude (83-123): crossing cones -----------------------------------
     ground(83, 112, 16);
     fill(83, 86, 14, 15); // a 2-tile block: both risers cut the cones (CP 2 on top)
@@ -65,7 +70,7 @@ export default defineLevel({
   ],
   stickers: [
     { id: 1, x: px(27), y: 262, line: "main", note: "above the arena: a stomp bounce off the teaching card reaches it (a double jump falls short)" },
-    { id: 2, x: px(78), y: 350, line: "off", note: "the perch behind the enforcer" },
+    { id: 2, x: px(78), y: px(8) - 30, line: "off", note: "the high perch behind the enforcer: held bounce off its back + white air jump" },
     // y = 250: a hop on slab 3 reaches it; standing (box top 268) or a bounce
     // off the red sentry 250 px away (box top >= 265 there) does not.
     { id: 3, x: px(109) + 12, y: 250, line: "mastery", note: "end of the never-seen line above both cones (hop at the slab's end)" },
@@ -79,7 +84,7 @@ export default defineLevel({
     { id: "p1", job: "watch", kind: "green", mode: "patrol", x: px(48) + 16, floor: px(12), dir: 1, min: px(42) + 16, max: px(50) + 16 },
     // On P2 behind its cover block: white lands next to it, so the swap back
     // to green has to happen before the hop down to the post.
-    { id: "p2", job: "swap", kind: "green", mode: "sentry", x: px(57), floor: px(8), dir: -1, min: px(56) + 16, max: px(57) + 16, turnEvery: 2.5 },
+    { id: "p2", job: "gate", kind: "green", mode: "sentry", x: px(57), floor: px(8), dir: -1, min: px(56) + 16, max: px(57) + 16, turnEvery: 2.5 },
     // The enforcer post: stationary red sentry turning every 3 s.
     { id: "enforcer", job: "gate", kind: "red", mode: "sentry", x: px(72) + 16, floor: px(16), dir: -1, min: px(68) + 16, max: px(76) + 16, turnEvery: 3 },
     // The floor's red sentry sees green: stomp it from behind when it faces

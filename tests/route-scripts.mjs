@@ -339,19 +339,22 @@ function heistInbound(pl, { alcove = false } = {}) {
  * (red smashes). */
 function heistEscape(pl, { roof = false, alcove = false } = {}) {
   if (alcove) {
-    // Sticker 2: behind the vault, smash the alcove stone, then turn for
-    // home (the room is safe: nothing in it can see red).
-    pl.right().to(tx(129)).dash();
+    // Sticker 2: the alarm card stands between Rubik and the alcove: knock
+    // it aside with a red dash (the knock refunds the dash), smash the
+    // alcove stone, then turn for home before it gets up (3 s).
+    pl.right();
+    pl.until((p) => Math.abs(p.guard("alarm").x - p.cx) < 110, pl.dir, 600, "near the alarm card").dash();
+    pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "knock");
+    pl.check(pl.guard("alarm").state === "stunned", "alarm card knocked");
+    pl.to(tx(129)).dash();
     pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "alcove smash");
     pl.check(pl.g.stickers[1].collected, "alcove sticker");
   }
   pl.left();
-  // The forced smash, fired from the doorway: the dash breaks the seal and
-  // carries on into the alarm card staring at the door (the first knock).
+  // The forced smash, from the doorway, before the alarm card gets close.
   pl.until((p) => p.cx < tx(112) + 24, { left: true }, 600, "to the door").dash();
   pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "smash");
   pl.check(pl.g.smashes >= 1, "door smashed");
-  pl.check(pl.guard("landing").state === "stunned", "landing card knocked by the same dash");
   const deaths = pl.g.deaths;
   pl.to(tx(100)).land();
   let spotted = pl.g.spotted;

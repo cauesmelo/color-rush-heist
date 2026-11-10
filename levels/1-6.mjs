@@ -10,14 +10,15 @@
  * twist:     the vault room is ONE readable lock: a red sentry (red sees
  *            green, so the disguise is useless) guards the vault; stair 3 is
  *            cover, its 0.4 s look-back telegraphs each turn, and its back is
- *            the stomp. Touching the vault: RED GET, REVERSE. The door slams
- *            (two stones), so the first smash is forced - and safe: nothing
- *            left in the room can see red.
- * conclude:  right to left, each card one job: the alarm card that arrives
- *            outside the door (the first knock: the smash dash carries into
- *            it), the island card (knock it mid-air for a refill, or land as
- *            green), the ledge lookout and the corridor patrol (green past
- *            them, or the roof gates: red smashes, sticker 3).
+ *            the stomp. Touching the vault: RED GET, REVERSE. The red goes into
+ *            Rubik and its guard greys out; the door slams (two stones), and
+ *            the alarm card comes out at the back of the room: one slow,
+ *            visible threat while the first smash is worked out.
+ * conclude:  right to left, each card one job: the alarm card (smash out
+ *            before it reaches you, or knock it), the island card (land as
+ *            green, or knock it), the ledge pair (a green lookout and a red
+ *            sentry: no single colour passes) and the corridor patrol (green
+ *            past it, or the roof gates: red smashes, sticker 3).
  *
  * Revision five (user playtest, 2026-11-10): "I get stuck here not knowing
  * what to do; this final room isn't fun, several guards on top of each
@@ -125,16 +126,18 @@ export default defineLevel({
     // stair 3 (below its cone), go when it looks at the vault, stomp its back.
     // Posted 4 tiles inside the door (not against it), so the doorway reads
     // clear after the theft: door, then the alarm card beyond it.
-    { id: "vault-guard", job: "gate", kind: "red", mode: "sentry", x: px(115) + 16, floor: px(8), dir: -1, min: px(114), max: px(116) + 16, turnEvery: 2.6 },
-    // Escape only: the alarm brings it to the landing, staring at the sealed
-    // door. Its body (3416-3464 px) lies inside a red dash fired from the
-    // door (Rubik's box reaches 3436 px), so the forced smash carries straight
-    // into it: the first knock is taught by the same press as the first
-    // smash. Dashed from deeper in the room, the dash stops in the doorway:
-    // it sees red ("?" after 0.15 s), and a second dash (the smash refunded
-    // it) or green answers it. The stones cut its cone, so the in-room
-    // respawn is never seen.
-    { id: "landing", job: "knock", kind: "green", mode: "sentry", fixed: true, x: px(107) + 16, floor: px(8), dir: 1, min: px(107) + 16, max: px(107) + 16, escapeOnly: true },
+    // Taking red drains it (grey, flat for good): the room's threat after the
+    // theft is the alarm card alone, and green in the room is safe from red.
+    { id: "vault-guard", job: "gate", kind: "red", mode: "sentry", x: px(115) + 16, floor: px(8), dir: -1, min: px(114), max: px(116) + 16, turnEvery: 2.6, drainOnTheft: true },
+    // Escape only: the vault room's climax. The alarm brings it out at the
+    // back of the room facing the alcove; it turns at the alcove stone and
+    // walks back toward the vault at 60% pace (96 px/s with the getaway's
+    // 1.6x), a visible clock about 6 s from the door. One threat at a time:
+    // smash the door and go (its patrol ends 2 tiles inside the door, so its
+    // spear never reaches the landing), knock it with a red dash (the
+    // mastery's way to the alcove sticker behind it), or go green (it can't
+    // see green, and the drained vault guard can't see anything).
+    { id: "alarm", job: "knock", kind: "green", mode: "patrol", pace: 0.6, x: px(126) + 16, floor: px(8), dir: 1, theftDir: 1, min: px(113) + 16, max: px(129) + 16, escapeOnly: true },
     // Escape only: it arrives on the island facing the incoming Rubik (spear
     // up, so no stomp). Safe line: swap to green after the last dash and land
     // through it. Red line: land clear of it and knock it with a ground dash

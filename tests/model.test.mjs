@@ -568,14 +568,19 @@ test("1-6: the theft - RED GET, REVERSE, the room's cards turn, the door seals a
   assert.equal(g.player.color, "red");
   assert.equal(g.checkpoint, "vault");
   assert.deepEqual(g.gets, ["red"]);
-  for (const id of ["corridor", "lookout", "landing", "ambush"]) assert.equal(guard(g, id).dir, 1, `${id} faces the incoming Rubik`);
-  for (const id of ["landing", "ambush"]) {
+  for (const id of ["corridor", "lookout", "ambush"]) assert.equal(guard(g, id).dir, 1, `${id} faces the incoming Rubik`);
+  for (const id of ["alarm", "ambush"]) {
     assert.equal(fresh("1-6").guards.find((c) => c.id === id).state, "away", `${id} is absent inbound`);
     assert.equal(guard(g, id).state, "calm", `${id} arrived with the alarm`);
   }
-  // Nothing in the sealed room can see red: the forced smash is safe.
+  // Taking red drains the vault's red guard; the room's one threat is the
+  // alarm card, out at the back and facing away from Rubik.
+  assert.equal(guard(g, "vault-guard").state, "drained");
   const seal = getLevel("1-6").stones.find((s) => s.id === "seal-low");
-  assert.deepEqual(g.guards.filter((c) => c.state !== "away" && c.x > (seal.x + 2) * T && M.canSee(c, "red")).map((c) => c.id), []);
+  const threats = g.guards.filter((c) => !["away", "drained"].includes(c.state) && c.x > (seal.x + 2) * T && M.canSee(c, "red"));
+  assert.deepEqual(threats.map((c) => c.id), ["alarm"]);
+  assert.equal(guard(g, "alarm").dir, 1, "it comes out facing the alcove");
+  assert.ok(guard(g, "alarm").x - cx(g) > 250, "out at the back");
   for (const id of ["seal-low", "seal-high"]) assert.equal(g.stones.find((s) => s.id === id).broken, false, `${id} dropped`);
   // Inbound the door was open; nothing but a red dash gets out now.
   assert.equal(fresh("1-6").stones.find((s) => s.id === "seal-low").broken, true);
@@ -618,17 +623,16 @@ test("1-6: a death after the theft respawns inside the sealed room, held still, 
   assert.equal(g.stones.find((s) => s.id === "seal-low").broken, false, "the door is shut again");
   assert.ok(cx(g) > (seal.x + 2) * T && cx(g) - (seal.x + 2) * T < 2 * T, "inside, within 2 tiles of the door");
   assert.ok(g.calm >= 1, `every card holds for ${g.calm.toFixed(2)} s`);
-  // No card in the room sees red (the alarm card outside is behind the door).
-  assert.equal(g.guards.filter((c) => M.canSee(c, "red") && c.state !== "away" && c.x > (seal.x + 2) * T).length, 0);
-  // The forced smash: a red dash at the door opens it, and the same dash
-  // carries on into the alarm card staring at the door (the first knock).
+  // The one threat in the room is back at the far end, facing away.
+  const alarm = guard(g, "alarm");
+  assert.ok(alarm.x - cx(g) > 400 && alarm.dir === 1, `alarm card ${Math.round(alarm.x - cx(g))} px away`);
+  // The forced smash: a red dash at the door opens it.
   ticks(g, 1, { left: true, dash: true });
   ticks(g, seconds(0.3), { left: true });
   assert.equal(g.stones.find((s) => s.id === "seal-low").broken, true);
-  assert.equal(guard(g, "landing").state, "stunned");
   assert.equal(g.deaths, 1, "and nothing kills him on the way out");
 });
-test("1-6 vault room: no state strands Rubik - dawdling is safe, the door always opens, the way out is cued", () => {
+test("1-6 vault room: a climax with one visible threat that never strands Rubik", () => {
   const theft = () => {
     const g = replayTo("1-6", ROUTES["1-6"].baseline, (x) => x.stolen);
     M.advance(g, M.WORLD.hitstop.get + M.WORLD.theftCalm + 0.1, {});
@@ -636,9 +640,22 @@ test("1-6 vault room: no state strands Rubik - dawdling is safe, the door always
   };
   const seal = getLevel("1-6").stones.find((s) => s.id === "seal-low"),
     door = (seal.x + 2) * T;
-  // Whatever a lost player does inside the sealed room for 20 s (stand,
-  // push the door, pace, jump, swap forms, dash the other way), nothing that
-  // sees him is in there: no death, and the door is still one dash away.
+  // The clock is visible and fair: a player who just stands at the vault gets
+  // the alarm card's "?" no sooner than 1.2 s after the hold, and one who
+  // walks to the door and pushes has 2.5+ s before its "?" (and ~5 s before
+  // its spear) with the dash key drawn on the door.
+  const firstSuspect = (input) => {
+    const g = theft(),
+      t0 = g.time;
+    while (g.time - t0 < 15 && guard(g, "alarm").state === "calm" && g.deaths === 0) M.update(g, M.TICK, input);
+    return g.time - t0;
+  };
+  assert.ok(firstSuspect({}) >= 1.2, `standing still: "?" after ${firstSuspect({}).toFixed(2)} s`);
+  assert.ok(firstSuspect({ left: true }) >= 2.5, `at the door: "?" after ${firstSuspect({ left: true }).toFixed(2)} s`);
+  // Whatever a lost player does in the room (stand, push, pace, hop, swap,
+  // dash the wrong way), the next move is always one dash: either he is still
+  // alive in the room, or he died and respawns by the door with the alarm
+  // card back at the far end. Then one red dash at the door gets him out.
   const dawdles = {
     stand: () => ({}),
     push: () => ({ left: true }),
@@ -650,38 +667,31 @@ test("1-6 vault room: no state strands Rubik - dawdling is safe, the door always
   for (const [name, input] of Object.entries(dawdles)) {
     const g = theft();
     for (let i = 0; i < seconds(20); i++) M.update(g, M.TICK, input(i));
-    assert.equal(g.deaths, 0, `${name}: 20 s in the room never kills`);
+    while (g.phase !== "playing") ticks(g, 1);
     assert.ok(cx(g) > door, `${name}: still inside`);
-    // From wherever he ended up: red, walk to the door, one dash.
+    assert.ok(g.guards.filter((c) => c.state !== "away" && c.state !== "drained" && c.x > door && M.canSee(c, "red")).length <= 1, `${name}: one threat at a time`);
+    // From wherever he is: red, to the door, one dash (walking left toward
+    // the door also walks away from the alarm card's spear).
     M.switchColor(g, "red");
-    ticks(g, seconds(0.2));
-    for (let i = 0; i < seconds(6) && cx(g) > door + 30; i++) ticks(g, 1, { left: true });
+    ticks(g, seconds(0.2), { left: true });
+    for (let i = 0; i < seconds(6) && cx(g) > door + 30 && g.phase === "playing"; i++) ticks(g, 1, { left: true });
+    // Speared on the way (the card was mid-attack): he respawns by the door.
+    while (g.phase !== "playing") ticks(g, 1);
+    assert.ok(cx(g) - door < 3 * T, `${name}: at the door`);
     ticks(g, 1, { left: true, dash: true });
     ticks(g, seconds(0.4), { left: true });
-    // On the ground the dash breaks the low stone; mid-hop, the stone in his
-    // rows (the upper one) - either opens a doorway he flies through.
     assert.ok(g.stones.some((s) => s.sealOnTheft && s.broken), `${name}: the door opens`);
     assert.ok(cx(g) < door, `${name}: and he is out`);
-    assert.equal(g.deaths, 0, `${name}: alive`);
   }
-  // A dash fired from deeper in the room stops in the doorway: the alarm
-  // card sees red, and the refunded dash (or green) answers it before its
-  // "!" beat ends (0.15 s "?", 0.6 s "!", 0.45 s notice).
-  const deep = theft();
-  for (let i = 0; i < seconds(3) && cx(deep) > door + 130; i++) ticks(deep, 1, { left: true });
-  ticks(deep, seconds(0.15)); // stop: the dash starts ~4 tiles inside the room
-  ticks(deep, 1, { left: true, dash: true });
-  ticks(deep, seconds(0.25), {});
-  assert.equal(deep.stones.find((s) => s.id === "seal-low").broken, true);
-  assert.notEqual(guard(deep, "landing").state, "stunned", "too far: the dash stopped in the doorway");
-  assert.equal(deep.player.dashCharge, 1, "the smash refunded the dash");
-  ticks(deep, 1, { left: true, dash: true });
-  ticks(deep, seconds(0.3), { left: true });
-  assert.equal(guard(deep, "landing").state, "stunned", "the second dash knocks it");
-  assert.equal(deep.deaths, 0);
-  // Only the first broken seal stone matters: the doorway is open once the
-  // stone in Rubik's rows breaks (the upper one stays as a lintel), and the
-  // renderer's door cue (game.mjs drawDoorCue) ends with that same stone.
+  // Respawn after the theft: by the door, the alarm card 400+ px away facing
+  // away, the door one dash from him (respawn test above).
+  // Green in the room is safe: the vault's guard is drained (it used to spear
+  // green Rubik 2.2 s after the swap), and the alarm card can't see green.
+  const green = theft();
+  M.switchColor(green, "green");
+  for (let i = 0; i < seconds(10); i++) ticks(green, 1, { left: true });
+  assert.equal(green.deaths, 0, "green by the door for 10 s: nothing sees him");
+  // The renderer's door cue ends with the first broken seal stone.
   const src = readFileSync(path.join(demo, "game.mjs"), "utf8");
   assert.match(src, /function doorSealed\(\)[\s\S]*?!seal\.some\(\(s\) => s\.broken\)[\s\S]*?function drawDoorCue\(\) \{\n  if \(!doorSealed\(\)\) return;/);
   assert.match(src, /drawStones\(\);\n  drawDoorCue\(\);/);
@@ -824,6 +834,8 @@ test("no stacked cards: two cards on one floor keep 2+ tiles between their bodie
     level.guards.forEach((a, i) =>
       level.guards.slice(i + 1).forEach((b) => {
         if (a.floor !== b.floor) return;
+        // A card drained by the theft never stands beside an escape-only one.
+        if ((a.drainOnTheft && b.escapeOnly) || (b.drainOnTheft && a.escapeOnly)) return;
         // Closest the two bodies can get (patrol bounds; a charge stays inside them).
         const gap = Math.max(a.min, b.min) - Math.min(a.max, b.max) - M.GUARD.w;
         if (a.pair === b.id) {
@@ -838,7 +850,7 @@ test("no stacked cards: two cards on one floor keep 2+ tiles between their bodie
   const vault = getLevel("1-6"),
     room = vault.guards.filter((c) => c.min >= 98 * T);
   assert.deepEqual(room.filter((c) => !c.escapeOnly).map((c) => c.id), ["vault-guard"]);
-  assert.deepEqual(room.filter((c) => c.escapeOnly).map((c) => c.id), ["landing"]);
+  assert.deepEqual(room.filter((c) => c.escapeOnly).map((c) => c.id), ["alarm"]);
 });
 test("1-5: the enforcer is the gate - no perch above it; sticker 2's perch only off its back", () => {
   const level = getLevel("1-5");

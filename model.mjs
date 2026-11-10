@@ -1094,9 +1094,16 @@ function steal(g) {
   // Rubik on his run home; escape-only cards arrive at their posts.
   for (const guard of g.guards) {
     if (guard.state === "drained") continue;
-    guard.dir = 1;
+    guard.dir = guard.theftDir ?? 1;
     guard.bumps = 0;
-    if (guard.escapeOnly) {
+    if (guard.drainOnTheft) {
+      // The vault's red goes into Rubik and its red guard greys out (1-2's
+      // drained green card): flat for good, a springboard, no cone. So the
+      // room never punishes a swap to green after the theft.
+      guard.state = "drained";
+      guard.sees = false;
+      event(g, "drain", guard.x, guard.floor - GUARD.h / 2, { guard: guard.id });
+    } else if (guard.escapeOnly) {
       guard.state = "calm";
       event(g, "arrive", guard.x, guard.floor - GUARD.h, { guard: guard.id });
     } else if (guard.state !== "stunned") {

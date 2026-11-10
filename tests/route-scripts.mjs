@@ -52,7 +52,7 @@ export const SCRIPTS = {
       stompIntoPit(pl);
       islandChain(pl, false);
       wallStomp(pl, { ledge: false });
-      // Over the second floor's cards in one double jump, then the run-up.
+      // Over the dip in one double jump, then the run-up.
       pl.to(tx(93) + 8).jump().airJump().landAt(tx(104));
       pl.right();
       jumpAt(pl, tx(106)).land(); // 2-tile steps
@@ -63,14 +63,7 @@ export const SCRIPTS = {
       stompIntoPit(pl);
       islandChain(pl, true);
       wallStomp(pl, { ledge: true });
-      // The second floor's chain: the patrol's back, then the lookout's.
-      pl.to(tx(93) + 8).stop();
-      pl.until((p) => p.guard("chain-a").dir === 1 && p.guard("chain-a").turning <= 0 && p.guard("chain-a").x < tx(96) + 8, {}, 900, "chain-a away");
-      pl.right().jump().steerTo((p) => p.guard("chain-a").x - 4);
-      pl.check(pl.guard("chain-a").state === "stunned", "chain-a stomped");
-      pl.steerTo(tx(101) - 4);
-      pl.check(pl.guard("chain-b").state === "stunned", "chain-b stomped");
-      pl.landAt(tx(104));
+      pl.to(tx(93) + 8).jump().airJump().landAt(tx(104));
       pl.right();
       jumpAt(pl, tx(106)).land();
       jumpAt(pl, tx(108)).land();
@@ -207,8 +200,12 @@ export const SCRIPTS = {
       pl.right().to(pl.guard("cross-red").x - 230).jump().steerTo((p) => p.guard("cross-red").x - 10);
       pl.check(pl.guard("cross-red").state === "stunned", "red sentry stomped");
       pl.until((p) => p.p.grounded, (p) => (p.cx < tx(110) ? { right: true } : {}), 240, "past the red sentry");
-      pl.right();
-      jumpAt(pl, tx(117)).land();
+      // Green through the green patrol to the goal block; its cone covers
+      // the white climb whenever it faces right, so wait for its back.
+      pl.right().to(tx(116) + 8).stop();
+      const back = (p) => p.guard("cross-green").dir === -1 && p.guard("cross-green").turning <= 0;
+      pl.until(back, {}, 900, "cross-green away");
+      pl.right().press({ color: "white", jump: true }).airJump().land();
       pl.to(tx(120)).check(pl.g.phase === "won", "goal face");
     },
     mastery(pl) {
@@ -306,40 +303,27 @@ function heistInbound(pl, { alcove = false } = {}) {
   pl.settle();
 }
 
-/** 1-6 escape: smash the door, knock the landing card, the crossing back,
- * home by the corridor (green) or the roof gates (red smashes). */
+/** 1-6 escape: smash the door (the same dash knocks the alarm card outside
+ * it), the crossing back, home by the corridor (green) or the roof gates
+ * (red smashes). */
 function heistEscape(pl, { roof = false, alcove = false } = {}) {
-  const dashAt = (id, reach = 120) => {
-    pl.until((p) => Math.abs(p.guard(id).x - p.cx) < reach || p.guard(id).state === "stunned", pl.dir, 240, `near ${id}`);
-    if (pl.guard(id).state !== "stunned") pl.dash().until((p) => p.p.dashTime <= 0, pl.dir, 60, `knock ${id}`);
-    pl.check(pl.guard(id).state === "stunned", `${id} knocked`);
-  };
   if (alcove) {
-    // Sticker 2: knock both charging burst cards aside (each knock refunds
-    // the dash), smash the alcove stone, then turn for home.
-    pl.right();
-    dashAt("burst-a");
-    dashAt("burst-b");
-    pl.to(tx(129)).dash();
+    // Sticker 2: behind the vault, smash the alcove stone, then turn for
+    // home (the room is safe: nothing in it can see red).
+    pl.right().to(tx(129)).dash();
     pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "alcove smash");
     pl.check(pl.g.stickers[1].collected, "alcove sticker");
   }
   pl.left();
-  pl.until((p) => p.cx < tx(113), { left: true }, 600, "to the door").dash(); // the forced smash
+  // The forced smash, fired from the doorway: the dash breaks the seal and
+  // carries on into the alarm card staring at the door (the first knock).
+  pl.until((p) => p.cx < tx(112) + 24, { left: true }, 600, "to the door").dash();
   pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "smash");
   pl.check(pl.g.smashes >= 1, "door smashed");
-  // Knock the landing card aside (it faces the chamber after REVERSE).
+  pl.check(pl.guard("landing").state === "stunned", "landing card knocked by the same dash");
   const deaths = pl.g.deaths;
+  pl.to(tx(100)).land();
   let spotted = pl.g.spotted;
-  pl.choose(
-    [0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4].map((wait) => (f) => {
-      f.wait(wait).dash();
-      f.until((p) => p.p.dashTime <= 0, f.dir, 60, "knock");
-      f.to(tx(100)).land();
-    }),
-    (f) => f.guard("landing").state === "stunned" && f.g.deaths === deaths,
-    "landing knock",
-  );
   // The crossing back: jump, dash, the orb, dash, onto the 4-tile island.
   // The island card faces the incoming Rubik (spear up: no stomp) and
   // patrols the island, so the landing is timed: wait on the bank, then fly

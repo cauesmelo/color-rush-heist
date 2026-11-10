@@ -1520,6 +1520,46 @@ function drawStones() {
     glyph("red", x + 32, y + 32, 10, game.stolen ? "#ff4a3a" : "#9e3a30");
   }
 }
+/** 1-6 after the theft, while the chamber door is still sealed: the way out
+ * reads in the world, not only in the REVERSE caption (shown once). The
+ * seal pulses, storm streaks (1-4's dash marks) run from Rubik's side into
+ * it, and once the caption has gone the upper stone carries the dash key.
+ * Added after the user's playtest stalled in this room (2026-11-10). */
+function drawDoorCue() {
+  if (!game.stolen || game.phase === "won") return;
+  // Breaking the low stone opens the doorway (the upper one stays as a
+  // lintel), so the cue ends with the first broken seal stone.
+  const seal = game.stones.filter((s) => s.sealOnTheft);
+  if (!seal.length || seal.some((s) => s.broken)) return;
+  const x0 = Math.min(...seal.map((s) => s.x)) * T,
+    y0 = Math.min(...seal.map((s) => s.y)) * T,
+    y1 = (Math.max(...seal.map((s) => s.y)) + 2) * T,
+    sx = wx(x0),
+    right = wx(x0 + 2 * T),
+    floor = wy(y1);
+  if (right < -40 || sx > W + 120) return;
+  const pulse = reducedMotion ? 0.8 : 0.55 + Math.sin(clock * 5) * 0.35;
+  ctx.strokeStyle = `rgba(255,96,72,${pulse.toFixed(3)})`;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(sx - 2, wy(y0) - 2, 2 * T + 4, y1 - y0 + 4);
+  // Streaks at Rubik's body height, flowing left into the seal.
+  for (let i = 0; i < 3; i++) {
+    const t = reducedMotion ? 0.5 : (clock * 0.9 + i / 3) % 1,
+      len = 22 - i * 5,
+      px0 = right + 10 + (1 - t) * 70,
+      py0 = floor - 46 + i * 13;
+    ctx.globalAlpha = reducedMotion ? 0.75 : Math.sin(t * Math.PI) * 0.85;
+    ctx.fillStyle = i === 1 ? "#ffd0c4" : "#ffffff";
+    ctx.fillRect(Math.round(px0), Math.round(py0), len, 3);
+    ctx.fillRect(Math.round(px0), Math.round(py0 - 3), 4, 3);
+  }
+  ctx.globalAlpha = 1;
+  // The sign, in the HUD's own keycap language, once REVERSE has said it.
+  if (fx.reverse < 0 && !(fx.reverseDelay > 0) && !fx.get) {
+    const bob = reducedMotion ? 0 : Math.round(Math.sin(clock * 3) * 2);
+    keycap(inputMode === "touch" ? "DASH" : "Shift", sx + T, wy(y0) + 38 + bob, 1, 16);
+  }
+}
 function drawCheckpoints() {
   LV.checkpoints.forEach((cp, index) => {
     if (cp.get) return; // saved by a GET moment: no marker
@@ -2472,6 +2512,7 @@ function drawWorld() {
   for (const guard of game.guards) drawCone(guard);
   drawTiles();
   drawStones();
+  drawDoorCue();
   drawCheckpoints();
   drawGoal();
   drawVault();

@@ -568,9 +568,14 @@ test("1-6: the theft - RED GET, REVERSE, the room's cards turn, the door seals a
   assert.equal(g.player.color, "red");
   assert.equal(g.checkpoint, "vault");
   assert.deepEqual(g.gets, ["red"]);
-  for (const id of ["burst-a", "burst-b"]) assert.ok(["alert", "windup", "lunge"].includes(guard(g, id).state));
-  for (const id of ["corridor", "lookout", "landing"]) assert.equal(guard(g, id).dir, 1, `${id} faces the route home`);
-  assert.equal(guard(g, "ambush").state, "calm", "the escape-only card arrived");
+  for (const id of ["corridor", "lookout", "landing", "ambush"]) assert.equal(guard(g, id).dir, 1, `${id} faces the incoming Rubik`);
+  for (const id of ["landing", "ambush"]) {
+    assert.equal(fresh("1-6").guards.find((c) => c.id === id).state, "away", `${id} is absent inbound`);
+    assert.equal(guard(g, id).state, "calm", `${id} arrived with the alarm`);
+  }
+  // Nothing in the sealed room can see red: the forced smash is safe.
+  const seal = getLevel("1-6").stones.find((s) => s.id === "seal-low");
+  assert.deepEqual(g.guards.filter((c) => c.state !== "away" && c.x > (seal.x + 2) * T && M.canSee(c, "red")).map((c) => c.id), []);
   for (const id of ["seal-low", "seal-high"]) assert.equal(g.stones.find((s) => s.id === id).broken, false, `${id} dropped`);
   // Inbound the door was open; nothing but a red dash gets out now.
   assert.equal(fresh("1-6").stones.find((s) => s.id === "seal-low").broken, true);
@@ -613,14 +618,87 @@ test("1-6: a death after the theft respawns inside the sealed room, held still, 
   assert.equal(g.stones.find((s) => s.id === "seal-low").broken, false, "the door is shut again");
   assert.ok(cx(g) > (seal.x + 2) * T && cx(g) - (seal.x + 2) * T < 2 * T, "inside, within 2 tiles of the door");
   assert.ok(g.calm >= 1, `every card holds for ${g.calm.toFixed(2)} s`);
-  // Cards that see red and share the room (the landing card is behind the door).
-  const inside = g.guards.filter((c) => M.canSee(c, "red") && c.state !== "away" && c.x > (seal.x + 2) * T);
-  const nearest = Math.min(...inside.map((c) => Math.abs(c.x - cx(g))));
-  assert.ok(nearest > 200, `the nearest card in the room that sees red is ${nearest.toFixed(0)} px away`);
-  // The forced smash: a red dash at the door opens it.
+  // No card in the room sees red (the alarm card outside is behind the door).
+  assert.equal(g.guards.filter((c) => M.canSee(c, "red") && c.state !== "away" && c.x > (seal.x + 2) * T).length, 0);
+  // The forced smash: a red dash at the door opens it, and the same dash
+  // carries on into the alarm card staring at the door (the first knock).
   ticks(g, 1, { left: true, dash: true });
   ticks(g, seconds(0.3), { left: true });
   assert.equal(g.stones.find((s) => s.id === "seal-low").broken, true);
+  assert.equal(guard(g, "landing").state, "stunned");
+  assert.equal(g.deaths, 1, "and nothing kills him on the way out");
+});
+test("1-6 vault room: no state strands Rubik - dawdling is safe, the door always opens, the way out is cued", () => {
+  const theft = () => {
+    const g = replayTo("1-6", ROUTES["1-6"].baseline, (x) => x.stolen);
+    M.advance(g, M.WORLD.hitstop.get + M.WORLD.theftCalm + 0.1, {});
+    return g;
+  };
+  const seal = getLevel("1-6").stones.find((s) => s.id === "seal-low"),
+    door = (seal.x + 2) * T;
+  // Whatever a lost player does inside the sealed room for 20 s (stand,
+  // push the door, pace, jump, swap forms, dash the other way), nothing that
+  // sees him is in there: no death, and the door is still one dash away.
+  const dawdles = {
+    stand: () => ({}),
+    push: () => ({ left: true }),
+    pace: (i) => (Math.floor(i / 180) % 2 ? { right: true } : { left: true }),
+    hop: (i) => ({ left: true, jump: i % 50 === 0 }),
+    "dash right": (i) => ({ right: true, dash: i % 90 === 0 }),
+    "swap red/white": (i) => ({ right: i % 240 < 120, color: i % 120 === 0 ? (i % 240 ? "white" : "red") : undefined }),
+  };
+  for (const [name, input] of Object.entries(dawdles)) {
+    const g = theft();
+    for (let i = 0; i < seconds(20); i++) M.update(g, M.TICK, input(i));
+    assert.equal(g.deaths, 0, `${name}: 20 s in the room never kills`);
+    assert.ok(cx(g) > door, `${name}: still inside`);
+    // From wherever he ended up: red, walk to the door, one dash.
+    M.switchColor(g, "red");
+    ticks(g, seconds(0.2));
+    for (let i = 0; i < seconds(6) && cx(g) > door + 30; i++) ticks(g, 1, { left: true });
+    ticks(g, 1, { left: true, dash: true });
+    ticks(g, seconds(0.4), { left: true });
+    assert.equal(g.stones.find((s) => s.id === "seal-low").broken, true, `${name}: the door opens`);
+    assert.ok(cx(g) < door, `${name}: and he is out`);
+  }
+  // A dash fired from deeper in the room stops in the doorway: the alarm
+  // card sees red, and the refunded dash (or green) answers it before its
+  // "!" beat ends (0.15 s "?", 0.6 s "!", 0.45 s notice).
+  const deep = theft();
+  for (let i = 0; i < seconds(3) && cx(deep) > door + 130; i++) ticks(deep, 1, { left: true });
+  ticks(deep, seconds(0.15)); // stop: the dash starts ~4 tiles inside the room
+  ticks(deep, 1, { left: true, dash: true });
+  ticks(deep, seconds(0.25), {});
+  assert.equal(deep.stones.find((s) => s.id === "seal-low").broken, true);
+  assert.notEqual(guard(deep, "landing").state, "stunned", "too far: the dash stopped in the doorway");
+  assert.equal(deep.player.dashCharge, 1, "the smash refunded the dash");
+  ticks(deep, 1, { left: true, dash: true });
+  ticks(deep, seconds(0.3), { left: true });
+  assert.equal(guard(deep, "landing").state, "stunned", "the second dash knocks it");
+  assert.equal(deep.deaths, 0);
+  // Only the first broken seal stone matters: the doorway is open once the
+  // stone in Rubik's rows breaks (the upper one stays as a lintel), and the
+  // renderer's door cue (game.mjs drawDoorCue) ends with that same stone.
+  const src = readFileSync(path.join(demo, "game.mjs"), "utf8");
+  assert.match(src, /function drawDoorCue\(\)[\s\S]*?seal\.some\(\(s\) => s\.broken\)/);
+  assert.match(src, /drawStones\(\);\n  drawDoorCue\(\);/);
+});
+test("1-6: sticker 3 stays sealed between the roof gates until red comes home", () => {
+  // Inbound, white can reach the canopy roof from the home cliff (a double
+  // jump up 2 tiles); the mid gate is stacked three high so the roof's left
+  // end can't hop it (a single 2-tile gate let 63% of white jumps through).
+  const level = getLevel("1-6"),
+    mid = level.stones.filter((s) => s.x === 31).map((s) => s.y).sort((a, b) => a - b);
+  assert.deepEqual(mid, [4, 6, 8]);
+  const start = { x: 25 * T + 16, feet: 10 * T };
+  assert.equal(anyReaches("1-6", { start, form: "white", top: 10 * T, past: 33 * T }, jumpFamily({ maxTakeoff: 60, air: true })), false);
+  // Red on the roof breaks the bottom stone and runs under the other two.
+  const g = noCards(fresh("1-6"));
+  g.unlocked.red = true;
+  place(g, 28 * T, 10 * T, { color: "red", direction: 1 });
+  ticks(g, 1, { right: true, dash: true });
+  ticks(g, seconds(0.8), { right: true });
+  assert.ok(g.stickers[2].collected, "red takes sticker 3");
 });
 test("1-6: home only ends the level after the theft; the escape has no fail timer", () => {
   const g = fresh("1-6");
@@ -649,6 +727,129 @@ test("1-6: the stacked roof gate is out of a white double jump's reach from the 
     gate = getLevel("1-6").stones.find((s) => s.id === "roof-high");
   assert.ok(rise > 4 * T, `white reaches 4-tile ledges (${rise.toFixed(1)} px)`);
   assert.ok(12 * T - gate.y * T > rise + 8, "the stacked roof gate stays out of reach inbound");
+});
+
+// ------------------------------------- every card has a job (revision 5) ---
+/** What a route does with each card, tick by tick: stomps/bounces/drains and
+ * knocks (events), the time Rubik spends inside its drawn cone in a colour it
+ * sees ("seen"), inside its cone turned the other way in a colour it sees
+ * ("mirror": its facing is what let him pass), inside its cone disguised
+ * ("hum"), the swap-to-disguise lead before he first enters its cone, and the
+ * closest approach of the two centres (px). */
+function cardWork(id, kind) {
+  const g = fresh(id),
+    work = Object.fromEntries(g.guards.map((c) => [c.id, { gate: 0, knock: 0, seen: 0, mirror: 0, hum: 0, swapLead: Infinity, near: Infinity, inside: false }]));
+  let lastEvent = 0,
+    lastSwap = -Infinity,
+    color = g.player.color;
+  for (const [s, input] of ROUTES[id][kind]) {
+    const n = Math.max(1, Math.round(s * 120));
+    for (let i = 0; i < n; i++) {
+      M.update(g, M.TICK, i === 0 ? input : { left: input.left, right: input.right });
+      const p = g.player,
+        box = { x: p.x, y: p.y, w: p.w, h: p.h };
+      if (p.color !== color) [color, lastSwap] = [p.color, g.time];
+      for (const c of g.guards) {
+        const w = work[c.id];
+        if (c.state === "away") continue;
+        w.near = Math.min(w.near, Math.hypot(p.x + p.w / 2 - c.x, p.y + p.h - c.floor));
+        if (["stunned", "drained"].includes(c.state)) continue;
+        const sees = M.canSee(c, p.color),
+          inCone = M.boxInCone(c, box, M.coneReach(g, c)),
+          turned = { ...c, dir: -c.dir },
+          inTurned = M.boxInCone(turned, box, M.coneReach(g, turned));
+        if (inCone && sees) w.seen += M.TICK;
+        if (inTurned && sees && !inCone) w.mirror += M.TICK;
+        if (inCone && !sees) {
+          w.hum += M.TICK;
+          if (!w.inside) w.swapLead = Math.min(w.swapLead, g.time - lastSwap);
+        }
+        w.inside = inCone && !sees;
+      }
+      for (const e of g.events) {
+        if (e.id <= lastEvent) continue;
+        lastEvent = e.id;
+        if (!work[e.guard]) continue;
+        if (["stomp", "bounce", "drain"].includes(e.type)) work[e.guard].gate++;
+        if (e.type === "knock") work[e.guard].knock++;
+      }
+    }
+  }
+  return { g, work };
+}
+/** The job vocabulary (LEVEL_DESIGN.md "Every card has a job"). Each job is
+ * proved on the routes, never just asserted: a card that only stands in the
+ * way of a disguised Rubik has no job outside the two disguise levels. */
+const JOBS = {
+  gate: (b) => b.gate > 0, // the guided line has to stomp it (or bounce off it)
+  refill: (b) => b.gate > 0, // stomped mid-gap by the guided line to refill the dash
+  knock: (b, m) => b.knock + m.knock > 0, // a red dash knocks it aside
+  watch: (b, m) => b.seen + b.mirror + m.seen + m.mirror >= 0.1, // a live sightline a line must time
+  swap: (b) => b.hum > 0 && b.swapLead <= 2, // the guided line swaps to its colour < 2 s before its cone
+  teach: (b) => b.hum + b.seen > 0, // the idea's first card, met in the open on the guided line
+  disguise: (b) => b.near < 24, // walks through disguised Rubik where he can't go around it
+};
+test("every card has a job, proved on the routes; cards that did no work are gone", () => {
+  const out = {};
+  for (const level of LEVELS) {
+    if (!level.guards.length) continue;
+    const base = cardWork(level.id, "baseline").work,
+      mastery = cardWork(level.id, "mastery").work;
+    out[level.id] = {};
+    for (const card of level.guards) {
+      assert.ok(card.job in JOBS, `${level.id} ${card.id}: declares a job (${card.job})`);
+      const b = base[card.id],
+        m = mastery[card.id];
+      assert.ok(JOBS[card.job](b, m), `${level.id} ${card.id}: no evidence for "${card.job}" ${JSON.stringify({ b, m })}`);
+      out[level.id][card.id] = card.job;
+    }
+    // Walking through a card in disguise is the lesson only where the level's
+    // idea is the disguise (1-3) or its conclusion lands on it (1-4); one
+    // introduction card per level at most.
+    if (!["1-3", "1-4"].includes(level.id)) assert.ok(!level.guards.some((c) => c.job === "disguise"), `${level.id}: disguise-only cards`);
+    assert.ok(level.guards.filter((c) => c.job === "teach").length <= 1, `${level.id}: one teaching card`);
+  }
+  // The cards revision five removed (no route ever engaged them, or they only
+  // crowded the vault room) stay gone.
+  const ids = (id) => getLevel(id).guards.map((c) => c.id);
+  for (const [id, gone] of [["1-2", ["chain-a", "chain-b"]], ["1-3", ["corridor-a"]], ["1-6", ["burst-a", "burst-b"]]])
+    for (const card of gone) assert.ok(!ids(id).includes(card), `${id} ${card}`);
+  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 30);
+});
+test("no stacked cards: two cards on one floor keep 2+ tiles between their bodies, unless a declared pair", () => {
+  for (const level of LEVELS)
+    level.guards.forEach((a, i) =>
+      level.guards.slice(i + 1).forEach((b) => {
+        if (a.floor !== b.floor) return;
+        // Closest the two bodies can get (patrol bounds; a charge stays inside them).
+        const gap = Math.max(a.min, b.min) - Math.min(a.max, b.max) - M.GUARD.w;
+        if (a.pair === b.id) {
+          assert.equal(b.pair, a.id, `${level.id}: ${a.id}/${b.id} pair both ways`);
+          assert.ok(gap >= 0, `${level.id} ${a.id}/${b.id}: a pair stands side by side, never overlapping (${gap} px)`);
+          return;
+        }
+        assert.ok(gap >= 2 * T, `${level.id} ${a.id}/${b.id}: ${gap} px apart`);
+      }),
+    );
+  // The vault room is one card inbound, and the escape meets one card per beat.
+  const vault = getLevel("1-6"),
+    room = vault.guards.filter((c) => c.min >= 98 * T);
+  assert.deepEqual(room.filter((c) => !c.escapeOnly).map((c) => c.id), ["vault-guard"]);
+  assert.deepEqual(room.filter((c) => c.escapeOnly).map((c) => c.id), ["landing"]);
+});
+test("1-5: the goal block needs white, and the green patrol's cone covers that climb when it faces it", () => {
+  const level = getLevel("1-5"),
+    c = level.guards.find((x) => x.id === "cross-green");
+  const climb = { x: 117 * T - M.PLAYER.w / 2, y: 16 * T - M.PLAYER.h, w: M.PLAYER.w, h: M.PLAYER.h };
+  const g = fresh("1-5");
+  for (let x = c.min; x <= c.max; x += 8) {
+    const probe = { ...c, x, dir: 1 };
+    assert.ok(M.boxInCone(probe, climb, M.coneReach(g, probe)), `facing the goal from ${x}: the climb is in view`);
+    assert.equal(M.boxInCone({ ...probe, dir: -1 }, climb, M.coneReach(g, { ...probe, dir: -1 })), false, "its back is the window");
+  }
+  const goalStep = { start: { x: 112 * T, feet: 16 * T }, top: 12 * T, past: 118 * T + 8 };
+  assert.equal(anyReaches("1-5", { ...goalStep, form: "green" }, jumpFamily({ maxTakeoff: 60 })), false, "green can't climb it");
+  assert.equal(anyReaches("1-5", { ...goalStep, form: "white" }, jumpFamily({ maxTakeoff: 60, air: true })), true, "white can");
 });
 
 // --------------------------------------------- rules over every level -----

@@ -6,14 +6,28 @@
  *            gates of sealed stones are already visible over the canopy.
  * develop:   greatest hits, compressed: a short canopy with one patrol (1-3),
  *            a white lookout ledge with the swap alcove (1-3/1-5), a dash +
- *            orb crossing via an island (1-4), the vault steps (the guard turns
- *            every 2 s), a landing patrol and a chamber of crossing cones.
- * twist:     touching the vault: hit-stop, RED GET, REVERSE. The chamber door
- *            slams (two stones drop into it), so the first smash is forced and
- *            safe; the dozing cards behind the vault wake and charge.
- * conclude:  the same level right to left: cards face home, an escape-only
- *            card waits on the island, and a roof shortcut of stone gates runs
- *            over the canopy. Every climb home is <=2 tiles (red jumps once).
+ *            orb crossing via an island (1-4), then the vault steps.
+ * twist:     the vault room is ONE readable lock: a red sentry (red sees
+ *            green, so the disguise is useless) guards the vault; stair 3 is
+ *            cover, its 0.4 s look-back telegraphs each turn, and its back is
+ *            the stomp. Touching the vault: RED GET, REVERSE. The door slams
+ *            (two stones), so the first smash is forced - and safe: nothing
+ *            left in the room can see red.
+ * conclude:  right to left, each card one job: the alarm card that arrives
+ *            outside the door (the first knock: the smash dash carries into
+ *            it), the island card (knock it mid-air for a refill, or land as
+ *            green), the ledge lookout and the corridor patrol (green past
+ *            them, or the roof gates: red smashes, sticker 3).
+ *
+ * Revision five (user playtest, 2026-11-10): "I get stuck here not knowing
+ * what to do; this final room isn't fun, several guards on top of each
+ * other". The old room stacked a landing patrol, the vault guard and two
+ * chasers in 26 tiles; after the theft the chasers speared a hesitant Rubik
+ * inside the sealed room and the landing card bumped him back in after the
+ * smash, and every death respawned him in the same trap. The chasers and the
+ * inbound landing patrol are gone (inbound they did no work: green Rubik
+ * walked among them), the room keeps one card, and the escape's cards are
+ * spaced one per beat. Every card declares its job (tests check each one).
  * Old Stage 1 geometry is reused with its column offsets noted.
  */
 import { defineLevel, px } from "./builder.mjs";
@@ -82,7 +96,15 @@ export default defineLevel({
     // = 192 px). A red jump + dash from the ledge's edge breaks both.
     { id: "roof-low", x: 40, y: 8 },
     { id: "roof-high", x: 40, y: 6 },
+    // The mid gate is stacked three high (rows 4-9): from the canopy roof's
+    // left end a white double jump tops out at feet 145 px, short of row 4
+    // (128 px), so sticker 3 stays sealed until red comes home (inbound, a
+    // single 2-tile gate here was hopped from the roof). Standing on the roof,
+    // Rubik's box spans rows 8-9: a red dash breaks the bottom stone and he
+    // runs on under the other two.
     { id: "roof-mid", x: 31, y: 8 }, // sticker 3 is sealed between the gates
+    { id: "roof-mid-b", x: 31, y: 6 },
+    { id: "roof-mid-c", x: 31, y: 4 },
     // The chamber door: absent inbound, dropped into place by the theft. Two
     // high (rows 4-7 of a 5-row room): no gap to hop through, so the first
     // smash is the way out.
@@ -92,21 +114,35 @@ export default defineLevel({
   ],
   orbs: [{ id: "crossing", x: px(76), y: 334 }], // at the apex of a jump from the row-14 banks
   guards: [
-    { id: "corridor", kind: "green", mode: "patrol", x: px(32) + 16, floor: px(16), dir: -1, min: px(28) + 16, max: px(38) + 16 },
-    { id: "lookout", kind: "green", mode: "patrol", x: px(47) + 16, floor: px(12), dir: 1, min: px(47) + 16, max: px(52) },
-    { id: "landing", kind: "green", mode: "patrol", x: px(106) + 16, floor: px(8), dir: 1, min: px(106) + 16, max: px(109) + 8 },
-    // Turns every 2.6 s (+0.4 s look-back): a readable wait on stair 3.
-    { id: "vault-guard", kind: "red", mode: "sentry", x: px(113) + 16, floor: px(8), dir: -1, min: px(113), max: px(116) + 16, turnEvery: 2.6 },
-    // Behind the vault: two awake patrols (green, so green Rubik walks among
-    // them inbound); at the theft they turn and chase (after the calm hold).
-    { id: "burst-a", kind: "green", mode: "patrol", x: px(123) + 16, floor: px(8), dir: 1, min: px(122) + 16, max: px(126) + 16, chaseOnTheft: true, chaseMin: px(111) },
-    { id: "burst-b", kind: "green", mode: "patrol", x: px(129), floor: px(8), dir: -1, min: px(127) + 16, max: px(130), chaseOnTheft: true, chaseMin: px(111) },
-    // Escape only: absent inbound, it arrives on the island at the theft.
-    { id: "ambush", kind: "green", mode: "patrol", x: px(65) + 16, floor: px(14), dir: 1, min: px(64) + 24, max: px(67) + 8, escapeOnly: true },
+    // Inbound: its cone covers the white climb onto the ledge at the corridor's
+    // end, so the swap back to green is timed to its back. Escape: it faces
+    // the incoming Rubik: green past it, or the roof gates above it.
+    { id: "corridor", job: "watch", kind: "green", mode: "patrol", x: px(32) + 16, floor: px(16), dir: -1, min: px(28) + 16, max: px(38) + 16 },
+    // Guards the swap alcove (sticker 1: green jump through it, white air
+    // jump); in the escape it faces the island: green, or the stacked gate.
+    { id: "lookout", job: "watch", kind: "green", mode: "patrol", x: px(47) + 16, floor: px(12), dir: 1, min: px(47) + 16, max: px(52) },
+    // The vault's only guard. Turns every 2.6 s (+0.4 s look-back): wait on
+    // stair 3 (below its cone), go when it looks at the vault, stomp its back.
+    { id: "vault-guard", job: "gate", kind: "red", mode: "sentry", x: px(113) + 16, floor: px(8), dir: -1, min: px(113), max: px(116) + 16, turnEvery: 2.6 },
+    // Escape only: the alarm brings it to the landing, staring at the sealed
+    // door. Its body (3416-3464 px) lies inside a red dash fired from the
+    // door (Rubik's box reaches 3436 px), so the forced smash carries straight
+    // into it: the first knock is taught by the same press as the first
+    // smash. Dashed from deeper in the room, the dash stops in the doorway:
+    // it sees red ("?" after 0.15 s), and a second dash (the smash refunded
+    // it) or green answers it. The stones cut its cone, so the in-room
+    // respawn is never seen.
+    { id: "landing", job: "knock", kind: "green", mode: "sentry", fixed: true, x: px(107) + 16, floor: px(8), dir: 1, min: px(107) + 16, max: px(107) + 16, escapeOnly: true },
+    // Escape only: it arrives on the island facing the incoming Rubik (spear
+    // up, so no stomp). Safe line: swap to green after the last dash and land
+    // through it. Red line: land clear of it and knock it with a ground dash
+    // (the knock refunds the dash for the jump + dash to the ledge).
+    { id: "ambush", job: "swap", kind: "green", mode: "patrol", x: px(65) + 16, floor: px(14), dir: 1, min: px(64) + 24, max: px(67) + 8, escapeOnly: true },
   ],
+
   /** cofre.png drawn at 4x on a carved dais, raised 24 px (old cx 6064 - 2240). */
   vault: { cx: 3824, floor: px(8) - 24, w: 92, h: 80 },
   /** Reaching the home cliff top while carrying red ends the level (and World 1). */
   home: { x0: px(3), x1: px(13), floor: px(12) },
-  par: 18, // "Quick getaway" (s): the baseline QA escape (11.96 s, tests/routes.mjs) x 1.5
+  par: 18, // "Quick getaway" (s): the baseline QA escape (tests/routes.mjs) x 1.5
 });

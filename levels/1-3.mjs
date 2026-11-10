@@ -8,7 +8,10 @@
  * introduce: an open glade; a green patrol walks toward green Rubik, its cone
  *            sweeps him, it hums and walks on through him (cards let their
  *            own color pass).
- * develop:   the old disguise corridor (3-tile canopy) with two patrols.
+ * develop:   the old disguise corridor (3-tile canopy): one patrol walks
+ *            through green Rubik where he can't jump over or around it (in
+ *            the glade he could), so the disguise is trusted, not just seen.
+ *            Revision five removed its twin, which repeated it.
  * twist:     a 4-tile wall green can't climb ("white card + Z"), then a lookout
  *            above it: its first "?" at white Rubik gives room to back off or
  *            go green ("green card + X").
@@ -24,8 +27,9 @@
  */
 import { defineLevel, px } from "./builder.mjs";
 
-const patrol = (id, minCol, maxCol, floorRow, dir, startCol = dir > 0 ? minCol : maxCol) => ({
+const patrol = (id, job, minCol, maxCol, floorRow, dir, startCol = dir > 0 ? minCol : maxCol) => ({
   id,
+  job,
   kind: "green",
   mode: "patrol",
   x: px(startCol) + 16,
@@ -84,19 +88,27 @@ export default defineLevel({
   guards: [
     // Introduce: walks toward the spawn but turns 392+ px short of it, so its
     // cone never reaches the start face.
-    patrol("glade", 18, 24, 16, -1),
-    patrol("corridor-a", 28, 35, 16, 1),
-    patrol("corridor-b", 43, 49, 16, -1),
-    // On the canopy roof, guarding the white ledge.
-    patrol("roof", 32, 44, 10, -1),
-    // On the wall top: faces away from the arrival point first.
-    patrol("lookout", 70, 78, 12, 1),
-    patrol("floor", 86, 94, 16, -1),
-    patrol("alcove", 101, 108, 12, 1),
-    // The finale's lookouts turn every 2.2 s (+0.4 s look-back), out of step.
-    { id: "pillar-a", kind: "green", mode: "sentry", x: px(128) + 16, floor: px(12), dir: -1, min: px(128) + 16, max: px(128) + 16, turnEvery: 2.2 },
-    { id: "pillar-b", kind: "green", mode: "sentry", x: px(144) + 16, floor: px(12), dir: 1, min: px(144) + 16, max: px(144) + 16, turnEvery: 2.2 },
-    { id: "platform", kind: "green", mode: "sentry", x: px(160) + 16, floor: px(12), dir: -1, min: px(160) + 16, max: px(160) + 16, turnEvery: 2.2 },
+    patrol("glade", "teach", 18, 24, 16, -1),
+    // The develop: in a corridor Rubik can't jump over it, so it walks
+    // straight through him (the disguise is the only way past).
+    patrol("corridor-b", "disguise", 43, 49, 16, -1),
+    // On the canopy roof, guarding the white ledge (sticker 2's route: white
+    // up, green past it, white again).
+    patrol("roof", "watch", 32, 44, 10, -1),
+    // On the wall top: faces away from the arrival point first; its "?" at
+    // white Rubik after the climb is the "green card + X" moment.
+    patrol("lookout", "watch", 70, 78, 12, 1),
+    // Its cone covers the white climb up the 4-tile step at 97 when it walks
+    // right: time the climb to its back, or swap to green mid-air.
+    patrol("floor", "watch", 86, 94, 16, -1),
+    // Lookout D on the step top: white lands in its view, so green before
+    // landing; it also guards the swap alcove (sticker 3).
+    patrol("alcove", "watch", 101, 108, 12, 1),
+    // The finale's lookouts turn every 2.2 s (+0.4 s look-back), out of step:
+    // each white hop is timed to the next card's back.
+    { id: "pillar-a", job: "watch", kind: "green", mode: "sentry", x: px(128) + 16, floor: px(12), dir: -1, min: px(128) + 16, max: px(128) + 16, turnEvery: 2.2 },
+    { id: "pillar-b", job: "watch", kind: "green", mode: "sentry", x: px(144) + 16, floor: px(12), dir: 1, min: px(144) + 16, max: px(144) + 16, turnEvery: 2.2 },
+    { id: "platform", job: "watch", kind: "green", mode: "sentry", x: px(160) + 16, floor: px(12), dir: -1, min: px(160) + 16, max: px(160) + 16, turnEvery: 2.2 },
   ],
   goal: { x: px(163), floor: px(12) },
   hintZones: {

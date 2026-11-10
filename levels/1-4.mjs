@@ -83,9 +83,12 @@ export default defineLevel({
   guards: [
     // Lookouts on pillars, staring ahead (the way Rubik flies): stomp their
     // backs to refill the dash mid-gap.
-    { id: "pillar", kind: "green", mode: "sentry", fixed: true, x: px(112) + 16, floor: px(18), dir: 1, min: px(112) + 16, max: px(112) + 16 },
-    { id: "chain", kind: "green", mode: "sentry", fixed: true, x: px(135) + 16, floor: px(18), dir: 1, min: px(135) + 16, max: px(135) + 16 },
-    { id: "island", kind: "green", mode: "patrol", x: px(148), floor: px(16), dir: 1, min: px(146) + 16, max: px(149) },
+    { id: "pillar", job: "refill", kind: "green", mode: "sentry", fixed: true, x: px(112) + 16, floor: px(18), dir: 1, min: px(112) + 16, max: px(112) + 16 },
+    { id: "chain", job: "refill", kind: "green", mode: "sentry", fixed: true, x: px(135) + 16, floor: px(18), dir: 1, min: px(135) + 16, max: px(135) + 16 },
+    // The landing island's patrol: Rubik is green here, so he lands through
+    // it (white would be seen and stomp it from the front: spear-free here,
+    // but a bump knocks him back toward the water).
+    { id: "island", job: "disguise", kind: "green", mode: "patrol", x: px(148), floor: px(16), dir: 1, min: px(146) + 16, max: px(149) },
   ],
   goal: { x: px(149) + 24, floor: px(16) },
   /** Storm wisps at the takeoff lip of every gap the main line dashes: the

@@ -1068,11 +1068,12 @@ function steal(g) {
   // REVERSE card sweeps and for ~0.8 s after; Rubik is untouchable meanwhile.
   g.calm = WORLD.theftCalm;
   p.grace = WORLD.theftCalm + 0.4;
-  // The chamber door slams: the first smash is forced, right here, with
-  // nothing in reach (teach red smash in safety before the run home).
+  // The chamber door slams: the first smash is forced, right here, and safe:
+  // no card left in the sealed room can see red (tests/model.test.mjs), so a
+  // hesitant player is never speared while working out the door.
   for (const stone of g.stones) if (stone.sealOnTheft) stone.broken = false;
-  // REVERSE: every card turns to face the route home (toward the vault side),
-  // the dozing guards behind the vault wake and charge.
+  // REVERSE: every card turns to face the vault side, i.e. the incoming
+  // Rubik on his run home; escape-only cards arrive at their posts.
   for (const guard of g.guards) {
     if (guard.state === "drained") continue;
     guard.dir = 1;
@@ -1080,12 +1081,6 @@ function steal(g) {
     if (guard.escapeOnly) {
       guard.state = "calm";
       event(g, "arrive", guard.x, guard.floor - GUARD.h, { guard: guard.id });
-    } else if (guard.chaseOnTheft) {
-      // The vault room's own cards turn on Rubik (held by the calm below) and
-      // may now chase the whole room, up to the sealed door.
-      guard.dir = -1;
-      guard.min = guard.chaseMin ?? guard.min;
-      alertGuard(g, guard, false);
     } else if (guard.state !== "stunned") {
       guard.state = "calm";
       guard.sight = 0;

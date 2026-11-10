@@ -15,8 +15,12 @@
  *            back. A checkpoint stands right before the chain.
  * twist:     a patrol paces in front of a 7-tile wall: only a stomp from
  *            behind while it walks toward the wall, then an air jump at the
- *            bounce's peak, gets up (a double jump tops out at 175 px). Then
- *            a patrol and a pedestal lookout to bounce over (or jump).
+ *            bounce's peak, gets up (a double jump tops out at 175 px). A
+ *            short dip after the wall is a breather before the finale (it
+ *            held a patrol and a pedestal lookout until revision five: the
+ *            guided line double-jumped over both, so they did no work and
+ *            were removed; the island chain already teaches back-to-back
+ *            bounces).
  * conclude:  the old opening's overhang drop onto a green lookout facing
  *            away: every way off the run-up lands on its back; its green
  *            swirls in -> GREEN GET; the goal face fills green.
@@ -25,6 +29,7 @@ import { defineLevel, px } from "./builder.mjs";
 
 const lookout = (id, col, floorRow, dir = 1, extra = {}) => ({
   id,
+  job: "gate", // every card here is a stomp the guided line needs
   kind: "green",
   mode: "sentry",
   fixed: true, // stares one way; the chain reads at a glance
@@ -66,8 +71,7 @@ export default defineLevel({
     ground(70, 81, 18); // the patrol's floor
     ledge(73, 76, 10); // sticker 2: an 8-tile ledge over the floor
     ground(82, 93, 11); // 7-tile wall
-    ground(94, 106, 18); // second low floor: a patrol and a lookout to bounce over
-    ground(100, 101, 16); // 2-tile pedestal for the lookout
+    ground(94, 106, 18); // a short dip: a breather before the finale
     // --- Conclude (107-133): the overhang drop onto the green card ----------
     ground(107, 108, 16);
     ground(109, 117, 14); // run-up
@@ -95,14 +99,12 @@ export default defineLevel({
   ],
   guards: [
     // A slow patrol: it walks at 60% pace and turns with a readable look-back.
-    { id: "pit", kind: "green", mode: "patrol", pace: 0.6, x: px(16) + 16, floor: px(16), dir: 1, min: px(15) + 16, max: px(24) + 16 },
+    { id: "pit", job: "gate", kind: "green", mode: "patrol", pace: 0.6, x: px(16) + 16, floor: px(16), dir: 1, min: px(15) + 16, max: px(24) + 16 },
     lookout("isle-a", 38, 16),
     lookout("isle-b", 45, 16),
     lookout("isle-c", 52, 16),
     lookout("isle-d", 58, 16),
-    { id: "wall", kind: "green", mode: "patrol", pace: 0.7, x: px(75) + 16, floor: px(18), dir: 1, min: px(73) + 16, max: px(79) + 16 },
-    { id: "chain-a", kind: "green", mode: "patrol", pace: 0.7, x: px(96) + 16, floor: px(18), dir: 1, min: px(95) + 16, max: px(98) },
-    lookout("chain-b", 100, 16, 1, { x: px(101), min: px(101), max: px(101) }),
+    { id: "wall", job: "gate", kind: "green", mode: "patrol", pace: 0.7, x: px(75) + 16, floor: px(18), dir: 1, min: px(73) + 16, max: px(79) + 16 },
     // The green card: it holds Rubik's green and faces away from the drop. Its
     // stomp head is 24 px wider each side (not 10): with the overhang, every
     // way off the run-up lands on its back.

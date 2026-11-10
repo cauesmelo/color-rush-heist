@@ -18,7 +18,7 @@
           width="960"
           height="540"
           tabindex="0"
-          aria-label="Color Theft Story: Color Rush Heist. Arrows or A D move, Space jumps (twice when white), Shift or K dashes, Z white, X green, C red, P pauses."
+          aria-label="Color Theft Story: Color Rush Heist. Arrows or A D move, Space jumps (twice when white), Shift or K dashes once you own it, Z white, X green, C red, P pauses. On the world map, arrows choose a level and Enter plays it."
         ></canvas>
         <button id="start" class="start-hit" aria-label="Press any key to start">
           <span class="sr-only">Start</span>
@@ -31,8 +31,9 @@
           <div data-panel="menu" class="menu">
             <h2 id="pause-title">Paused</h2>
             <button id="resume" class="primary" type="button">Resume</button>
-            <button id="opt-retry" type="button">Back to checkpoint</button>
-            <button id="opt-restart" type="button">Restart stage</button>
+            <button id="opt-retry" class="play-only" type="button">Back to checkpoint</button>
+            <button id="opt-restart" class="play-only" type="button">Restart level</button>
+            <button id="opt-map" class="play-only" type="button">World map</button>
             <div class="row toggles">
               <button id="opt-sfx" type="button" aria-pressed="true">Sound</button>
               <button id="opt-music" type="button" aria-pressed="false">Music</button>
@@ -43,6 +44,13 @@
               <button data-show="art" type="button">Art</button>
               <button data-show="credits" type="button">Credits</button>
             </div>
+            <button class="map-only quiet" data-show="reset" type="button">Reset progress</button>
+          </div>
+          <div data-panel="reset" class="menu" hidden>
+            <h2>Reset?</h2>
+            <p class="rule">Erase every clear, sticker and stamp? This can't be undone.</p>
+            <button id="opt-reset-yes" type="button">Yes, erase</button>
+            <button data-show="menu" class="primary" type="button">Keep my progress</button>
           </div>
           <div data-panel="controls" class="menu" hidden>
             <h2>Controls</h2>
@@ -76,7 +84,7 @@
         </div>
         <div id="results-actions" class="results-actions" hidden>
           <button id="continue" class="primary" type="button">Continue &#9656;</button>
-          <button id="again" type="button">Play again</button>
+          <button id="again" type="button">Retry</button>
         </div>
         <p id="live" class="sr-only" aria-live="polite"></p>
       </div>

@@ -1,17 +1,24 @@
 /** Color Rush Heist: browser front end, renderer, input, audio and QA API.
  *
- * The simulation lives in model.mjs (pure); this file only observes it. Every
- * sprite is drawn on ONE 2x pixel grid: 16 px Tileset cells -> 32 px tiles,
- * Rubik 32 px frames -> 64 px, cards 86x67 / 110x86 -> 2x, vault 23x20 -> 46x40.
- * Runtime effects (tints, grey card, colorized forest) are derived canvases;
- * asset files are never modified.
+ * The simulation lives in model.mjs (pure) and the campaign rules in
+ * campaign.mjs (pure); this file only observes them, draws, plays sound and
+ * owns the one side effect of saving. Every sprite is drawn on ONE 2x pixel
+ * grid: 16 px Tileset cells -> 32 px tiles, Rubik 32 px frames -> 64 px, cards
+ * 86x67 / 110x86 -> 2x, vault 23x20 -> 4x. Runtime effects (tints, grey card,
+ * colorized forest) are derived canvases; asset files are never modified.
+ *
+ * Front-end flow: title -> comic (first visit) -> 1-1 -> level clear -> world
+ * map -> level intro card -> play -> clear ... -> 1-6 -> world clear ->
+ * end_game.png -> title. Returning players go from the title to the map.
  */
 import * as M from "./model.mjs";
-import * as L from "./level.mjs";
+import * as B from "./levels/builder.mjs";
+import { LEVELS, getLevel } from "./levels/index.mjs";
+import * as C from "./campaign.mjs";
 
 const W = 960,
   H = 540,
-  T = L.TILE;
+  T = B.TILE;
 const canvas = document.querySelector("#game"),
   ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
@@ -37,6 +44,21 @@ const store = {
     }
   },
 };
+/** Campaign progress (campaign.mjs): stickers, clears, stamps, hint budget. If
+ * storage is blocked, loadSave/writeSave quietly keep it for this visit. */
+const storage = (() => {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+})();
+let save = C.loadSave(storage);
+// The previous build remembered only "comic seen"; carry that over.
+if (!save.comicSeen && store.get("storySeen", false)) save.comicSeen = true;
+function persist() {
+  C.writeSave(storage, save);
+}
 const settings = {
   sfx: store.get("sfx", true),
   // On by default, but nothing streams before the player's first key or tap
@@ -191,23 +213,25 @@ function buildDerived() {
 const CHUNK = 32; // tiles per baked chunk (1024 px): small enough for mobile canvases
 /** Two baked layers: the dark back wall is drawn BEHIND the sight cones (so a
  * cone inside the corridor stays visible), the solid tiles in front of them. */
-function bakeTiles() {
+function bakeTiles(level = LV) {
+  if (!assetsReady && !img.tiles) return;
+  derived.bakedFor = level.id;
   derived.back = [];
   derived.chunks = [];
-  for (let c0 = 0; c0 < L.COLS; c0 += CHUNK) {
-    const [b, bx] = makeCanvas(CHUNK * T, L.ROWS * T),
-      [c, x] = makeCanvas(CHUNK * T, L.ROWS * T);
-    for (let ty = 0; ty < L.ROWS; ty++)
-      for (let tx = c0; tx < Math.min(L.COLS, c0 + CHUNK); tx++) {
+  for (let c0 = 0; c0 < level.cols; c0 += CHUNK) {
+    const [b, bx] = makeCanvas(CHUNK * T, B.ROWS * T),
+      [c, x] = makeCanvas(CHUNK * T, B.ROWS * T);
+    for (let ty = 0; ty < B.ROWS; ty++)
+      for (let tx = c0; tx < Math.min(level.cols, c0 + CHUNK); tx++) {
         const dx = (tx - c0) * T,
           dy = ty * T;
-        if (L.BACK[ty][tx] === "b") {
-          const [ax, ay] = L.backCell(tx, ty);
+        if (level.back[ty][tx] === "b") {
+          const [ax, ay] = B.backCell(tx, ty);
           bx.drawImage(derived.tilesDark, ax * 16, ay * 16, 16, 16, dx, dy, T, T);
         }
-        const ch = L.MAP[ty][tx];
+        const ch = level.map[ty][tx];
         if (ch === "#" || ch === "=") {
-          const [ax, ay] = ch === "#" ? L.tileCell(tx, ty) : L.ledgeCell(tx, ty);
+          const [ax, ay] = ch === "#" ? B.tileCell(level, tx, ty) : B.ledgeCell(level, tx, ty);
           x.drawImage(img.tiles, ax * 16, ay * 16, 16, 16, dx, dy, T, T);
         }
       }
@@ -217,7 +241,8 @@ function bakeTiles() {
 }
 
 // ---------------------------------------------------------------- state ----
-let game = M.createGame(),
+let LV = getLevel(save.last) || LEVELS[0],
+  game = M.createGame(LV.id, C.gameOptions(save, LV.id)),
   screen = "boot",
   screenTime = 0,
   manual = false,
@@ -225,12 +250,14 @@ let game = M.createGame(),
   accumulator = 0,
   inputMode = matchMedia("(pointer: coarse)").matches ? "touch" : "keyboard",
   coarsePointer = matchMedia("(pointer: coarse)").matches,
-  storySeen = store.get("storySeen", false),
   lastEventId = 0,
   lastRespawns = 0,
   clock = 0; // wall clock for decoration (never affects the simulation)
 const cam = { x: 0, y: 164, shake: 0, look: 80 };
-const fx = { vaultOpen: 0, particles: [], flash: 0, flashColor: "#fff", reverse: -1, iris: 0, irisDir: 0, stageTitle: 0, refill: 0, swirl: null, clear: 0, chipDeal: {}, locked: 0, death: null };
+const fx = { vaultOpen: 0, particles: [], flash: 0, flashColor: "#fff", reverse: -1, iris: 0, irisDir: 0, intro: null, get: null, refill: 0, swirl: null, clear: 0, chipDeal: {}, locked: 0, death: null, goal: 0, goalColor: null, result: null };
+/** World-map state: the node Rubik stands on, his walk between nodes, the
+ * chalk path that draws in after a new unlock. */
+const map = { cursor: 0, from: 0, walk: 1, reveal: null, prompt: 0 };
 let colorAmount = 0;
 const held = new Set();
 const pulses = { jump: false, jumpReleased: false, dash: false, color: undefined };
@@ -274,6 +301,11 @@ const SOUNDS = {
   smash: [["noise", 600, 120, 0.25, 0.1]],
   knock: [["square", 300, 120, 0.12, 0.08]],
   theft: [["sawtooth", 196, 392, 0.5, 0.06], ["square", 523, 1046, 0.4, 0.05, 0.05]],
+  get: [["square", 392, 392, 0.1, 0.05], ["square", 523, 523, 0.1, 0.05, 0.1], ["square", 659, 659, 0.1, 0.05, 0.2], ["square", 784, 784, 0.12, 0.05, 0.3], ["square", 1046, 1046, 0.35, 0.05, 0.42]],
+  goal: [["triangle", 784, 784, 0.08, 0.06], ["triangle", 988, 988, 0.08, 0.06, 0.08], ["triangle", 1175, 1175, 0.22, 0.06, 0.16]],
+  tally: [["square", 1319, 1319, 0.05, 0.04]],
+  step: [["triangle", 330, 330, 0.04, 0.04]],
+  unlock: [["sine", 523, 784, 0.25, 0.05], ["sine", 784, 1046, 0.3, 0.04, 0.2]],
   checkpoint: [["sine", 784, 784, 0.08, 0.05], ["sine", 1046, 1046, 0.16, 0.05, 0.08]],
   die: [["square", 440, 110, 0.35, 0.06]],
   win: [["square", 523, 523, 0.1, 0.06], ["square", 659, 659, 0.1, 0.06, 0.1], ["square", 784, 784, 0.1, 0.06, 0.2], ["square", 1046, 1046, 0.3, 0.06, 0.3]],
@@ -348,7 +380,7 @@ function stopMusic() {
   track.source = null;
 }
 function syncMusic() {
-  const wanted = settings.music && ["story", "play", "results"].includes(screen) && game.phase !== "paused";
+  const wanted = settings.music && ["story", "play", "results", "map", "world"].includes(screen) && game.phase !== "paused" && !menuOpen;
   if (!wanted) return stopMusic();
   const a = audioContext();
   if (!a) return;
@@ -393,19 +425,25 @@ const ui = {
 function setScreen(name) {
   screen = name;
   screenTime = 0;
+  menuOpen = false;
+  ui.pauseCard.hidden = true;
   document.documentElement.dataset.screen = name;
   ui.start.hidden = name !== "title";
-  ui.results.hidden = name !== "results";
-  ui.pause.hidden = name !== "play";
+  ui.results.hidden = !["results", "world"].includes(name);
+  // On the world clear there is nothing to retry; on a level clear, Retry.
+  $("again").hidden = name !== "results";
+  ui.pause.hidden = !["play", "map"].includes(name);
   syncTouch();
   syncMusic();
-  if (name === "results") setTimeout(() => $("continue").focus({ preventScroll: true }), 50);
+  if (["results", "world"].includes(name)) setTimeout(() => $("continue").focus({ preventScroll: true }), 50);
   announce(
     {
       title: "Color Theft Story. Press any key to start.",
       story: "Story. Press any key to skip.",
-      play: "Green Forest. Steal back the red.",
-      results: "You got your red back!",
+      play: `${LV.id} ${LV.name}.`,
+      results: `${LV.id} ${LV.name} clear!`,
+      map: `World 1, Green Forest. ${LV.id} ${LV.name}. Left and right choose a level, Enter plays.`,
+      world: "World clear! You got your red back!",
       ending: "Thanks for playing! That's it by now.",
     }[name] || "",
   );
@@ -419,25 +457,37 @@ function focusGame() {
 function beginFrontEnd() {
   if (!assetsReady || screen !== "title") return;
   audioContext();
-  // Replays skip the comic automatically; the first visit sees the story.
-  if (storySeen) enterPlay(true);
+  // The first visit sees the comic, then 1-1; returning players go to the map.
+  if (save.comicSeen) openMap();
   else setScreen("story");
   focusGame();
 }
-function enterPlay(fresh = true) {
-  if (fresh) newGame();
-  storySeen = true;
-  store.set("storySeen", true);
+/** Into a level. The kit always comes from the level (fixed on replays); the
+ * save only supplies the hint budget and the stickers already owned.
+ * intro: show the level card (1 s, 0.5 s once cleared) with the model held
+ * for its first 0.4 s; any key skips it and counts as input. */
+function startLevel(id, { intro = true, skipIntro = false } = {}) {
+  const level = getLevel(id);
+  if (!level) return false;
+  LV = level;
+  newGame();
+  if (!save.comicSeen) {
+    save.comicSeen = true;
+    store.set("storySeen", true);
+    persist();
+  }
   setScreen("play");
-  // The Rubik-face iris opens on the stage; reduced motion cuts straight in.
+  // The Rubik-face iris opens on the level; reduced motion cuts straight in.
   fx.iris = reducedMotion ? 0 : 1;
   fx.irisDir = reducedMotion ? 0 : -1;
-  fx.stageTitle = 2.6;
+  fx.intro = intro ? { age: 0, dur: C.isCleared(save, id) ? 0.5 : 1, skipped: skipIntro } : null;
   focusGame();
+  return true;
 }
 function newGame() {
-  game = M.createGame();
+  game = M.createGame(LV.id, C.gameOptions(save, LV.id));
   M.startGame(game);
+  if (derived.bakedFor !== LV.id && assetsReady) bakeTiles(LV);
   lastEventId = game.eventId;
   lastRespawns = 0;
   fx.particles = [];
@@ -446,11 +496,45 @@ function newGame() {
   fx.clear = 0;
   fx.death = null;
   fx.chipDeal = {};
-  colorAmount = 0;
+  fx.get = null;
+  fx.reverseDelay = 0;
+  fx.goal = 0;
+  fx.goalColor = null;
+  fx.result = null;
+  colorAmount = C.forestColor(save);
   snapCamera();
 }
+/** The world map, with Rubik on `id` (default: the save's next level). */
+function openMap(id = save.last) {
+  const index = Math.max(0, C.levelIndex(id));
+  map.cursor = map.from = index;
+  map.walk = 1;
+  LV = getLevel(C.WORLD1[index]);
+  setScreen("map");
+  fx.iris = reducedMotion ? 0 : 1;
+  fx.irisDir = reducedMotion ? 0 : -1;
+  focusGame();
+}
+/** The map's menu reuses the pause card (settings, Controls, Art, Credits and
+ * Reset progress); it never touches a game in progress. */
+let menuOpen = false;
+function toggleMapMenu(force) {
+  menuOpen = force ?? !menuOpen;
+  ui.pauseCard.hidden = !menuOpen;
+  ui.pauseCard.dataset.mode = "map";
+  if (menuOpen) {
+    held.clear();
+    clearPulses();
+    showPanel("menu");
+    setTimeout(() => ui.resume.focus({ preventScroll: true }), 0);
+  } else focusGame();
+  syncMusic();
+  if (menuOpen && audio?.state === "running") audio.suspend().catch(() => {});
+}
 function togglePause(force) {
+  if (screen === "map") return toggleMapMenu(force);
   if (screen !== "play") return;
+  ui.pauseCard.dataset.mode = "play";
   const pausing = force ?? game.phase === "playing";
   if (pausing && ["playing", "dead"].includes(game.phase)) {
     game.resumePhase = game.phase;
@@ -536,8 +620,9 @@ addEventListener("keydown", (event) => {
   if (screen === "story") {
     if (event.repeat || key === "tab") return;
     event.preventDefault();
-    // The key that skips the comic also counts as the first input of play.
-    enterPlay(true);
+    // The key that skips the comic also counts as the first input of play
+    // (so the 1-1 card never holds it back).
+    startLevel(C.WORLD1[0], { skipIntro: true });
     if (gameKeys.has(key)) {
       held.add(key);
       queueKey(key);
@@ -551,7 +636,33 @@ addEventListener("keydown", (event) => {
     }
     return;
   }
-  if (screen === "results") return; // native buttons own the results screen
+  if (["results", "world"].includes(screen)) return; // native buttons own these
+  if (screen === "map") {
+    if (menuOpen) {
+      if ((key === "escape" || key === "p") && !event.repeat) {
+        event.preventDefault();
+        toggleMapMenu(false);
+      } else if (key === "arrowdown" || key === "arrowup") {
+        event.preventDefault();
+        moveMenuFocus(key === "arrowdown" ? 1 : -1);
+      }
+      return;
+    }
+    if (event.repeat && !["arrowleft", "arrowright", "a", "d"].includes(key)) return;
+    if (key === "escape" || key === "p") {
+      event.preventDefault();
+      toggleMapMenu(true);
+    } else if (KEY.left.includes(key) || KEY.right.includes(key)) {
+      event.preventDefault();
+      mapStep(KEY.left.includes(key) ? -1 : 1);
+    } else if (key === "enter" || KEY.jump.includes(key)) {
+      event.preventDefault();
+      mapEnter();
+    }
+    return;
+  }
+  // The level card: any key skips it (and still counts as input below).
+  if (fx.intro && !fx.intro.skipped && game.phase === "playing") fx.intro.skipped = true;
   if (game.phase === "paused") {
     if ((key === "escape" || key === "p") && !event.repeat) {
       event.preventDefault();
@@ -597,12 +708,23 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && screen === "play" && game.phase === "playing") togglePause(true);
 });
 
-// Pointer: tapping the stage on title/story/ending screens advances.
+// Pointer: tapping the stage on title/story/ending screens advances; on the
+// map, tapping a node walks there and tapping the current node enters it.
 canvas.addEventListener("pointerdown", (event) => {
   if (event.pointerType === "touch") inputMode = "touch";
   syncTouch();
-  if (screen === "story") enterPlay(true);
+  if (screen === "story") startLevel(C.WORLD1[0], { skipIntro: true });
   else if (screen === "ending") setScreen("title");
+  else if (screen === "map" && !menuOpen) {
+    const box = canvas.getBoundingClientRect(),
+      x = ((event.clientX - box.left) / box.width) * W,
+      y = ((event.clientY - box.top) / box.height) * H;
+    const index = MAP_NODES.findIndex((n) => Math.abs(n.x - x) < 60 && y > n.y - 140 && y < n.y + 60);
+    if (index < 0) return;
+    if (index === map.cursor && map.walk >= 1) mapEnter();
+    else if (C.isUnlocked(save, C.WORLD1[index])) mapGo(index);
+    else play("locked");
+  }
 });
 ui.start.addEventListener("click", () => beginFrontEnd());
 ui.pause.addEventListener("click", () => togglePause());
@@ -620,11 +742,90 @@ $("opt-retry").addEventListener("click", () => {
 });
 $("opt-restart").addEventListener("click", () => {
   ui.pauseCard.hidden = true;
-  enterPlay(true);
+  startLevel(LV.id, { intro: false });
+});
+$("opt-map").addEventListener("click", () => {
+  ui.pauseCard.hidden = true;
+  game.phase = "paused";
+  rememberHints();
+  openMap(LV.id);
+});
+$("opt-reset-yes").addEventListener("click", () => {
+  // Erases clears, stickers, stamps and the hint budget; settings stay.
+  save = C.resetSave(storage);
+  persist();
+  play("ui");
+  toggleMapMenu(false);
+  openMap(C.WORLD1[0]);
+  announce("Progress erased. World 1 starts again at 1-1.");
 });
 for (const button of document.querySelectorAll("[data-show]")) button.addEventListener("click", () => showPanel(button.dataset.show));
-$("continue").addEventListener("click", () => setScreen("ending"));
-$("again").addEventListener("click", () => enterPlay(true));
+$("continue").addEventListener("click", () => {
+  if (screen === "world") return setScreen("ending");
+  // 1-6 is World 1's finale: its clear goes on to the world clear.
+  if (LV.id === C.WORLD1[C.WORLD1.length - 1]) return setScreen("world");
+  openMap(save.last);
+  // A first clear draws the chalk path to the next node, then Rubik walks it.
+  if (fx.result?.unlocked) {
+    map.reveal = { to: C.levelIndex(fx.result.unlocked), age: 0 };
+    map.cursor = map.from = Math.max(0, C.levelIndex(fx.result.unlocked) - 1);
+    LV = getLevel(C.WORLD1[map.cursor]);
+  }
+});
+$("again").addEventListener("click", () => startLevel(LV.id, { intro: false }));
+// ------------------------------------------------------------- world map --
+/** Six nodes 140 px apart on a slab path whose top is y = 400: each a chalk
+ * face on a stick above the path (1-6 is the vault). Rubik walks the path. */
+const MAP_NODES = C.WORLD1.map((id, i) => ({ id, x: 130 + i * 140, y: 400 }));
+const MAP_WALK = 0.35; // s per node (reduced motion snaps)
+function mapGo(index) {
+  if (index === map.cursor || !C.isUnlocked(save, C.WORLD1[index])) return;
+  map.from = map.cursor;
+  map.cursor = index;
+  map.walk = reducedMotion ? 1 : 0;
+  LV = getLevel(C.WORLD1[index]);
+  play("step");
+  announce(`${LV.id} ${LV.name}${C.isCleared(save, LV.id) ? ", cleared" : ""}. ${C.levelRecord(save, LV.id).stickers.length} of 3 stickers.`);
+}
+function mapStep(dir) {
+  const target = map.cursor + dir;
+  if (target < 0 || target >= C.WORLD1.length) return;
+  if (!C.isUnlocked(save, C.WORLD1[target])) {
+    play("locked");
+    map.prompt = 0.4;
+    return;
+  }
+  mapGo(target);
+}
+function mapEnter() {
+  if (map.walk < 1 || map.reveal) return;
+  const id = C.WORLD1[map.cursor];
+  if (!C.isUnlocked(save, id)) return;
+  play("ui");
+  startLevel(id);
+}
+function updateMap(dt) {
+  if (map.walk < 1) map.walk = Math.min(1, map.walk + dt / MAP_WALK);
+  map.prompt = Math.max(0, map.prompt - dt);
+  if (map.reveal) {
+    map.reveal.age += dt;
+    // The path draws in for 0.6 s, then Rubik walks to the new node.
+    if (map.reveal.age >= (reducedMotion ? 0 : 0.6)) {
+      const to = map.reveal.to;
+      map.reveal = null;
+      play("unlock");
+      mapGo(to);
+    }
+  }
+}
+/** Save the hint budget the player has used so far (a hint never comes back). */
+function rememberHints() {
+  const next = C.mergeHints(save, game.hints);
+  if (JSON.stringify(next.hints) !== JSON.stringify(save.hints)) {
+    save = next;
+    persist();
+  }
+}
 function retryCheckpoint() {
   if (screen !== "play" || !["playing", "dead"].includes(game.phase)) return;
   // A retry is a respawn: the whole segment snapshot is restored, so it can't
@@ -636,8 +837,15 @@ function retryCheckpoint() {
 // (detail = 0) is the only click handled, so taps never double-fire.
 for (const button of document.querySelectorAll("[data-input],[data-action],[data-color]")) {
   const activate = () => {
-    if (screen === "story") enterPlay(true);
+    if (screen === "story") startLevel(C.WORLD1[0], { skipIntro: true });
+    // On the map the deck still works: arrows walk, JUMP enters.
+    if (screen === "map" && !menuOpen) {
+      if (button.dataset.input) mapStep(button.dataset.input === "left" ? -1 : 1);
+      else if (button.dataset.action === "jump") mapEnter();
+      return false;
+    }
     if (screen !== "play") return false;
+    if (fx.intro) fx.intro.skipped = true;
     return true;
   };
   button.addEventListener("pointerdown", (event) => {
@@ -707,15 +915,20 @@ function syncTouch() {
   // Touch devices always keep their pads during play (and the comic, so a tap
   // on JUMP can skip it); a keyboard press only changes the hint glyphs.
   const touchDevice = coarsePointer || inputMode === "touch";
-  ui.touch.hidden = !(touchDevice && ["play", "story"].includes(screen));
+  ui.touch.hidden = !(touchDevice && ["play", "story", "map"].includes(screen));
+  // Only the pads of the current kit: no DASH pad before DASH GET, no red
+  // card before the theft (and none of the form cards on the map).
+  const playing = screen === "play";
   for (const b of ui.touch.querySelectorAll("[data-color]")) {
-    b.hidden = !game.unlocked[b.dataset.color];
+    b.hidden = !playing || !game.unlocked[b.dataset.color];
     b.classList.toggle("selected", game.player.color === b.dataset.color);
   }
+  const dashPad = ui.touch.querySelector('[data-action="dash"]');
+  if (dashPad) dashPad.hidden = !playing || !game.dashUnlocked;
 }
 
 // ----------------------------------------------------------------- camera --
-const maxCamX = M.WORLD.width - W,
+const maxCamX = () => LV.width - W,
   maxCamY = M.WORLD.height - H;
 /** Vertical framing follows the last floor Rubik stood on (Mario-style), so a
  * jump over a pit keeps the water below in view; it only chases him when he
@@ -731,15 +944,15 @@ function cameraTarget() {
   // Over or near a pit, lean down so the water below is always in view.
   const ahead = game.player.direction * 260;
   for (let x = Math.min(cx, cx + ahead) - 120; x <= Math.max(cx, cx + ahead) + 120; x += T)
-    if (L.MAP[L.WATER_ROW][Math.floor(x / T)] === "~") {
-      y = Math.max(y, L.WATER_ROW * T + 64 - H + 8);
+    if (LV.map[B.WATER_ROW][Math.floor(x / T)] === "~") {
+      y = Math.max(y, B.WATER_ROW * T + 64 - H + 8);
       break;
     }
   const screenFeet = feet - y;
   if (screenFeet < H * 0.3) y = feet - H * 0.3;
   if (screenFeet > H * 0.86) y = feet - H * 0.86;
   return {
-    x: Math.max(0, Math.min(maxCamX, cx - W / 2 + cam.look)),
+    x: Math.max(0, Math.min(maxCamX(), cx - W / 2 + cam.look)),
     y: Math.max(0, Math.min(maxCamY, y)),
   };
 }
@@ -779,6 +992,36 @@ function dust(x, y, dir = 0, count = 5) {
   for (let i = 0; i < count; i++)
     fx.particles.push({ x: x + (Math.random() - 0.5) * 24, y: y - 2, vx: (dir || (Math.random() - 0.5)) * (40 + Math.random() * 60), vy: -20 - Math.random() * 40, life: 0.35, age: 0, color: "#e8e6dc", size: 4, gravity: 40 });
 }
+/** GET cards: the new form (or the storm for dash) at 4x, its key, and one
+ * caption of at most six words. */
+const GET_CARDS = {
+  green: { title: "GREEN GET!", caption: "Green cards can't see green.", key: "X", say: "Green get! Green cards can't see green. X for green, Z for white." },
+  dash: { title: "DASH GET!", caption: "Dash once per jump.", key: "Shift", touch: "DASH", say: "Dash get! Shift dashes, once per jump. Landing, stomps and orbs refill it." },
+  red: { title: "RED GET!", caption: "Red dash smashes stones.", key: "C", say: "Red get! Red dash smashes cracked stones and knocks cards aside. Run home!" },
+};
+/** Save the clear at the goal and keep what the tally needs. */
+function recordWin() {
+  const id = LV.id,
+    before = C.levelRecord(save, id),
+    wasOpen = C.unlockedIds(save),
+    collected = game.stickers.filter((x) => x.collected).map((x) => x.id),
+    stamps = C.levelStamps(id);
+  rememberHints();
+  save = C.recordClear(save, id, { time: game.finishTime, stickers: collected, spotted: game.spotted, escapeTime: game.escapeTime, color: game.player.color });
+  persist();
+  const after = C.levelRecord(save, id);
+  fx.result = {
+    id,
+    time: game.finishTime,
+    best: after.best,
+    newBest: before.best === null || game.finishTime < before.best,
+    firstClear: !before.clear,
+    stickers: game.stickers.map((x) => ({ id: x.id, got: x.collected, owned: x.owned })), // owned = in the save before this run
+    unseen: stamps.unseen ? game.spotted === 0 : null,
+    quick: stamps.quick ? !!game.medals?.quickGetaway : null,
+    unlocked: C.unlockedIds(save).find((x) => !wasOpen.includes(x)) || null,
+  };
+}
 /** Consume new model events: sounds, particles, transitions. */
 function handleEvents() {
   for (const e of game.events) {
@@ -806,10 +1049,14 @@ function handleEvents() {
         burst(e.x, e.y, 14, "#7fd04b", 170, 0.6);
         break;
       case "absorb":
-        fx.chipDeal.green = 1;
         fx.flash = reducedMotion ? 0 : 0.25;
         fx.flashColor = "#9be36a";
-        announce("Green absorbed. Green cards can't see you. Press X for green, Z for white.");
+        break;
+      case "get":
+        // GET card (Mega Man's weapon get): drawn for the model's 1.2 s
+        // hit-stop, then the form card is dealt into the HUD.
+        fx.get = { ability: e.ability, age: 0 };
+        announce(GET_CARDS[e.ability].say);
         break;
       case "swap":
         burst(p.x + p.w / 2, p.y + p.h / 2, 10, e.color === "green" ? "#7fd04b" : e.color === "red" ? "#ff5a4a" : "#ffffff", 120, 0.35, 4, 100);
@@ -819,7 +1066,13 @@ function handleEvents() {
         break;
       case "sticker":
         burst(e.x, e.y, 12, "#ffd84a", 140, 0.5, 4, 200);
-        announce(`Sticker ${e.count} of 9.`);
+        // A sticker is the player's for good the moment it is touched.
+        save = C.collectSticker(save, LV.id, e.sticker);
+        persist();
+        announce(`Sticker ${e.count} of 3${e.owned ? " (already yours)" : ""}.`);
+        break;
+      case "hint":
+        rememberHints();
         break;
       case "smash":
         cam.shake = reducedMotion ? 0 : 4;
@@ -835,13 +1088,14 @@ function handleEvents() {
         break;
       case "theft":
         syncMusic(); // gear change
-        fx.reverse = 0;
+        // The REVERSE card sweeps in once the RED GET card is done.
+        fx.reverse = -1;
+        fx.reverseDelay = M.WORLD.hitstop.get;
         fx.flash = reducedMotion ? 0 : 0.5;
         fx.flashColor = "#ff3b30";
         cam.shake = reducedMotion ? 0 : 6;
         fx.chipDeal.red = 1;
         burst(e.x, e.y, 26, "#ff4b3a", 260, 0.8, 5, 300);
-        announce("Red stolen! REVERSE: run home. Red dash smashes cracked stones and knocks cards aside.");
         break;
       case "die":
         fx.death = { ...game.deathAt, age: 0 };
@@ -862,7 +1116,10 @@ function handleEvents() {
       case "win":
         syncMusic();
         fx.clear = 0;
-        announce("Home! You got your red back!");
+        fx.goal = 0;
+        fx.goalColor = e.color;
+        recordWin();
+        announce(game.stolen ? "Home! You got your red back!" : `${LV.id} clear!`);
         break;
     }
   }
@@ -878,8 +1135,23 @@ function updateFx(dt) {
   fx.flash = Math.max(0, fx.flash - dt);
   fx.refill = Math.max(0, fx.refill - dt);
   fx.locked = Math.max(0, fx.locked - dt);
-  fx.stageTitle = Math.max(0, fx.stageTitle - dt);
-  if (fx.reverse >= 0) fx.reverse += dt;
+  if (fx.intro) {
+    fx.intro.age += dt;
+    if (fx.intro.age > fx.intro.dur + 0.4) fx.intro = null;
+  }
+  if (fx.get) {
+    fx.get.age += dt;
+    if (fx.get.age > M.WORLD.hitstop.get + 0.1) {
+      fx.chipDeal[fx.get.ability === "dash" ? "dash" : fx.get.ability] = 1;
+      fx.get = null;
+    }
+  }
+  if (game.phase === "won") fx.goal = Math.min(1, fx.goal + dt * 2.5);
+  // The REVERSE card waits out the RED GET card (fx.reverseDelay).
+  if (fx.reverseDelay > 0) {
+    fx.reverseDelay -= dt;
+    if (fx.reverseDelay <= 0) fx.reverse = 0;
+  } else if (fx.reverse >= 0) fx.reverse += dt;
   if (fx.reverse > 2.6) fx.reverse = -1;
   if (game.stolen) fx.vaultOpen = Math.min(1, fx.vaultOpen + dt * 2);
   if (fx.swirl) {
@@ -892,10 +1164,15 @@ function updateFx(dt) {
     fx.iris = Math.max(0, Math.min(1, fx.iris + fx.irisDir * dt * (1 / 0.8)));
     if (fx.iris === 0 || fx.iris === 1) fx.irisDir = 0;
   }
-  // The forest regains color as Rubik does (Gris): green, theft, the road home.
+  // The forest regains color with the campaign (0.12 per cleared level) and
+  // within a level as Rubik does (Gris): the GETs, the theft, the road home.
   const p = game.player,
-    homeward = game.stolen ? 1 - Math.max(0, Math.min(1, (p.x - L.HOME.x1) / (L.VAULT.cx - L.HOME.x1))) : 0,
-    target = game.phase === "won" ? 1 : (game.unlocked.green ? 0.18 : 0) + (game.stolen ? 0.22 + homeward * 0.35 : 0);
+    base = C.forestColor(save),
+    homeward = game.stolen && LV.home && LV.vault ? 1 - Math.max(0, Math.min(1, (p.x - LV.home.x1) / (LV.vault.cx - LV.home.x1))) : 0,
+    target =
+      game.phase === "won" && game.stolen
+        ? 1
+        : Math.min(1, base + (game.gets.includes("green") ? 0.08 : 0) + (game.stolen ? 0.22 + homeward * 0.4 : 0) + (game.phase === "won" ? 0.12 : 0));
   colorAmount += (target - colorAmount) * Math.min(1, dt * (game.phase === "won" ? 1.4 : 2));
 }
 
@@ -1023,19 +1300,32 @@ function drawBackground() {
   // at y≈190–260 of the 2x art) and fading upward, like light rising from
   // behind the forest. The 0.075 parallax keeps it reading as very distant;
   // it lands centred over the vault room when the camera reaches it.
+  // Each level brings the beacon closer (level.beacon 0..1): a faint speck on
+  // the horizon in 1-1, the full pillar over the vault in 1-6.
+  const tint = TINTS[LV.tint];
+  if (tint) {
+    ctx.save();
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
   if (!game.stolen) {
-    const gx = Math.round(W / 2 + (L.VAULT.cx - (cam.x + W / 2)) * 0.075),
+    const near = LV.beacon ?? 1,
+      anchor = LV.vault ? LV.vault.cx : LV.width + 2400 * (1 - near),
+      gx = Math.round(W / 2 + (anchor - (cam.x + W / 2)) * 0.075),
       base = by + 236,
-      pulse = reducedMotion ? 0.85 : 0.8 + Math.sin(clock * 2) * 0.2;
+      pulse = (reducedMotion ? 0.85 : 0.8 + Math.sin(clock * 2) * 0.2) * (0.35 + 0.65 * near);
     if (gx > -90 && gx < W + 90) {
       ctx.save();
       ctx.globalCompositeOperation = "screen";
       // feathered column: horizontal falloff × vertical fade
-      for (const [half, alpha] of [
+      for (const [half0, alpha] of [
         [44, 0.1],
         [22, 0.16],
         [9, 0.2],
       ]) {
+        const half = Math.max(3, Math.round(half0 * (0.3 + 0.7 * near)));
         const v = ctx.createLinearGradient(0, base, 0, base - 300);
         v.addColorStop(0, `rgba(230,70,50,${alpha * pulse})`);
         v.addColorStop(1, "rgba(230,70,50,0)");
@@ -1064,6 +1354,9 @@ function drawBackground() {
     }
   }
 }
+/** Time of day per level, multiplied over the backdrop only (tiles, cards and
+ * Rubik keep their true colors): 1-4 a storm, 1-5 dusk, 1-6 night. */
+const TINTS = { storm: "#a9b6cf", dusk: "#f3c39b", night: "#8d88b8" };
 const wx = (x) => Math.round(x - cam.x),
   wy = (y) => Math.round(y - cam.y);
 function drawChunks(list) {
@@ -1077,10 +1370,10 @@ function drawTiles() {
   // drawn animated surface so a pit never reads as ground.
   const frame = reducedMotion ? 0 : Math.floor(clock * 5) % 5;
   const c0 = Math.max(0, Math.floor(cam.x / T)),
-    c1 = Math.min(L.COLS - 1, Math.ceil((cam.x + W) / T)),
-    top = wy(L.WATER_ROW * T);
+    c1 = Math.min(LV.cols - 1, Math.ceil((cam.x + W) / T)),
+    top = wy(B.WATER_ROW * T);
   for (let tx = c0; tx <= c1; tx++) {
-    if (L.MAP[L.WATER_ROW][tx] !== "~") continue;
+    if (LV.map[B.WATER_ROW][tx] !== "~") continue;
     const x = wx(tx * T),
       sx = 288 + (tx % 2) * 16;
     ctx.drawImage(img.tiles, sx, frame * 32 + 7, 16, 25, x, top + 14, T, 50);
@@ -1125,8 +1418,8 @@ function drawStones() {
   }
 }
 function drawCheckpoints() {
-  L.CHECKPOINTS.forEach((cp, index) => {
-    if (cp.auto) return;
+  LV.checkpoints.forEach((cp, index) => {
+    if (cp.get) return; // saved by a GET moment: no marker
     const x = wx(cp.x),
       y = wy(cp.floor);
     if (x < -60 || x > W + 60) return;
@@ -1151,13 +1444,76 @@ function drawCheckpoints() {
     }
   });
 }
+/** A chalk 3x3 cube face drawn with `cell` px squares (the checkpoint and
+ * goal art language: the cutout's shape, home-made, never a platform). */
+function chalkFace(x, y, cell, fill, bright, scaleX = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scaleX, 1);
+  const size = cell * 3 + 2;
+  for (let i = 0; i < 9; i++) {
+    const cx = -size / 2 + (i % 3) * cell,
+      cy = -size / 2 + Math.floor(i / 3) * cell;
+    if (fill) {
+      ctx.fillStyle = typeof fill === "function" ? fill(i) : fill;
+      ctx.fillRect(cx + 1, cy + 1, cell - 2, cell - 2);
+    }
+    ctx.strokeStyle = bright ? "#ffffff" : "rgba(244,240,226,0.78)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx + 1, cy + 1, cell - 2, cell - 2);
+  }
+  ctx.restore();
+}
+/** The goal face: the checkpoint face at 2x on a taller stick. Touching it
+ * flips it and fills it with Rubik's current color. */
+function drawGoal() {
+  const goal = LV.goal;
+  if (!goal) return;
+  const x = wx(goal.x),
+    y = wy(goal.floor);
+  if (x < -80 || x > W + 80) return;
+  ctx.fillStyle = "#c9b48a";
+  ctx.fillRect(x - 3, y - 64, 6, 64);
+  ctx.fillStyle = "#6b5a3e";
+  ctx.fillRect(x - 3, y - 64, 2, 64);
+  const won = game.phase === "won",
+    k = won ? fx.goal : 0,
+    flip = reducedMotion ? 1 : Math.cos(k * Math.PI * 2),
+    bob = reducedMotion || won ? 0 : Math.round(Math.sin(clock * 2.2) * 2);
+  if (!won) {
+    // a soft halo so the goal reads from afar, without words
+    const g = ctx.createRadialGradient(x, y - 100 + bob, 4, x, y - 100 + bob, 70);
+    g.addColorStop(0, "rgba(255,240,190,0.28)");
+    g.addColorStop(1, "rgba(255,240,190,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 70, y - 170, 140, 140);
+  }
+  chalkFace(x, y - 100 + bob, 22, won && k > 0.25 ? COLORS[fx.goalColor || game.player.color] : "rgba(20,16,26,0.35)", won, Math.max(0.08, Math.abs(flip)));
+}
+/** 1-4's stray storm swirl: rubik_storm frames 1-3 at 2x over a stump. */
+function drawPickups() {
+  for (const pickup of game.pickups) {
+    if (pickup.taken) continue;
+    const x = wx(pickup.x),
+      y = wy(pickup.y) + (reducedMotion ? 0 : Math.round(Math.sin(clock * 3) * 4));
+    if (x < -60 || x > W + 60) continue;
+    const g = ctx.createRadialGradient(x, y, 4, x, y, 46);
+    g.addColorStop(0, "rgba(255,255,255,0.55)");
+    g.addColorStop(1, "rgba(200,220,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 46, y - 46, 92, 92);
+    const f = 1 + (reducedMotion ? 0 : Math.floor(clock * 10) % 3);
+    ctx.drawImage(img.storm, f * 32, 0, 32, 32, x - 32, y - 32, 64, 64);
+  }
+}
 /** The vault as the set piece: cofre.png at 4x (an even multiple of the 2x
  * grid) on a dais made of the slab tiles, flanked by two pillar strips from the
  * atlas, under a pulsing red glow. On the theft its door swings open and the
  * red pours out. */
 function drawVault() {
-  const v = L.VAULT,
-    x = wx(v.cx - v.w / 2),
+  const v = LV.vault;
+  if (!v) return;
+  const x = wx(v.cx - v.w / 2),
     y = wy(v.floor - v.h),
     floor = wy(v.floor + 24);
   if (x < -200 || x > W + 200) return;
@@ -1251,7 +1607,11 @@ function drawStickers() {
       y = wy(s.y);
     if (x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
     const bob = reducedMotion ? 0 : Math.round(Math.sin(clock * 2.6 + s.id) * 3);
-    drawSticker(x, y + bob, 20, reducedMotion ? -1 : ((clock * 0.6 + s.id * 0.37) % 1.6) / 0.6);
+    // Already in the save from an earlier run: a faint outline (NSMB's
+    // collected star coins), still worth touching for this run's tally.
+    if (s.owned) ctx.globalAlpha = 0.38;
+    drawSticker(x, y + bob, 20, reducedMotion || s.owned ? -1 : ((clock * 0.6 + s.id * 0.37) % 1.6) / 0.6);
+    ctx.globalAlpha = 1;
   }
 }
 const SHEETS = {
@@ -1338,6 +1698,15 @@ function drawGuard(guard) {
     [row, col] = guardFrame(guard, sheet),
     dw = sheet.cw * 2,
     dh = sheet.ch * 2;
+  if (guard.absorb && guard.state === "asleep") {
+    // The glowing card holds Rubik's green: it pulses, unlike its neighbours.
+    const a = reducedMotion ? 0.4 : 0.3 + Math.sin(clock * 4) * 0.12,
+      g = ctx.createRadialGradient(x, floor - 44, 6, x, floor - 44, 80);
+    g.addColorStop(0, `rgba(127,208,75,${a})`);
+    g.addColorStop(1, "rgba(127,208,75,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 80, floor - 124, 160, 160);
+  }
   ctx.save();
   ctx.translate(x, floor);
   // Sheets face left; a right-facing card mirrors around its body centre.
@@ -1468,10 +1837,12 @@ function drawParticles() {
   }
   ctx.globalAlpha = 1;
 }
-/** The four contextual bubbles. Each shows device-matched glyphs only:
+/** The five contextual bubbles (at most two per level). Each shows device-matched glyphs only:
  * keycaps on a keyboard, the on-screen button's look on touch. */
 const HINTS = {
   move: { keys: ["<", ">"], touch: ["<", ">"] },
+  // 1-1's twist: the jump key twice ("jump, jump" - white's air jump).
+  airjump: { keys: ["Space", "Space"], touch: ["JUMP", "JUMP"] },
   white: { keys: ["Z"], touch: [], chip: "white", thought: true },
   green: { keys: ["X"], touch: [], chip: "green" },
   dash: { keys: ["Shift"], touch: ["DASH"], dash: true },
@@ -1554,34 +1925,56 @@ function drawHud() {
   });
   const deal = fx.chipDeal[p.color] || 0;
   formCard(p.color, 16 + shake, 14 - deal * 30, 40, 56, keyFor(p.color), -0.05, 1);
-  // Sticker face: Rubik's own yellow face, 3x3, top right under the buttons.
-  const fx0 = W - 16 - 58,
+  // After DASH GET: a storm streak by the form cards, and a Shift (or DASH)
+  // keycap for the first 3 dashes of 1-4. State itself stays on Rubik.
+  if (game.dashUnlocked) {
+    const deal = fx.chipDeal.dash || 0,
+      dx = 18 + forms.length * 26 + 36 + deal * 50,
+      dy = 26 - deal * 30;
+    ctx.globalAlpha = 1 - deal * 0.8;
+    ctx.fillStyle = "rgba(10,8,14,0.55)";
+    roundRect(dx + 2, dy + 3, 36, 36, 8);
+    ctx.fill();
+    ctx.fillStyle = "#fbf9f2";
+    roundRect(dx, dy, 36, 36, 8);
+    ctx.fill();
+    ctx.fillStyle = p.dashCharge > 0 || p.grounded ? "#1b1420" : "#a9a1ae";
+    for (let i = 0; i < 3; i++) ctx.fillRect(dx + 7 + i * 4, dy + 9 + i * 7, 22 - i * 6, 4);
+    ctx.globalAlpha = 1;
+    if (LV.id === "1-4" && game.dashes < 3 && inputMode !== "touch") keycap("Shift", dx + 18, dy + 52);
+  }
+  // Sticker strip: this level's three slots, top right under the buttons.
+  // Solid = taken this run; faint = already in the save from an earlier run.
+  const fx0 = W - 16 - 84,
     fy0 = 54;
   ctx.fillStyle = "#1b1420";
-  roundRect(fx0 - 2, fy0 - 2, 62, 62, 8);
+  roundRect(fx0 - 2, fy0 - 2, 88, 34, 8);
   ctx.fill();
   ctx.fillStyle = "#2b2230";
-  roundRect(fx0, fy0, 58, 58, 7);
+  roundRect(fx0, fy0, 84, 30, 7);
   ctx.fill();
-  for (const s of game.stickers) {
-    const i = s.id - 1,
-      cx = fx0 + 4 + (i % 3) * 17,
-      cy = fy0 + 4 + Math.floor(i / 3) * 17;
-    ctx.fillStyle = s.collected ? "#ffcf2e" : "#463b4a";
-    roundRect(cx, cy, 16, 16, 3);
+  game.stickers.forEach((st, i) => {
+    const sx = fx0 + 5 + i * 26,
+      sy = fy0 + 4;
+    ctx.fillStyle = st.collected ? "#ffcf2e" : st.owned ? "rgba(255,207,46,0.28)" : "#463b4a";
+    roundRect(sx, sy, 22, 22, 4);
     ctx.fill();
-    if (s.collected) {
+    if (st.collected) {
       ctx.fillStyle = "#fff4c2";
-      ctx.fillRect(cx + 2, cy + 2, 5, 3);
+      ctx.fillRect(sx + 3, sy + 3, 7, 4);
+    } else if (st.owned) {
+      ctx.strokeStyle = "#ffcf2e";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx + 1, sy + 1, 20, 20);
     }
-  }
-  let below = fy0 + 82;
+  });
+  let below = fy0 + 58;
   // Escape pressure without a fail timer: the "Quick getaway" par counts
   // down under the sticker face. At zero it just greys out; nothing fails.
   if (game.stolen && game.theftTime !== null) {
-    const left = Math.max(0, M.MEDAL_PAR_ESCAPE - ((game.finishTime ?? game.time) - game.theftTime)),
+    const left = Math.max(0, (LV.par ?? 0) - ((game.finishTime ?? game.time) - game.theftTime)),
       on = left > 0,
-      cx = W - 16 - 58 + 14,
+      cx = W - 16 - 84 + 14,
       cy = below - 6;
     ctx.fillStyle = on ? "#fbf9f2" : "#6a5f70";
     ctx.beginPath();
@@ -1601,7 +1994,7 @@ function drawHud() {
   if (settings.timer) text(fmtTime(game.time), W - 16, below + 4, 32, "#fbf9f2", "right");
   // During the getaway, a small home arrow at the left edge until home is on
   // screen (the chalk cube face is the home marker).
-  if (game.stolen && game.phase !== "won" && L.HOME.x1 < cam.x) {
+  if (game.stolen && game.phase !== "won" && LV.home && LV.home.x1 < cam.x) {
     const a = reducedMotion ? 1 : 0.75 + Math.sin(clock * 6) * 0.25,
       y = H / 2 - 22;
     ctx.globalAlpha = a;
@@ -1624,17 +2017,101 @@ function drawHud() {
     ctx.globalAlpha = 1;
   }
 }
-const keyFor = (color) => (inputMode === "touch" ? null : { white: "Z", green: "X", red: "C" }[color]);
-function drawStageTitle() {
-  if (fx.stageTitle <= 0) return;
-  const a = Math.min(1, fx.stageTitle / 0.6);
+// No key glyph while white is the only form (1-1, 1-2): nothing to switch to.
+const keyFor = (color) => (inputMode === "touch" || !game.unlocked.green ? null : { white: "Z", green: "X", red: "C" }[color]);
+/** The level card: "1-3" at 64 px, the name at 32 px and three sticker
+ * slots on an Uno-style card over the dimmed first frame (1 s; 0.5 s once
+ * the level is cleared). Any key skips it. */
+function drawIntro() {
+  const card = fx.intro;
+  if (!card) return;
+  const t = card.age,
+    out = card.skipped ? Math.min(1, t * 6) : Math.max(0, (t - card.dur) / 0.4),
+    a = Math.max(0, Math.min(1, t / 0.12, 1 - out));
+  if (a <= 0) return;
+  ctx.save();
   ctx.globalAlpha = a;
-  text("Green forest", W / 2, 150, 64, "#ffffff", "center", "#000000");
-  ctx.globalAlpha = 1;
+  ctx.fillStyle = "rgba(10,8,14,0.45)";
+  ctx.fillRect(0, 0, W, H);
+  const cw = 300,
+    ch = 190,
+    x = W / 2 - cw / 2,
+    y = H / 2 - ch / 2 - 30,
+    rec = C.levelRecord(save, LV.id);
+  ctx.translate(W / 2, y + ch / 2);
+  ctx.rotate(reducedMotion ? 0 : -0.04 + (1 - Math.min(1, t / 0.25)) * -0.12);
+  ctx.translate(-W / 2, -(y + ch / 2));
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  roundRect(x + 6, y + 8, cw, ch, 18);
+  ctx.fill();
+  ctx.fillStyle = "#fbf9f2";
+  roundRect(x, y, cw, ch, 18);
+  ctx.fill();
+  ctx.fillStyle = "#2b1f2e";
+  roundRect(x + 8, y + 8, cw - 16, ch - 16, 12);
+  ctx.fill();
+  text(LV.id, W / 2, y + 74, 64, "#ffcf2e", "center", "#000");
+  text(LV.name, W / 2, y + 112, 32, "#ffffff", "center", "#000");
+  LV.stickers.forEach((st, i) => {
+    const sx = W / 2 - 40 + i * 28;
+    ctx.fillStyle = rec.stickers.includes(st.id) ? "#ffcf2e" : "#463b4a";
+    roundRect(sx, y + 132, 22, 22, 4);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+/** GET card: hit-stop, then the new color at 4x with its key and a caption,
+ * held for the model's 1.2 s GET freeze; the form card is then dealt into
+ * the HUD (chipDeal). */
+function drawGetCard() {
+  const get = fx.get;
+  if (!get) return;
+  const info = GET_CARDS[get.ability],
+    t = get.age,
+    a = Math.max(0, Math.min(1, t / 0.12, (M.WORLD.hitstop.get + 0.1 - t) / 0.15)),
+    pop = reducedMotion ? 1 : Math.min(1, 0.6 + t * 3);
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = "rgba(10,8,14,0.5)";
+  ctx.fillRect(0, 0, W, H);
+  const color = get.ability === "dash" ? "white" : get.ability,
+    cw = 440,
+    ch = 230,
+    x = W / 2 - cw / 2,
+    y = H / 2 - ch / 2 - 20;
+  ctx.translate(W / 2, H / 2 - 20);
+  ctx.scale(pop, pop);
+  ctx.translate(-W / 2, -(H / 2 - 20));
+  ctx.fillStyle = "#fbf9f2";
+  roundRect(x, y, cw, ch, 20);
+  ctx.fill();
+  ctx.fillStyle = get.ability === "dash" ? "#3d4f7a" : COLORS[color];
+  roundRect(x + 10, y + 10, cw - 20, ch - 20, 14);
+  ctx.fill();
+  ctx.fillStyle = "rgba(251,249,242,0.9)";
+  ctx.beginPath();
+  ctx.ellipse(x + 112, y + ch / 2, 86, 96, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+  // Rubik at 4x in the new color (dash: the storm frames).
+  ctx.imageSmoothingEnabled = false;
+  if (get.ability === "dash") {
+    const f = 1 + (reducedMotion ? 0 : Math.floor(clock * 10) % 3);
+    ctx.drawImage(img.storm, f * 32, 0, 32, 32, x + 48, y + ch / 2 - 64, 128, 128);
+  } else ctx.drawImage(img[color], (Math.floor(clock * 4) % 2) * 32, 0, 32, 32, x + 48, y + ch / 2 - 70, 128, 128);
+  text(info.title, x + 316, y + 70, 48, "#ffffff", "center", "#000");
+  if (get.ability === "dash") {
+    if (inputMode === "touch") dashPill(x + 280, y + 128);
+    else bigKey(info.key, x + 278, y + 128);
+  } else {
+    formCard(color, x + 262, y + 92, 30, 42, null);
+    if (inputMode !== "touch") bigKey(info.key, x + 306, y + 128);
+  }
+  text(info.caption, x + 316, y + 182, 32, "#ffffff", "center", "#000");
+  ctx.restore();
 }
 /** Uno REVERSE card sweeping across: the theft's turning point. */
 function drawReverse() {
-  if (fx.reverse < 0) return;
+  if (fx.reverse < 0 || fx.get) return;
   const t = fx.reverse / 1.1,
     x = reducedMotion ? W / 2 : W + 160 - (W + 320) * Math.min(1, t * 1.15),
     y = H / 2;
@@ -1737,7 +2214,9 @@ function drawWorld() {
   drawTiles();
   drawStones();
   drawCheckpoints();
+  drawGoal();
   drawVault();
+  drawPickups();
   drawOrbs();
   drawStickers();
   for (const guard of game.guards) drawGuard(guard);
@@ -1819,21 +2298,14 @@ function drawStory() {
   });
   text("▸▸", W - 18, H - 14, 32, "#fbf9f2", "right");
   if (t >= end) drawIris(Math.min(1, (t - end) / 0.8));
-  if (t >= close) enterPlay(true);
+  if (t >= close) startLevel(C.WORLD1[0], { skipIntro: false });
 }
 function drawEnding() {
   ctx.drawImage(img.ending, 0, 0, W, H);
   drawIris(Math.max(0, 1 - screenTime / 0.8));
 }
-function drawResults() {
-  // Colorized forest behind a dim card panel.
-  ctx.drawImage(derived.forestColor, 0, 0, W, H);
-  ctx.fillStyle = "rgba(14,10,20,0.55)";
-  ctx.fillRect(0, 0, W, H);
-  const px = 150,
-    py = 44,
-    pw = 660,
-    ph = 392;
+/** Card panel shared by the tally screens. */
+function panel(px, py, pw, ph) {
   ctx.fillStyle = "rgba(0,0,0,0.5)";
   roundRect(px + 6, py + 8, pw, ph, 22);
   ctx.fill();
@@ -1843,56 +2315,140 @@ function drawResults() {
   ctx.fillStyle = "#2b1f2e";
   roundRect(px + 8, py + 8, pw - 16, ph - 16, 16);
   ctx.fill();
-  text("Color Theft Story: Color Rush Heist", W / 2, py + 30, 16, "#cfc6d6", "center", null);
-  text("You got your red back!", W / 2, py + 70, 48, "#ffffff", "center", "#000");
-  // Red Rubik idles beside the numbers, on a little chalk home face.
-  ctx.fillStyle = "#3d3042";
-  roundRect(px + 70, py + 210, 100, 14, 7);
+}
+/** A stamp: a small round seal, colored when earned, a grey outline when not. */
+function stamp(label, got, x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.12);
+  ctx.fillStyle = got ? COLORS.red : "#3a3040";
+  ctx.beginPath();
+  ctx.arc(0, 0, 30, 0, Math.PI * 2);
   ctx.fill();
-  drawRubik("red", (Math.floor(clock * 4) % 2) * 32, 0, px + 120, py + 216, 1, 1);
-  const g = game,
+  ctx.strokeStyle = got ? "#fbf9f2" : "#6a5f70";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.arc(0, 0, 25, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+  text(label, x, y + 8, 16, got ? "#ffffff" : "#8a7f90", "center", got ? "#5a0e0a" : null);
+}
+/** Level clear: time and best, stickers flying into their slots (0.15 s
+ * each, with a sound), stamps; Continue (default) or Retry. */
+function drawResults() {
+  ctx.drawImage(colorAmount > 0.01 ? derived.forestColor : img.forest, 0, 0, W, H);
+  ctx.fillStyle = "rgba(14,10,20,0.55)";
+  ctx.fillRect(0, 0, W, H);
+  const r = fx.result || { time: game.finishTime ?? game.time, best: null, stickers: game.stickers.map((x) => ({ id: x.id, got: x.collected, owned: x.owned })), unseen: null, quick: null };
+  const px = 170,
+    py = 52,
+    pw = 620,
+    ph = 380;
+  panel(px, py, pw, ph);
+  text(`World 1 - ${LV.id}`, W / 2, py + 34, 16, "#cfc6d6", "center", null);
+  text(`${LV.name}: clear!`, W / 2, py + 76, 48, "#ffffff", "center", "#000");
+  // Rubik in the color he finished in, on his chalk face.
+  ctx.fillStyle = "#3d3042";
+  roundRect(px + 60, py + 196, 100, 14, 7);
+  ctx.fill();
+  drawRubik(game.player.color, (Math.floor(clock * 4) % 2) * 32, 0, px + 110, py + 202, 1, 1);
+  const rows = [
+    ["Time", fmtTime(r.time ?? 0), r.newBest && !r.firstClear ? "best!" : ""],
+    ["Best", r.best === null ? "-" : fmtTime(r.best), ""],
+  ];
+  if (game.escapeTime !== null) rows.push(["Getaway", fmtTime(game.escapeTime), ""]);
+  rows.forEach(([k, v, note], i) => {
+    text(k, px + 210, py + 138 + i * 36, 32, "#cfc6d6", "left", null);
+    text(v, px + 420, py + 138 + i * 36, 32, "#ffffff", "right", null);
+    if (note) text(note, px + 430, py + 138 + i * 36, 32, "#ffcf2e", "left", null);
+  });
+  // Stickers fly into their slots one by one.
+  r.stickers.forEach((st, i) => {
+    const sx = px + 214 + i * 70,
+      sy = py + 262,
+      land = 0.35 + i * 0.15,
+      k = reducedMotion ? 1 : Math.max(0, Math.min(1, (screenTime - land) / 0.15));
+    ctx.fillStyle = "#1b1420";
+    roundRect(sx - 4, sy - 4, 56, 56, 9);
+    ctx.fill();
+    ctx.fillStyle = "#463b4a";
+    roundRect(sx, sy, 48, 48, 7);
+    ctx.fill();
+    if (st.got || st.owned) {
+      if (!st.got) ctx.globalAlpha = 0.4; // owned from an earlier run
+      drawSticker(sx + 24, sy + 24 - (1 - k) * 60, 40, -1);
+      ctx.globalAlpha = 1;
+    }
+    if (st.got && k > 0 && k < 1 && !st.pinged) {
+      st.pinged = true;
+      play("tally");
+    }
+  });
+  const got = r.stickers.filter((x) => x.got || x.owned).length;
+  text(`${got}/3`, px + 452, py + 296, 32, "#ffcf2e", "left", null);
+  // Stamps where this level can award them.
+  let sx = px + 530;
+  if (r.unseen !== null) {
+    stamp("Unseen", r.unseen, sx, py + 150);
+    sx -= 0;
+  }
+  if (r.quick !== null) stamp("Quick", r.quick, sx, py + 230);
+  if (r.unlocked) text(`${r.unlocked} is open!`, W / 2, py + ph - 26, 32, "#9be36a", "center", null);
+}
+/** World clear: the old results screen, retitled, with world totals and the
+ * three world medals, then one caption in the comic's style. */
+function drawWorldClear() {
+  ctx.drawImage(derived.forestColor, 0, 0, W, H);
+  ctx.fillStyle = "rgba(14,10,20,0.5)";
+  ctx.fillRect(0, 0, W, H);
+  const px = 120,
+    py = 18,
+    pw = 720,
+    ph = 412;
+  panel(px, py, pw, ph);
+  text("World 1 - Green Forest: clear!", W / 2, py + 40, 32, "#cfc6d6", "center", null);
+  text("You got your red back!", W / 2, py + 86, 48, "#ffffff", "center", "#000");
+  ctx.fillStyle = "#3d3042";
+  roundRect(px + 60, py + 196, 100, 14, 7);
+  ctx.fill();
+  drawRubik("red", (Math.floor(clock * 4) % 2) * 32, 0, px + 110, py + 202, 1, 1);
+  const total = C.stickerTotal(save),
     rows = [
-      ["Time", fmtTime(g.finishTime ?? g.time)],
-      ["Getaway", fmtTime(g.escapeTime ?? 0)],
-      ["Spotted", String(g.spotted)],
+      ["Stickers", `${total}/${C.TOTAL_STICKERS}`],
+      ["Levels", `${C.WORLD1.filter((id) => C.isCleared(save, id)).length}/${C.WORLD1.length}`],
+      ["Getaway", fmtTime(game.escapeTime ?? 0)],
     ];
   rows.forEach(([k, v], i) => {
-    text(k, px + 230, py + 136 + i * 38, 32, "#cfc6d6", "left", null);
-    text(v, px + 440, py + 136 + i * 38, 32, "#ffffff", "right", null);
+    text(k, px + 220, py + 142 + i * 36, 32, "#cfc6d6", "left", null);
+    text(v, px + 470, py + 142 + i * 36, 32, "#ffffff", "right", null);
   });
-  // Sticker face, big.
-  const fx0 = px + 490,
-    fy0 = py + 108;
-  ctx.fillStyle = "#1b1420";
-  roundRect(fx0 - 4, fy0 - 4, 118, 118, 12);
-  ctx.fill();
-  for (const s of g.stickers) {
-    const i = s.id - 1;
-    ctx.fillStyle = s.collected ? "#ffcf2e" : "#463b4a";
-    roundRect(fx0 + 4 + (i % 3) * 36, fy0 + 4 + Math.floor(i / 3) * 36, 32, 32, 5);
-    ctx.fill();
-  }
-  text(`${M.stickerCount(g)}/9`, fx0 + 55, fy0 + 146, 32, "#ffcf2e", "center", null);
-  // Three medal cards flip in one by one.
-  const medals = [
-    ["Full face", g.medals?.fullFace, "all 9 stickers"],
-    ["Never spotted", g.medals?.neverSpotted, 'never a "!"'],
-    ["Quick getaway", g.medals?.quickGetaway, `home in ${M.MEDAL_PAR_ESCAPE} s`],
-  ];
-  medals.forEach(([name, got, how], i) => {
+  // Six little faces: each level's sticker count.
+  C.WORLD1.forEach((id, i) => {
+    const rec = C.levelRecord(save, id);
+    chalkFace(px + 540 + (i % 3) * 52, py + 150 + Math.floor(i / 3) * 56, 14, (k) => (k < rec.stickers.length ? "#ffcf2e" : "#463b4a"), rec.stickers.length === 3);
+  });
+  const medals = C.worldMedals(save),
+    list = [
+      ["Full face", medals.fullFace, `all ${C.TOTAL_STICKERS} stickers`],
+      ["Ghost", medals.ghost, "Unseen 1-3 to 1-6"],
+      ["Quick getaway", medals.quickGetaway, `home in ${getLevel("1-6").par} s`],
+    ];
+  list.forEach(([name, got, how], i) => {
     const appear = Math.max(0, Math.min(1, (screenTime - 0.4 - i * 0.35) / 0.3)),
-      cx = px + 128 + i * 202,
-      cy = py + 316,
+      cx = px + 140 + i * 220,
+      cy = py + 296,
       flip = reducedMotion ? 1 : Math.abs(Math.cos((1 - appear) * Math.PI * 0.5));
     if (appear <= 0) return;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(Math.max(0.05, flip), 1);
     ctx.fillStyle = got ? "#fbf9f2" : "#4a3f4e";
-    roundRect(-94, -40, 188, 84, 10);
+    roundRect(-100, -40, 200, 84, 10);
     ctx.fill();
     ctx.fillStyle = got ? COLORS.red : "#2b2230";
-    roundRect(-88, -34, 176, 72, 6);
+    roundRect(-94, -34, 188, 72, 6);
     ctx.fill();
     ctx.restore();
     if (flip > 0.6) {
@@ -1900,6 +2456,160 @@ function drawResults() {
       text(got ? "earned!" : how, cx, cy + 26, 32, got ? "#ffe066" : "#9a8fa0", "center", got ? "#5a0e0a" : null);
     }
   });
+  // One narration box, the comic's caption style, after the medals.
+  if (screenTime > 1.6) {
+    const a = reducedMotion ? 1 : Math.min(1, (screenTime - 1.6) / 0.4);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = "#1b1420";
+    ctx.fillRect(W / 2 - 320, py + ph - 66, 640, 44);
+    ctx.fillStyle = "#f6efd9";
+    ctx.fillRect(W / 2 - 317, py + ph - 63, 634, 38);
+    text("Green and red are back. Blue is up in the mountains.", W / 2, py + ph - 36, 32, "#1b1420", "center", null);
+    ctx.globalAlpha = 1;
+  }
+}
+/** The world map: a side view built from bg1-sky over bg1 that regains color
+ * with every clear, a path of slab cells, six chalk-face nodes (1-6 is the
+ * vault under the red beacon), Rubik walking node to node. */
+function drawMap() {
+  const amount = C.forestColor(save);
+  ctx.fillStyle = derived.skyFill;
+  ctx.fillRect(0, 0, W, H);
+  // bg1-sky continues bg1 upward: its bottom 20 rows fill the 40 px band the
+  // forest (shifted down 40 px) leaves at the top, both at exactly 2x.
+  ctx.drawImage(img.sky, 0, 431, 480, 20, 0, 0, 960, 40);
+  if (amount > 0.01) {
+    ctx.globalAlpha = amount;
+    ctx.drawImage(derived.skyColor, 0, 431, 480, 20, 0, 0, 960, 40);
+    ctx.globalAlpha = 1;
+  }
+  ctx.drawImage(img.forest, 0, 40, W, H);
+  if (amount > 0.01) {
+    ctx.globalAlpha = amount;
+    ctx.drawImage(derived.forestColor, 0, 40, W, H);
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = derived.groundFill;
+  ctx.fillRect(0, 40 + H - 2, W, 4);
+  // The red beacon rises behind the vault node until World 1 is clear.
+  const vault = MAP_NODES[MAP_NODES.length - 1];
+  if (!C.worldClear(save)) {
+    const pulse = reducedMotion ? 0.85 : 0.8 + Math.sin(clock * 2) * 0.2;
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    for (const [half, alpha] of [
+      [40, 0.12],
+      [18, 0.2],
+      [7, 0.24],
+    ]) {
+      const v = ctx.createLinearGradient(0, vault.y - 20, 0, vault.y - 360);
+      v.addColorStop(0, `rgba(230,70,50,${alpha * pulse})`);
+      v.addColorStop(1, "rgba(230,70,50,0)");
+      ctx.fillStyle = v;
+      ctx.fillRect(vault.x - half, vault.y - 360, half * 2, 340);
+    }
+    ctx.restore();
+  }
+  text("World 1", W / 2, 46, 32, "#fbf9f2", "center", "#000");
+  text("Green Forest", W / 2, 88, 48, "#ffffff", "center", "#000");
+  // Path: slab cells (atlas row 0, cells 12-17, top 12 source px) at 2x, one
+  // continuous strip; segments to locked nodes are faint, and a newly opened
+  // segment draws in over 0.6 s.
+  const first = MAP_NODES[0].x - 48,
+    last = MAP_NODES[MAP_NODES.length - 1].x + 48,
+    cells = Math.round((last - first) / 32);
+  for (let j = 0; j < cells; j++) {
+    const x = first + j * 32,
+      seg = Math.max(0, Math.min(MAP_NODES.length - 2, Math.floor((x + 16 - MAP_NODES[0].x) / 140))),
+      to = seg + 1,
+      revealing = map.reveal && map.reveal.to === to,
+      reached = x + 16 <= MAP_NODES[0].x + 4 || C.isUnlocked(save, MAP_NODES[to].id),
+      along = (x + 16 - MAP_NODES[seg].x) / 140,
+      lit = revealing ? along <= Math.min(1, map.reveal.age / 0.6) : reached;
+    ctx.globalAlpha = lit ? 1 : 0.35;
+    const cell = j === 0 ? 12 : j === cells - 1 ? 17 : 13 + (j % 4);
+    ctx.drawImage(img.tiles, cell * 16, 0, 16, 12, x, MAP_NODES[0].y, 32, 24);
+  }
+  ctx.globalAlpha = 1;
+  // Nodes: chalk faces on sticks; locked ones are a faint outline, open ones
+  // bob, cleared ones are filled with the color Rubik finished in.
+  MAP_NODES.forEach((node, i) => {
+    const rec = C.levelRecord(save, node.id),
+      open = C.isUnlocked(save, node.id) && !(map.reveal && map.reveal.to === i),
+      bob = open && !rec.clear && !reducedMotion ? Math.round(Math.sin(clock * 3 + i) * 3) : 0,
+      x = node.x,
+      y = node.y - 82 + bob,
+      full = rec.stickers.length === 3;
+    ctx.globalAlpha = open ? 1 : 0.4;
+    ctx.fillStyle = "#c9b48a";
+    ctx.fillRect(x - 2, y + 28, 4, node.y - y - 28);
+    if (full) {
+      // A 3/3 level gets a gold rim on its node (Celeste's lesson).
+      ctx.strokeStyle = "#ffcf2e";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(x - 31, y - 31, 62, 62);
+    }
+    if (i === MAP_NODES.length - 1) {
+      // The vault node: cofre.png at 2x.
+      ctx.drawImage(img.vault, x - 23, y - 20, 46, 40);
+      if (rec.clear) {
+        ctx.fillStyle = "rgba(232,56,44,0.55)";
+        ctx.fillRect(x - 15, y - 13, 30, 28);
+      }
+    } else chalkFace(x, y, 17, rec.clear ? COLORS[rec.color || "white"] : open ? "rgba(20,16,26,0.5)" : null, open && i === map.cursor);
+    ctx.globalAlpha = 1;
+    text(node.id, x, y - 38, 16, open ? "#fbf9f2" : "#bdb4c2", "center", "#1b1420");
+    // Three sticker pips under the path, and a red seal for any stamp.
+    for (let k = 0; k < 3; k++) {
+      ctx.fillStyle = rec.stickers.includes(k + 1) ? "#ffcf2e" : open ? "rgba(27,20,32,0.75)" : "rgba(27,20,32,0.35)";
+      roundRect(x - 23 + k * 16, node.y + 32, 12, 12, 3);
+      ctx.fill();
+    }
+    if (rec.unseen || rec.quick) {
+      ctx.fillStyle = COLORS.red;
+      ctx.beginPath();
+      ctx.arc(x + 34, y - 26, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fbf9f2";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  });
+  // Rubik walks node to node on the path (his 2x run row).
+  const a = MAP_NODES[map.from],
+    b = MAP_NODES[map.cursor],
+    k = map.walk,
+    rx = a.x + (b.x - a.x) * k,
+    walking = k < 1,
+    dir = b.x >= a.x ? 1 : -1,
+    color = C.isCleared(save, "1-6") ? "red" : C.isCleared(save, "1-2") ? "green" : "white";
+  drawRubik(color, walking ? (Math.floor(clock * 12) % 4) * 32 : (Math.floor(clock * 4) % 2) * 32, walking ? 64 : 0, rx + 34, a.y + 2 - (walking && !reducedMotion ? Math.abs(Math.sin(k * Math.PI)) * 10 : 0), dir, 1);
+  // HUD: owned forms (top left) and the world's sticker total (top right).
+  const forms = ["white", "green", "red"].filter((c) => c === "white" || (c === "green" && C.isCleared(save, "1-2")) || (c === "red" && C.isCleared(save, "1-6")));
+  forms.forEach((c, i) => formCard(c, 16 + i * 30, 14, 34, 48, null, -0.05 + i * 0.12, 1));
+  ctx.fillStyle = "#1b1420";
+  roundRect(W - 16 - 124, 54, 124, 36, 8);
+  ctx.fill();
+  drawSticker(W - 16 - 104, 72, 20, -1);
+  text(`${C.stickerTotal(save)}/${C.TOTAL_STICKERS}`, W - 24, 82, 32, "#ffcf2e", "right", null);
+  // Bottom panel: the selected level.
+  const level = getLevel(C.WORLD1[map.cursor]),
+    rec = C.levelRecord(save, level.id),
+    py = 470;
+  ctx.fillStyle = "rgba(27,20,32,0.86)";
+  roundRect(150, py, 660, 60, 12);
+  ctx.fill();
+  text(`${level.id}  ${level.name}`, 170, py + 28, 32, "#ffffff", "left", null);
+  text(level.idea, 170, py + 52, 16, "#cfc6d6", "left", null);
+  text(rec.best === null ? "" : `best ${fmtTime(rec.best)}`, 640, py + 28, 32, "#cfc6d6", "right", null);
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = rec.stickers.includes(i + 1) ? "#ffcf2e" : "#463b4a";
+    roundRect(656 + i * 26, py + 10, 20, 20, 4);
+    ctx.fill();
+  }
+  const touch = inputMode === "touch",
+    prompt = map.prompt > 0 ? "locked" : touch ? "tap again: play" : "Enter: play";
+  text(prompt, 790, py + 52, 16, map.prompt > 0 ? "#ff9b8a" : "#ffcf2e", "right", null);
 }
 function fmtTime(t) {
   return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}.${Math.floor((t % 1) * 10)}`;
@@ -1908,6 +2618,8 @@ function fmtTime(t) {
 // ------------------------------------------------------------------- loop --
 function stepPlay(dt) {
   if (manual) return;
+  // The level card holds the world for its first 0.4 s unless a key skips it.
+  if (fx.intro && !fx.intro.skipped && fx.intro.age < 0.4) return;
   accumulator += dt;
   while (accumulator >= M.TICK) {
     M.update(game, M.TICK, getInput());
@@ -1930,13 +2642,19 @@ function frame(now) {
     updateFx(dt);
     updateCamera(dt);
     if (game.phase === "won") {
+      // 0.25 s of stillness, the goal face flips and fills, the iris closes
+      // on Rubik, then the tally (at most ~2.5 s, skippable by Continue).
       fx.clear += dt;
-      if (fx.clear > 1.6 && fx.irisDir === 0 && fx.iris === 0) fx.irisDir = 1;
-      if (fx.clear > 2.5) {
-        setScreen("results");
+      if (fx.clear > 1.2 && fx.irisDir === 0 && fx.iris === 0) fx.irisDir = 1;
+      if (fx.clear > 2.1) {
+        setScreen(LV.id === C.WORLD1[C.WORLD1.length - 1] ? "world" : "results");
         play("win");
       }
     }
+  } else if (screen === "map") {
+    updateMap(dt);
+    if (fx.irisDir) fx.iris = Math.max(0, Math.min(1, fx.iris + fx.irisDir * dt * (1 / 0.8)));
+    if (fx.iris === 0 || fx.iris === 1) fx.irisDir = 0;
   }
   render();
   syncTouch();
@@ -1950,14 +2668,20 @@ function render() {
   if (screen === "story") return drawStory();
   if (screen === "ending") return drawEnding();
   if (screen === "results") return drawResults();
+  if (screen === "world") return drawWorldClear();
+  if (screen === "map") {
+    drawMap();
+    return drawIris(fx.iris);
+  }
   drawWorld();
   drawHud();
-  drawStageTitle();
   drawReverse();
+  drawGetCard();
   drawFlash();
   // The win iris closes on Rubik himself; the opening iris is screen-centred.
   if (game.phase === "won") drawIris(fx.iris, wx(game.player.x + M.PLAYER.w / 2), wy(game.player.y + M.PLAYER.h / 2));
   else drawIris(fx.iris);
+  drawIntro(); // the level card sits on top while the iris opens behind it
 }
 
 // ---------------------------------------------------------------- QA API ---
@@ -1970,26 +2694,62 @@ function getState() {
     stickerList: s.stickers,
     screen,
     assetsReady,
+    level: { id: LV.id, name: LV.name, idea: LV.idea, kit: structuredClone(LV.kit), gets: C.getsIn(LV.id), par: LV.par, cols: LV.cols },
+    intro: !!fx.intro,
+    getCard: fx.get?.ability ?? null,
+    map: { cursor: map.cursor, id: C.WORLD1[map.cursor], walking: map.walk < 1, revealing: !!map.reveal, menuOpen },
+    campaign: {
+      levels: [...C.WORLD1],
+      unlocked: C.unlockedIds(save),
+      stickerTotal: C.stickerTotal(save),
+      totalStickers: C.TOTAL_STICKERS,
+      worldClear: C.worldClear(save),
+      worldMedals: C.worldMedals(save),
+      forestColor: C.forestColor(save),
+    },
+    save: structuredClone(save),
+    result: fx.result ? structuredClone(fx.result) : null,
     camera: { x: cam.x, y: cam.y },
     settings: { ...settings },
     audio: { musicDecoded: !!track.buffer, musicPlaying: !!track.source, musicRate: track.rate, context: audio?.state ?? "none" },
   };
 }
+/** Straight into play for QA (no card, no iris): the level's own kit. */
+function qaStart(id) {
+  held.clear();
+  clearPulses();
+  ui.pauseCard.hidden = true;
+  startLevel(id, { intro: false });
+  fx.iris = 0;
+  fx.irisDir = 0;
+  render();
+  return getState();
+}
 window.__game = {
   getState,
   start: beginFrontEnd,
   skipStory() {
-    if (screen === "story") enterPlay(true);
+    if (screen === "story") startLevel(C.WORLD1[0], { skipIntro: true });
     return getState();
   },
-  restart() {
-    held.clear();
-    clearPulses();
-    ui.pauseCard.hidden = true;
-    enterPlay(true);
+  /** Restart the current level (1-1 on a fresh page) straight into play. */
+  restart: () => qaStart(LV.id),
+  /** Start any World 1 level by id ("1-1" .. "1-6"), unlocked or not. */
+  startLevel: (id) => {
+    if (!getLevel(id)) throw new Error(`Unknown level ${id}`);
+    return qaStart(id);
+  },
+  openMap(id) {
+    openMap(id || save.last);
     fx.iris = 0;
     fx.irisDir = 0;
     render();
+    return getState();
+  },
+  /** Erase campaign progress (clears, stickers, stamps, hints); settings stay. */
+  resetSave() {
+    save = C.resetSave(storage);
+    persist();
     return getState();
   },
   setManual(value) {
@@ -1997,7 +2757,7 @@ window.__game = {
     accumulator = 0;
   },
   step(seconds, input = {}, options = {}) {
-    if (screen !== "play") enterPlay(true);
+    if (screen !== "play") qaStart(LV.id);
     M.advance(game, seconds, input);
     handleEvents();
     updateFx(Math.min(seconds, 5));
@@ -2009,6 +2769,9 @@ window.__game = {
   },
   get model() {
     return game;
+  },
+  get campaign() {
+    return C;
   },
   togglePause,
 };

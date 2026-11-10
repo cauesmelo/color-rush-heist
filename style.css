@@ -123,6 +123,7 @@ a {
   display: none;
 }
 [data-screen="results"] .corner,
+[data-screen="world"] .corner,
 [data-screen="ending"] .corner,
 [data-screen="story"] .corner {
   display: none;
@@ -190,6 +191,16 @@ a {
   text-align: center;
   padding-left: 4px;
   padding-right: 4px;
+}
+/* One card serves the in-level pause and the world map's menu. */
+.card-panel[data-mode="map"] .play-only,
+.card-panel[data-mode="play"] .map-only {
+  display: none;
+}
+.menu button.quiet {
+  background: #2b2230;
+  color: #bdb4c2;
+  text-align: center;
 }
 .toggles button[aria-pressed="false"] {
   color: #9a8fa0;

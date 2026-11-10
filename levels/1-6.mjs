@@ -6,7 +6,9 @@
  *            gates of sealed stones are already visible over the canopy.
  * develop:   greatest hits, compressed: a short canopy with one patrol (1-3),
  *            a white lookout ledge with the swap alcove (1-3/1-5), a dash +
- *            orb crossing via an island (1-4), then the vault steps.
+ *            orb crossing via an island (1-4; since the levels round with a
+ *            stepping rock under the orb, so the dash line is the fast one,
+ *            not the only one), then the vault steps.
  * twist:     the vault room is ONE readable lock: a red sentry (red sees
  *            green, so the disguise is useless) guards the vault; stair 3 is
  *            cover, its 0.4 s look-back telegraphs each turn, and its back is
@@ -60,6 +62,13 @@ export default defineLevel({
     water(54, 63); // 10 tiles to the island (2 down)
     ground(64, 67, 14); // the island (an escape-only card arrives here)
     water(68, 83); // 16 tiles with a refill orb in the middle
+    // Levels round: a 3-tile stepping rock under the orb, 2 down: a plain jump
+    // reaches it from either bank (7 and 6 tiles of water) and a plain jump
+    // climbs from it (a 2-tile step). The dash + orb crossing stays the fast
+    // line (the guided routes fly clear above the rock), but a person who has
+    // not yet worked out the orb is no longer stopped by it: the first-timer
+    // proxy fell here 100+ times, and the crossing back is the escape.
+    ground(75, 77, 16);
     // --- Develop 4 (84-132): the vault steps, landing and chamber ------------
     ground(84, 99, 14); // the bank and stair 1 (old cols 166-169)
     ground(100, 102, 12); // stair 2

@@ -109,6 +109,15 @@ figcaption small {
 .archive .badge {
   background: #5a5060;
 }
+/* Withheld from this build (itch.json "withhold"): a hatched blank, no request. */
+.art-blank {
+  height: 140px;
+  border-radius: 8px;
+  background: repeating-linear-gradient(45deg, #e4dfd2 0 8px, #f4f1e8 8px 16px);
+}
+.withheld .badge {
+  background: #1b1420;
+}
 footer {
   margin-top: 24px;
   font-size: 20px;

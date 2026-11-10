@@ -12,16 +12,34 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const config = JSON.parse(await readFile(path.join(root, 'itch.json'), 'utf8'));
 const destination = path.join(root, 'dist', 'itch');
 const excluded = new Set(['package.json', 'package-lock.json', 'serve.mjs', 'package-itch.mjs', 'itch.json']);
+/** Folders kept in the repository but withheld from the upload, each with the
+ * reason players' builds leave it out (itch.json `withhold`, ITCH_IO.md). */
+const withheld = Object.entries(config.withhold || {}).map(([folder, reason]) => ({ folder: folder.replace(/\/?$/, '/'), reason }));
+const withheldBy = (name) => withheld.find(({ folder }) => name.startsWith(folder));
+/** Root files players get: the runtime (html/css/js/json) and the player docs
+ * only. Research, audit and design Markdown stays in the repository. */
+const rootFile = (name) => /\.(html|css|js|mjs|json)$/i.test(name) || /^(README|CHANGELOG)\.md$/i.test(name) || /licen[cs]e/i.test(name);
 async function runtimeFiles(folder, prefix = '') {
   const out = [];
   for (const entry of (await readdir(folder, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
     if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue;
     const name = prefix + entry.name;
     if (entry.isDirectory()) {
+      if (withheldBy(name + '/')) continue;
       if (prefix || ['assets', 'vendor', 'levels'].includes(entry.name)) out.push(...await runtimeFiles(path.join(folder, entry.name), name + '/'));
-    } else if (!excluded.has(name) && (prefix || /\.(html|css|js|mjs|json|md|txt)$/i.test(name))) out.push(name);
+    } else if (!excluded.has(name) && (prefix || rootFile(name))) out.push(name);
   }
   return out;
+}
+/** The packaged art manifest tells the gallery which originals this build
+ * leaves out, so it shows a note instead of requesting a missing file. */
+function packagedManifest(data) {
+  const manifest = JSON.parse(data.toString('utf8'));
+  for (const entry of manifest) {
+    const hit = withheldBy('assets/' + entry.file);
+    if (hit) Object.assign(entry, { packaged: false, withheld: hit.reason });
+  }
+  return Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
 }
 const table = Array.from({ length: 256 }, (_, n) => {
   let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0;
@@ -34,6 +52,7 @@ await mkdir(destination, { recursive: true });
 for (const source of await runtimeFiles(root)) {
   const name = source.replace(/\.mjs$/, '.js');
   let data = await readFile(path.join(root, source));
+  if (source === 'art-manifest.json' && withheld.length) data = packagedManifest(data);
   if (/\.(m?js|html|css|json)$/i.test(source)) {
     // Change only explicit local module suffix references, retaining image bytes.
     data = Buffer.from(data.toString('utf8').replace(/\.mjs(?=["'`?])/g, '.js'));
@@ -45,6 +64,15 @@ for (const source of await runtimeFiles(root)) {
   entries.push({ name, data, sha256: createHash('sha256').update(data).digest('hex') });
 }
 if (!entries.some(entry => entry.name === 'index.html')) throw new Error('Missing root index.html');
+// A withheld file must not be needed: no shipped runtime file may name one.
+for (const { folder } of withheld) {
+  const names = (await readdir(path.join(root, folder))).filter((name) => !name.startsWith('.'));
+  for (const entry of entries.filter((e) => /\.(js|html|css)$/i.test(e.name))) {
+    const text = entry.data.toString('utf8');
+    const hit = names.find((name) => text.includes(name));
+    if (hit) throw new Error(`${entry.name} refers to withheld ${folder}${hit}`);
+  }
+}
 const unpackedBytes = entries.reduce((sum, entry) => sum + entry.data.length, 0);
 if (entries.length > 1000 || unpackedBytes > 500 * 1024 * 1024) throw new Error('itch.io archive limits exceeded');
 const locals = [], directories = []; let offset = 0;
@@ -65,6 +93,6 @@ end.writeUInt32LE(0x06054b50); end.writeUInt16LE(entries.length, 8); end.writeUI
 const zip = Buffer.concat([...locals, centralDirectory, end]);
 const zipPath = path.join(root, 'dist', config.slug + '-itch.zip');
 await writeFile(zipPath + '.tmp', zip); await rename(zipPath + '.tmp', zipPath);
-const report = { slug: config.slug, title: config.title, archive: path.basename(zipPath), entry: 'index.html', files: entries.length, unpackedBytes, zipBytes: zip.length, sha256: createHash('sha256').update(zip).digest('hex'), recommendedEmbed: config.embed, entries: entries.map(({ name, data, sha256 }) => ({ name, bytes: data.length, sha256 })) };
+const report = { slug: config.slug, title: config.title, archive: path.basename(zipPath), entry: 'index.html', files: entries.length, unpackedBytes, zipBytes: zip.length, sha256: createHash('sha256').update(zip).digest('hex'), recommendedEmbed: config.embed, withheld: withheld.map(({ folder, reason }) => ({ folder, reason })), entries: entries.map(({ name, data, sha256 }) => ({ name, bytes: data.length, sha256 })) };
 await writeFile(path.join(root, 'dist', 'build-report.json'), JSON.stringify(report, null, 2) + '\n');
 console.log(`${config.title}: ${zipPath} (${entries.length} files; ${(zip.length / 1048576).toFixed(2)} MiB)`);

@@ -10,6 +10,11 @@ Use Click to Play, a 960×540 embed (the game is exactly 2× the original 480×2
 
 The runtime has no CDN, account, API key, backend, Node process or cross-origin isolation requirement. Start/audio input is user-initiated.
 
+## What the ZIP carries (v1.0)
+
+- **Player docs only.** The exporter ships `README.md`, `CHANGELOG.md` and licence files (`assets/SOURCE-LICENSE.txt`). Research, audit and design notes (`RESEARCH*.md`, `LEVEL_DESIGN.md`, `MOVEMENT_AUDIT.md`, this file) stay in the repository.
+- **`assets/player/` is withheld (studio decision, 2026-11-10).** Its 17 files are a generic third-party "Pink Monster" pack whose licence is unverified. The game never draws them (the gallery always listed them as archive-only), and the art-preservation rule is about the repository, not the upload, so the repository keeps them byte-identical and the ZIP leaves them out. The rule lives in `itch.json` under `withhold`. The exporter skips the folder, marks those 17 entries `packaged: false` in the ZIP's copy of `art-manifest.json`, and fails the build if any shipped HTML, CSS or JS names one of the withheld files. The packaged gallery shows them as "not in this build" note cards (86 images plus 17 notes) and never requests them. **To revert** once the owner verifies the licence: delete the `withhold` entry from `itch.json` and rebuild; the gallery then shows all 103 images again.
+
 The package excludes local development servers, tests, Node dependencies and build tools. Keep those development files outside the upload. Rebuild the ZIP after edits; editing source does not update a previously generated/uploaded archive.
 
 The full workspace contains detailed deployment rationale in `../common/docs/ITCH_IO.md`, validation evidence in `../common/docs/VALIDATION.md`, and shared continuity in `../common/SHARED_MEMORY.md`. These documents are optional when copying this project elsewhere. Official upload reference: https://itch.io/docs/creators/html5

@@ -19,7 +19,7 @@ plan is in the brief, §8). `LEVEL_DESIGN.md` covers each level beat by beat.
 
 ```sh
 npm run dev          # http://127.0.0.1:4174 (this folder only, loopback)
-npm test             # 70 tests: 59 model/level/movement + 11 campaign (node:test)
+npm test             # 92 tests: 59 model/level + 22 movement audit + 11 campaign (node:test)
 npm run routes       # regenerate tests/routes.mjs after a level edit
 npm run build:itch   # dist/color-rush-heist-itch.zip
 ```
@@ -120,24 +120,32 @@ lasts for the visit. Settings keep their old keys.
 
 All numbers are in `model.mjs` `WORLD` with comments and pinned by tests (120 Hz
 fixed ticks, px/s; deterministic, so routes replay identically in Node and Chrome).
+`MOVEMENT_AUDIT.md` measures every item of the shared movement rubric
+(`common/docs/MOVEMENT_CRITERIA.md`) before and after the audit pass; the
+measurements live on as `tests/movement-audit.test.mjs`. Input events are stamped
+and applied on the tick they happened in (`loop.mjs`), so every window below is the
+same at 30, 60, 120 or 240 Hz and through frame hitches.
 
 | Feel | Value | Why |
 | --- | --- | --- |
-| Run / start / stop | 330 px/s; 0→330 in 0.13 s; 330→0 in 0.10 s | snappy, no ice |
-| Turnaround (ground) | momentum gone in 0.055 s (6000 px/s²), full speed back in 0.18 s | reversing never feels heavy |
-| Air control | full acceleration; reversing 4200 px/s²; letting go drifts ~18 px | precision first, a little carry |
-| Jump | 470 px/s → 93 px held (2 tiles safe, 3 never); a tap (release halves vy) ≈ 25–45 px | variable height |
-| Apex hang | half gravity while jump is held and \|vy\| < 60 | a readable peak to aim from |
-| Fall | 1.15× gravity past the apex band, capped at 760 px/s | landings read firm and quick |
-| White air jump | ×0.94 (+83 px, 175 px total) | 4-tile ledges |
-| Coyote / buffer | 11 ticks (~92 ms) / 0.12 s, the buffer kept alive through an air dash | no lost inputs |
-| Corner correction | rising into a ceiling corner by ≤ 6 px slides past it | no unfair bonks |
+| Run / start / stop | 330 px/s; 0→330 in 0.10 s; 330→0 in 0.10 s | snappy, no ice |
+| Turnaround (ground) | momentum gone in 0.042 s (8000 px/s²), full speed back in 0.142 s | reversing never feels heavy |
+| Air control | 79% of the ground's acceleration; reversing 4200 px/s² (0.21 s, never a flip); letting go drifts ~18 px | precision first, a little carry |
+| Jump | 470 px/s → 93 px held (2 tiles safe, 3 never); a tap (release keeps 60% of vy) = 34 px, 0.35 of the hold | variable height |
+| Apex hang | half gravity while jump is held and \|vy\| < 60 (+0.12 s) | a readable peak to aim from |
+| Fall | 1.3× gravity past the apex band, capped at 760 px/s | an asymmetric arc: landings read firm and quick |
+| White air jump | ×0.94 (+83 px, 175 px total); two small puffs under Rubik's feet while it is unspent | 4-tile ledges; the resource reads on him |
+| Support | the feet (±11 px, within 2 px of the drawn legs), not the 40 px box | he never stands on the air past an edge |
+| Lip rest | when only the box's edge meets a lip, ≤ 4 ticks on it: scramble on when moving toward it, otherwise slip off | no "looked landed but fell", no landing with the feet short |
+| Coyote / buffer | 14 ticks (117 ms) from the feet leaving / 0.12 s; buffers age in real time through freezes (kept alive through an air dash) | no lost inputs, no stale ones |
+| Corner correction | rising into a ceiling corner, or dashing into a lip's underside, by ≤ 6 px slides past it | no unfair bonks |
 | Ledge assist | meeting a lip with the feet ≤ 12 px below its top steps onto it | no "visually made it but didn't"; 12 < 32 so it never creates a climb (93+12 < 128, 175+12 < 192) |
 | Dash | horizontal only (left/right/facing), 850 px/s × 0.17 s = 145 px, gravity-free, one in the air, 4-tick freeze-frame | horizontal keeps the gap rules exact and readable |
-| Dash-jump | jump during a ground dash keeps 560 px/s, bleeding to run speed at 900 px/s² (~+2 tiles of gap) | player expression; never required |
-| Stomp | hold jump (or press it as you land) for the high bounce (195 px over the card's floor), else a hop (~150) | bounce-height variety |
+| Dash-jump | jump during a ground dash keeps 560 px/s, bleeding to run speed at 900 px/s² | player expression; never required |
+| Stomp | hold jump (or press it as you land: 0.12 s before, in the 0.08 s freeze or 0.05 s after) for the high bounce (195 px over the card's floor), else a hop (~150) | bounce-height variety; a freeze press never spends the air jump |
 | Respawn | 0.45 s hop; keys held since the death stay locked until released; a jump pressed in its last 0.12 s fires | no running straight back into the water, no lost input |
-| Hitbox | Rubik 40×52 inside his 56×60 drawn art, feet on the ground line; card body 48×84 | tested against the PNG alpha |
+| Pause | a direction held through a pause applies on resume; presses in the menu never reach Rubik | no lost or phantom input |
+| Hitbox | Rubik 40×52 inside his 56×60 drawn art, feet on the ground line; card body 48×84 (8 px inside the drawn card); spear band = the drawn spear head (green 50–68, red 46–64 px up) | tested against the PNG alpha and the canvas |
 
 Juice supports precision rather than hiding it: squash/stretch on jump, landing, air
 jump, dash-jump and stomps, the stomped card squashed flat, dust on landings and
@@ -151,7 +159,10 @@ model, re-checked in tests): green jump crosses 11 water tiles, green dash-jump 
 green jump + dash 17, white double jump **19** (an air jump saved for the fall resets
 the falling speed; the brief estimated 15), white dash-jump + double jump 22. So 1-4's
 orb twist gap is **20 tiles** (white needs the dash) and 1-2's stomp-only heights are
-7–8 tiles (the double jump's 175 px never reaches them).
+7–8 tiles (the double jump's 175 px never reaches them). The movement audit's gap lab
+(bank to bank at the same height, `tests/movement-audit.test.mjs` F) gives green jump
+10, green jump + dash 15, white double 17, white double + dash 20 tiles, identical
+before and after the audit's tuning; every level gate test re-passes.
 
 ## Mechanics (what is implemented)
 
@@ -223,11 +234,14 @@ derived canvases; no asset file is modified.
   auto-tiler; `levels/1-1.mjs … 1-6.mjs` — one frozen data module per level;
   `levels/index.mjs` — the order.
 - `model.mjs` — pure deterministic simulation of one level (`createGame(level, {hints, owned})`).
+- `loop.mjs` — the pure fixed-step clock: stamped input changes applied on their own tick.
 - `campaign.mjs` — pure campaign rules and the try-wrapped save.
 - `game.mjs` — front end: renderer, map, cards, tallies, HUD, input, audio, `window.__game`.
 - `index.html`, `style.css`, `embed.css`, `embed.js` — the plain green page and itch iframe mode.
 - `gallery.html`, `gallery.mjs`, `gallery.css`, `art-manifest.json` — the art archive
   (still shipped for QA; nothing in the game links to it).
+- `tests/movement-audit.test.mjs` — the movement rubric, measured (`MOVEMENT_AUDIT.md`);
+  `tests/browser-movement.mjs` — its real-Chrome checks (dev tool, needs Playwright).
 - `tests/model.test.mjs`, `tests/campaign.test.mjs` — the suites; `tests/routes.mjs` —
   generated route fixtures; `tests/route-planner.mjs`, `tests/route-scripts.mjs`,
   `tests/generate-routes.mjs` — the planner that produced them; `tests/png.mjs` — a
@@ -254,14 +268,39 @@ color, jumps, grounded, vy, dashTime, dashCooldown, dashCharge, …}`. New field
 `levelId`, `level {id, name, idea, kit, gets, par, cols}`, `dashUnlocked`, `gets`,
 `bounces`, `dashes`, `calm`, `intro`, `getCard`, `map {cursor, id, walking, revealing,
 menuOpen}`, `campaign {levels, unlocked, stickerTotal, totalStickers, worldClear,
-worldMedals, forestColor}`, `save`, `result` (the last tally).
+worldMedals, forestColor}`, `save`, `result` (the last tally), `simClock` (the
+`performance.now()` moment the simulation corresponds to, for mapping a key's
+`timeStamp` to its tick).
 
 Routes (`tests/routes.mjs`): `ROUTES[levelId] = { baseline, mastery }`, plain JSON
 `[seconds, input]` arrays using only `left/right/jump/jumpReleased/dash/color`; each
 starts from `startLevel(id)` / `createGame(id)`. `BASELINE_ROUTE` / `MASTERY_ROUTE`
 remain as aliases for 1-6's routes.
 
-## Validation (actual results, 2026-11-09)
+## Validation (actual results)
+
+**Movement audit, 2026-11-10** (`MOVEMENT_AUDIT.md`: 29 rubric items, before 19 PASS /
+4 WARN / 6 FAIL, after 27 PASS / 2 WARN / 0 FAIL):
+
+- `npm test`: **92/92 pass** (59 model/level, 22 movement audit, 11 campaign).
+- Routes regenerated for the new movement, baseline / mastery: 1-1 11.5 / 15.7 s,
+  1-2 20.9 / 26.1, 1-3 20.1 / 25.3, 1-4 14.7 / 15.1, 1-5 18.1 / 20.2, 1-6 34.7 / 36.4
+  (escape 11.75 / 13.5; the Quick par stays 18 s, within 1 s of 1.5 × 11.75). All win
+  with 0 deaths, mastery 3/3; stealth baselines and every mastery route unseen (1-2's
+  baseline is seen once, as before: it is not a stealth level).
+- `npm run build:itch`: 133 files (now with `loop.js` and this audit), a 7.1 MiB ZIP (exact size and
+  SHA-256 in `dist/build-report.json`).
+- Real Chrome, trusted key events (`tests/browser-movement.mjs` against `node serve.mjs
+  --port 4401` on this folder and on the built `dist/itch` folder): all 12 routes win;
+  a press shows on the next rendered frame or the one after; under 40-90 ms main-thread
+  hitches every jump fires on its keydown's tick; a direction held through pause/resume
+  keeps moving; Space on the focused Resume resumes without a jump; the drawn sprite,
+  diffed on the canvas, has its feet line on the floor and its feet within 2 px of the
+  support; lookahead 1.57 s at run speed. The built game also plays with real keys in a
+  sandboxed 960×640 iframe. No console errors or failed requests.
+
+**Earlier pass, 2026-11-09** (before the movement audit; the flow checks below were not
+all re-run on the new build, and the route times and test counts above supersede):
 
 - `npm test`: **70/70 pass** (59 model/level/movement, 11 campaign). They cover the six
   levels' shape and kits; **no sleeping card in any level or route**; GET order and
@@ -301,7 +340,10 @@ remain as aliases for 1-6's routes.
 Known limits: white can double-jump 1-4's develop gaps (the level starts green, so the
 dash is the guided way); 1-4's pillar gap can also be crossed by stomping its
 lookout and air-jumping (an intended alternative); 1-5's perch-to-perch jump passes
-the enforcer; guards follow fixed timers.
+the enforcer; guards follow fixed timers. Movement audit WARNs: the skill gradient
+(expert lines 2-8% faster than the frame-perfect guided bots, below the rubric's 15%;
+see `MOVEMENT_AUDIT.md`) and the original art's stride/dash frames, whose feet sit
+4-10 px off the support (all standing, landing and falling frames are within 2 px).
 
 Not verified: physical phones, Safari/Firefox, subjective audio, first-play times and
 whether players find it fun. Those need the user's playtest (RESEARCH_PROGRESSION.md

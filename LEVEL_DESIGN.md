@@ -18,6 +18,7 @@ the build differs, this file says so.
 | Green dash-jump / jump + dash | crosses ≤ 13 / ≤ 17 tiles | 1-4's 12/14-tile gaps need the dash as green |
 | Dash | 145 px, gravity-free, horizontal only | 1-4's 20-tile orb gap needs it as white too |
 | Ledge assist | a lip ≤ 12 px above the feet is stepped onto | below every gating height (93+12 < 128, 175+12 < 192) |
+| Support (movement audit) | the feet (±11 px), not the 40 px box; a box edge alone on a lip scrambles on (moving toward it) or slips off within 4 ticks | the takeoff point is unchanged (coyote counts from the feet); the audit's gap lab gives the same envelope before and after |
 | Card body | 48 × 84 px | a 3-tile corridor fits a card but not a jump over it |
 
 - One new idea per level, in introduce → develop → twist → conclude order; older ideas

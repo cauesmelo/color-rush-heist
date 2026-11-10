@@ -406,24 +406,29 @@ kbd {
 }
 /* The jam title card is shown as an artifact in a frame, not an instruction:
  * the JPEG (an original; its own colours, outside the palette) decimated by a
- * whole factor (5 source px per art px: 96 x 54) and framed in cream and ink. */
+ * whole factor (4 source px per art px: 60 x 34, so 2 on a 2x display) and framed
+ * in cream and ink, its caption underneath. */
 .relic {
-  margin: calc(var(--ap) * 2) auto;
+  display: grid;
+  justify-items: center;
+  margin: calc(var(--ap) * 2) 0;
   padding: 0;
-  width: calc(var(--ap) * 100);
-  border: calc(var(--ap) * 2) solid var(--cream);
-  box-shadow: 0 0 0 calc(var(--ap)) var(--ink), calc(var(--ap) * 3) calc(var(--ap) * 3) 0 0 var(--void);
 }
 .relic img {
   display: block;
-  width: 100%;
+  width: calc(var(--ap) * 64);
+  height: calc(var(--ap) * 38);
+  border: calc(var(--ap) * 2) solid var(--cream);
+  box-shadow: 0 0 0 calc(var(--ap)) var(--ink), calc(var(--ap) * 3) calc(var(--ap) * 3) 0 0 var(--void);
   image-rendering: pixelated;
 }
 .relic figcaption {
-  padding: 0 0 calc(var(--ap) * 2);
+  margin-top: calc(var(--ap) * 3);
   text-align: center;
-  color: var(--ink);
-  background: var(--cream);
+  color: var(--mist);
+}
+.menu button[data-show="menu"] {
+  margin-top: calc(var(--ap) * 3);
 }
 /* Results: the canvas draws the card; these are its one-primary-action row. */
 .results-actions {
@@ -437,11 +442,13 @@ kbd {
   z-index: 6;
 }
 .results-actions > * {
-  flex: 1;
+  flex: none;
+  width: calc(var(--ap) * 80);
   text-align: center !important;
 }
+/* Whole art pixels only: 106 + 4 + 80 = 190 (a flex ratio gave half-pixel widths). */
 .results-actions .primary {
-  flex: 1.4;
+  width: calc(var(--ap) * 106);
 }
 #continue::after {
   content: "";

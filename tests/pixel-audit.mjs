@@ -48,6 +48,8 @@ const outDir = path.resolve(opt("out", "pixel-audit-out"));
 const label = opt("label", "run");
 const only = (opt("only", "") || "").split(",").filter(Boolean);
 const dprs = (opt("dpr", "1,2") || "1,2").split(",").map(Number);
+// --viewport 2000x1200 audits a window big enough for a 2x or 3x surface (whole-number scaling).
+const [vw, vh] = (opt("viewport", "1280x720") || "1280x720").split("x").map(Number);
 mkdirSync(outDir, { recursive: true });
 
 const require = createRequire(process.env.PLAYWRIGHT_FROM || new URL("../../common/package.json", import.meta.url).pathname);
@@ -185,6 +187,33 @@ function analyse(png, origin, k, rect, { step, block, opaque }) {
   return { pixels: grid.length, offPalette: offPixels, offColours: off.size, worstOff: worst, intermediate, blocks, gridBad: bad, badAt };
 }
 
+/** Whole-canvas blur check: every k x k device-pixel block of the canvas must be
+ * one colour when k > 1 (an integer scale of a pixel image). Anti-aliased DOM text,
+ * a fractional scale or a smoothed image breaks it. Returns {blocks, bad}. */
+function blurBlocks(png, origin, k, w, h) {
+  let blocks = 0,
+    bad = 0;
+  for (let by = 0; by < h; by++)
+    for (let bx = 0; bx < w; bx++) {
+      const x0 = origin[0] + bx * k,
+        y0 = origin[1] + by * k;
+      if (x0 + k > png.width || y0 + k > png.height || x0 < 0 || y0 < 0) continue;
+      const first = (y0 * png.width + x0) * 4;
+      let same = true;
+      for (let dy = 0; dy < k && same; dy++)
+        for (let dx = 0; dx < k; dx++) {
+          const i = ((y0 + dy) * png.width + x0 + dx) * 4;
+          if (png.rgba[i] !== png.rgba[first] || png.rgba[i + 1] !== png.rgba[first + 1] || png.rgba[i + 2] !== png.rgba[first + 2]) {
+            same = false;
+            break;
+          }
+        }
+      blocks++;
+      if (!same) bad++;
+    }
+  return { blocks, bad };
+}
+
 // -------------------------------------------------------------- state driving --
 const save = (levels = {}, extra = {}) =>
   JSON.stringify({
@@ -212,7 +241,7 @@ class Driver {
     this.browser = browser;
     this.dpr = dpr;
   }
-  async open({ saveJson = null, viewport = { width: 1280, height: 720 }, mobile = false, query = "", delayArt = 0 } = {}) {
+  async open({ saveJson = null, viewport = { width: vw, height: vh }, mobile = false, query = "", delayArt = 0 } = {}) {
     if (this.context) await this.context.close();
     this.context = await this.browser.newContext({ viewport, deviceScaleFactor: mobile ? 3 : this.dpr, isMobile: mobile, hasTouch: mobile });
     // Deterministic time: the page's clock (rAF, timers, performance.now) only
@@ -388,7 +417,7 @@ const STATES = [
         await d.ev((n) => document.querySelector(`[data-show="${n}"]`).click(), panel);
         await d.wait(200);
       }
-      return { regions: [D("pause card", "#pause-card", false, ".relic"), D("panel buttons", "#pause-card button", true)] };
+      return { regions: [D("pause card", "#pause-card", false), D("panel buttons", "#pause-card button", true)] };
     },
   })),
   {
@@ -659,8 +688,22 @@ const STATES = [
 // touch pads keep working but are not audited, and nothing here emulates a phone.
 
 // ------------------------------------------------------------------ main --
+/** Original exhibits shown in the UI with their own colours (the credits' JPEG): painted
+ * ink before anything is measured, so they are neither judged nor counted as blur. */
+const EXHIBITS = [".relic"];
 async function measure(d, shotPath, result) {
-  const png = readPng(shotPath);
+  let png = readPng(shotPath);
+  const dprNow = await d.ev(() => devicePixelRatio);
+  const holes = await d.ev((sels) => sels.flatMap((sel) => [...document.querySelectorAll(sel)].map((e) => {
+    const r = e.getBoundingClientRect();
+    return [r.x, r.y, r.x + r.width, r.y + r.height];
+  })), EXHIBITS);
+  if (holes.length) {
+    png = { ...png, rgba: Uint8Array.from(png.rgba) };
+    for (const [x0, y0, x1, y1] of holes)
+      for (let y = Math.max(0, Math.floor(y0 * dprNow)); y < Math.min(png.height, Math.ceil(y1 * dprNow)); y++)
+        for (let x = Math.max(0, Math.floor(x0 * dprNow)); x < Math.min(png.width, Math.ceil(x1 * dprNow)); x++) png.rgba.set([0, 0, 0, 255], (y * png.width + x) * 4);
+  }
   const info = await d.ev(() => {
     const box = document.querySelector("#game").getBoundingClientRect();
     const stage = document.querySelector("#stage").getBoundingClientRect();
@@ -673,6 +716,7 @@ async function measure(d, shotPath, result) {
     k = (info.canvas.w * dpr) / W;
   const scale = { cssWidth: +info.canvas.w.toFixed(2), deviceWidth: +(info.canvas.w * dpr).toFixed(2), k: +k.toFixed(4), integer: Math.abs(k - Math.round(k)) < 0.001 || (k < 1 && false) };
   result.scale = scale;
+  if (scale.integer && k >= 2) result.blur = blurBlocks(png, origin, Math.round(k), W, H);
   const out = [];
   for (const region of result.regions) {
     let rects = [];
@@ -690,19 +734,7 @@ async function measure(d, shotPath, result) {
       out.push({ name: region.name, missing: true });
       continue;
     }
-    // An excluded exhibit (the credits JPEG, an original with its own colours) is
-    // painted ink in a copy of the screenshot, so it is not judged.
-    let shot = png;
-    if (region.skip) {
-      const holes = await d.ev((sel) => [...document.querySelectorAll(sel)].map((e) => {
-        const r = e.getBoundingClientRect();
-        return [r.x, r.y, r.x + r.width, r.y + r.height];
-      }), region.skip);
-      shot = { ...png, rgba: Uint8Array.from(png.rgba) };
-      for (const [x0, y0, x1, y1] of holes)
-        for (let y = Math.max(0, Math.floor(y0 * dpr)); y < Math.min(png.height, Math.ceil(y1 * dpr)); y++)
-          for (let x = Math.max(0, Math.floor(x0 * dpr)); x < Math.min(png.width, Math.ceil(x1 * dpr)); x++) shot.rgba.set([0, 0, 0, 255], (y * png.width + x) * 4);
-    }
+    const shot = png;
     const agg = { name: region.name, dom: !!region.dom, opaque: region.opaque, pixels: 0, offPalette: 0, offColours: 0, intermediate: 0, blocks: 0, gridBad: 0, worstOff: [] };
     for (const r of rects) {
       const rect = r.css
@@ -756,7 +788,7 @@ for (const dpr of dprs) {
       await d.page.screenshot({ path: file });
       await measure(d, file, run);
       run.errors = d.errors.slice();
-      run.pass = run.regions.every((r) => r.missing || r.pass) && run.scale.integer && !run.errors.length;
+      run.pass = run.regions.every((r) => r.missing || r.pass) && run.scale.integer && !(run.blur?.bad > 0) && !run.errors.length;
     } catch (e) {
       run.pass = false;
       run.error = String(e.stack || e).split("\n").slice(0, 3).join(" | ");
@@ -764,7 +796,7 @@ for (const dpr of dprs) {
     if (!run.pass) failures++;
     report.runs.push(run);
     const fails = (run.regions || []).filter((r) => !r.missing && !r.pass);
-    console.log(`${run.pass ? "PASS" : "FAIL"} ${tag}  ${run.error || fails.map((r) => `${r.name}[off ${r.offPalette}/${r.pixels} mid ${r.intermediate} grid ${r.gridBad}/${r.blocks}${process.env.VERBOSE ? ` worst ${r.worstOff} at ${JSON.stringify(r.badAt)}` : ""}]`).join("; ")}`);
+    console.log(`${run.pass ? "PASS" : "FAIL"} ${tag}  ${run.blur?.bad ? `[blur ${run.blur.bad}/${run.blur.blocks}] ` : ""}${run.error || fails.map((r) => `${r.name}[off ${r.offPalette}/${r.pixels} mid ${r.intermediate} grid ${r.gridBad}/${r.blocks}${process.env.VERBOSE ? ` worst ${r.worstOff} at ${JSON.stringify(r.badAt)}` : ""}]`).join("; ")}`);
   }
   if (d.context) await d.context.close();
   d.context = null;
@@ -785,7 +817,8 @@ const totals = report.runs.reduce(
   },
   { regions: 0, regionFails: 0, off: 0, mid: 0, gridBad: 0, blocks: 0, pixels: 0 },
 );
-report.summary = { runs: report.runs.length, runFailures: failures, ...totals };
+const blur = report.runs.reduce((t, r) => ({ blocks: t.blocks + (r.blur?.blocks ?? 0), bad: t.bad + (r.blur?.bad ?? 0) }), { blocks: 0, bad: 0 });
+report.summary = { runs: report.runs.length, runFailures: failures, ...totals, blur };
 writeFileSync(path.join(outDir, "report.json"), JSON.stringify(report, null, 1));
-console.log(`\n${label}: ${report.runs.length - failures}/${report.runs.length} runs pass; ${totals.regions - totals.regionFails}/${totals.regions} regions pass; off-palette px ${totals.off}/${totals.pixels}, intermediate px ${totals.mid}, bad art blocks ${totals.gridBad}/${totals.blocks}`);
+console.log(`\n${label}: ${report.runs.length - failures}/${report.runs.length} runs pass; ${totals.regions - totals.regionFails}/${totals.regions} regions pass; off-palette px ${totals.off}/${totals.pixels}, intermediate px ${totals.mid}, bad art blocks ${totals.gridBad}/${totals.blocks}; scaled-canvas blur blocks ${blur.bad}/${blur.blocks}`);
 process.exit(failures ? 1 : 0);

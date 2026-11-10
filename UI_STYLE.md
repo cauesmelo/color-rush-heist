@@ -132,11 +132,16 @@ new UI.
   palette pixels. `tests/pixel-ui.test.mjs` pins the functions in `game.mjs` that
   still use a non-pixel call to exactly that list.
 - **The credits' jam title card** (`intro.jpeg`, an original JPEG) is shown
-  decimated by 5 (96 x 54 art px) in a pixel frame; its colours are its own and
-  the audit skips it.
+  decimated by 4 (60 x 34 art px: a whole factor, 2 on a 2x display) in a pixel
+  frame; its colours are its own and the audit masks it out.
 - **Windows below 1x** and phones: the browser resamples (nearest neighbour). Phones
   are out of scope (owner decision); the touch pads keep working and wear the same
   sprites, and are not audited.
+- **Surfaces of 3x and more** (a window of 2880 x 1620 CSS px at DPR 1, or a
+  4K fullscreen): the canvas UI and the DOM's body text stay crisp, but the browser's
+  rasteriser leaves a faint edge on the DOM's large headings ("Paused", "Options").
+  Measured at 1x and 2x (and 2x on a DPR 1 window of 2000 x 1200: 0 stray pixels in
+  3.1 M), not at 3x.
 - **Sub-pixel layout**: the CSS relies on the browser placing boxes on the device
   grid; at a display scale that is not a whole number of device pixels per art
   pixel the DOM text could blur. The audit covers DPR 1 and 2 only.

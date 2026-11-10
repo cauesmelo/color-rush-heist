@@ -5,10 +5,11 @@
  * Each audit run saves one full-window screenshot per state (dpr<N>-<state>.png).
  * This crops the game surface out of each, lays before and after side by side,
  * and renders sheets as PNGs (nearest-neighbour, so the pixels are what the
- * player sees). Also writes zoom.png: 4x crops of chosen details at DPR 2, where
- * any blur would show. */
+ * player sees). Also writes zoom-dpr2.png: 4x crops of chosen details from the
+ * DPR 2 captures, where any blur or anti-aliasing would show. */
 import { createRequire } from "node:module";
 import { readdirSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -43,10 +44,10 @@ const per = rows;
 const sheets = [];
 for (let i = 0; i < ids.length; i += per) {
   const chunk = ids.slice(i, i + per);
-  const html = `<style>body{margin:0;background:#222;color:#ddd;font:12px monospace}.row{display:flex;gap:6px;margin:6px;align-items:flex-start}.tile{position:relative}.tile b{position:absolute;left:4px;top:4px;background:#000;padding:1px 4px}.img{image-rendering:pixelated}.cap{margin:6px;font-size:14px;color:#fff}.missing{width:480px;height:270px;display:grid;place-items:center;background:#400}</style>${chunk
+  const html = `<style>body{margin:0;background:#222;color:#ddd;font:12px monospace}.row{display:flex;gap:6px;margin:6px;align-items:flex-start}.tile{position:relative;flex:none}.tile b{position:absolute;left:4px;top:4px;background:#000;padding:1px 4px}.img{image-rendering:pixelated}.cap{margin:6px;font-size:14px;color:#fff}.missing{width:480px;height:270px;display:grid;place-items:center;background:#400}</style>${chunk
     .map((id) => `<div class="cap">${id}</div><div class="row">${tile(before, id, "before")}${tile(after, id, "after")}</div>`)
     .join("")}`;
-  const file = path.join(out, `_sheet-${i / per}.html`);
+  const file = path.join(os.tmpdir(), `crh-sheet-${process.pid}-${i / per}.html`);
   writeFileSync(file, html);
   await page.goto(pathToFileURL(file).href);
   const height = await page.evaluate(() => document.body.scrollHeight);
@@ -55,5 +56,25 @@ for (let i = 0; i < ids.length; i += per) {
   await page.screenshot({ path: path.join(out, name), fullPage: true });
   sheets.push(name);
 }
+// Zoom crops from the DPR 2 captures (device px; stage at (320, 180) of the 2560x1440 window).
+const ZOOMS = [
+  ["results-stamps", "stamps and sockets", 600, 100, 190, 250],
+  ["pause", "pause buttons", 300, 280, 360, 150],
+  ["play-1-4-hud", "HUD corner", 0, 0, 270, 200],
+  ["map-progress", "map nodes", 220, 260, 420, 170],
+];
+const z = 2,
+  zoomTile = (dir, [id, , x, y, w, h], label) => {
+    const file = path.join(dir, `dpr2-${id}.png`);
+    if (!existsSync(file)) return "";
+    return `<div class="tile"><div class="img" style="width:${w * 2 * z}px;height:${h * 2 * z}px;background:url('${pathToFileURL(file).href}') -${(320 + 2 * x) * z}px -${(180 + 2 * y) * z}px / ${2560 * z}px ${1440 * z}px no-repeat"></div><b>${label}</b></div>`;
+  };
+const zoomHtml = `<style>body{margin:0;background:#222;color:#ddd;font:12px monospace}.row{display:flex;gap:6px;margin:6px;align-items:flex-start}.tile{position:relative;flex:none}.tile b{position:absolute;left:4px;top:4px;background:#000;padding:1px 4px}.img{image-rendering:pixelated}.cap{margin:6px;font-size:14px;color:#fff}</style>${ZOOMS.map((zm) => `<div class="cap">${zm[0]}: ${zm[1]} (DPR 2, ${z}x zoom of device pixels)</div><div class="row">${zoomTile(before, zm, "before")}${zoomTile(after, zm, "after")}</div>`).join("")}`;
+const zoomFile = path.join(os.tmpdir(), `crh-sheet-${process.pid}-zoom.html`);
+writeFileSync(zoomFile, zoomHtml);
+await page.setViewportSize({ width: 1600, height: 900 });
+await page.goto(pathToFileURL(zoomFile).href);
+await page.setViewportSize({ width: 1600, height: await page.evaluate(() => document.body.scrollHeight) });
+await page.screenshot({ path: path.join(out, "zoom-dpr2.png"), fullPage: true });
 await browser.close();
-console.log(sheets.join("\n"));
+console.log(sheets.join("\n") + "\nzoom-dpr2.png");

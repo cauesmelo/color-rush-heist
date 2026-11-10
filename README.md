@@ -21,7 +21,7 @@ plan is in the brief, §8). `LEVEL_DESIGN.md` covers each level beat by beat.
 
 ```sh
 npm run dev          # http://127.0.0.1:4174 (this folder only, loopback)
-npm test             # 106 tests: 67 model/level + 22 movement audit + 12 campaign + 5 cone-blind rule (~18 s)
+npm test             # 115 tests: 69 model/level + 22 movement audit + 16 campaign/save + 5 cone-blind rule + 3 release (~20 s)
 node tests/cone-blind-audit.mjs   # ~40 s: full report of what a cone-blind player gets past (LEVEL_DESIGN.md)
 npm run routes       # regenerate tests/routes.mjs after a level edit
 npm run build:itch   # dist/color-rush-heist-itch.zip
@@ -109,19 +109,62 @@ declared pair). `LEVEL_DESIGN.md` lists each card's safe and expert line.
    file is untouched) and "World 2: Blue Mountains - coming soon" → title.
 
 **Pause (in a level):** Resume, Back to checkpoint, Restart level, World map, Sound /
-Music / Timer, Controls, Art ("Art by Vitor Farias"), Credits. **Map menu (P/Esc on
-the map):** Resume, the same settings and panels, and **Reset progress** (with a
-confirm panel). Pausing, the map menu, blur or a hidden tab suspend all audio.
+Music / Options, Controls, Art ("Art by Vitor Farias"), Credits. **Options:** Slow
+spotting (the assist), Less motion and Timer. **Map menu (P/Esc on the map):** Resume,
+the same settings and panels, and **Reset progress** (with a confirm panel). Pausing,
+the map menu, blur or a hidden tab suspend all audio. The title shows the release as a
+`v1.0` DOM label (bottom left); Credits add the jam track, the version line and the
+AI-assistance disclosure.
+
+## Accessibility (v1.0)
+
+- **Never colour alone.** White, green and red each have a glyph: a square, a triangle
+  and a diamond. Every colour mechanic wears it as a badge: a cream disc with an ink rim.
+  - The cards carry it at the corner, beside their original suit numerals (green 1,
+    red 3).
+  - Rubik wears his current form's badge at the back of his head, from 1-2 on.
+  - The red-only stones carry red's badge over their crack pattern.
+  - The HUD form cards and the touch pads use the same glyphs, ink-outlined.
+  - Cone states read by the "?" and "!" bubbles, and a cone that can see Rubik's colour
+    is lit with a crisp edge, while one that can't is faint. None of these depends on
+    hue.
+  - Checked on real frames with Chrome's emulated protanopia, deuteranopia, tritanopia
+    and achromatopsia. Before the badges, Rubik's forms differed by hue only, and the
+    stones' bare red diamond vanished on their olive centre under protanopia and
+    deuteranopia.
+- **Slow spotting** (assist, off by default, saved): a card must keep Rubik in sight
+  twice as long before "?" (0.5 s) and "!" (1.2 s; 0.3 s for "?" in the escape).
+  - Cones, patrols, turns, the spear and every physics number are unchanged. Every
+  baseline and mastery route still wins with 0 deaths (tested).
+  - A run with it on at any moment clears, unlocks and keeps its stickers and best
+    time, but earns no Ghost, Takedown or Quick stamp. The result card says so. Stamps
+    already earned are never removed.
+- **Less motion:** follows `prefers-reduced-motion` until the player picks in Options,
+  which then wins. Under it there is no shake, flash, particle (including stone
+  debris), squash or iris, and the map snaps. State cues stay, steady instead of
+  pulsing. The root QA asserts all of this from both the system and Options.
 
 ## Save (campaign.mjs)
 
-Key `color-rush-heist:save`, version 1: last level, comic seen, the hint budget, and
-per level `clear`, `best`, `stickers`, `unseen`, `quick`, `color`. A sticker is saved
-the moment it is touched and is never removed; a clear is saved at the goal; mid-level
-positions are never saved. Loading sanitizes everything (unknown levels, bad sticker
-numbers, non-finite times and unknown hint states are dropped). Every storage call is
-wrapped in `try`: with blocked storage (private window, sandboxed iframe) progress
-lasts for the visit. Settings keep their old keys.
+One versioned key, `color-rush-heist:v2:save` (version 2, since 1.0.0). It holds the
+last level, comic seen, the hint budget, and per level `clear`, `best`, `stickers`,
+`unseen`, `takedown`, `takedownBest`, `quick` and `color`. It also holds `settings`
+(`sfx`, `music`, `timer`, `slowSpotting`, and `reduceMotion`: null follows the
+system) and `migratedFrom`.
+
+- A sticker is saved the moment it is touched and is never removed. A clear is saved at
+  the goal. Mid-level positions are never saved.
+- Loading sanitizes everything: unknown levels, bad sticker numbers, non-finite times,
+  unknown hint states and malformed settings fall back field by field.
+- **Migration:** when the v2 key is absent, the 0.x v1 save (`color-rush-heist:save`)
+  and the old per-setting keys (`:sfx`, `:music`, `:timer`, and `:storySeen` from
+  before World 1) are imported once and written as v2. The old keys are left in place
+  for a rollback, and the v2 key's presence marks the migration done. A corrupt or
+  unknown-version v2 value gives a fresh save, never a re-import.
+- Every storage call is wrapped in `try`. With blocked storage (a private window, a
+  sandboxed or third-party itch iframe), the game boots and plays and keeps progress for
+  the visit; the release gate probes this.
+- Reset progress keeps the settings.
 
 ## Movement (crisp, readable, expressive)
 
@@ -159,7 +202,8 @@ jump, dash-jump and stomps, the stomped card squashed flat, dust on landings and
 sharp turnarounds, dash afterimages as solid silhouettes in the form's color, a dash
 refill flash and a light spent-dash shade on Rubik, freeze-frames on dash (4 ticks),
 stomp (0.08 s), smash, knock and theft, and a small shake only on stomps and big
-impacts. Reduced motion turns off shake, flashes, particles and squash.
+impacts. Reduced motion (the system setting, or Options → Less motion) turns off shake,
+flashes, particles and squash.
 
 **Measured envelope** (a 1-tick sweep of takeoff, air-jump and dash timing on the real
 model, re-checked in tests): green jump crosses 11 water tiles, green dash-jump 13,
@@ -249,7 +293,10 @@ pillars by `tilesOnScreen()` in `levels/builder.mjs`.
 - **Archive (60):** World 2 art (`bg2`, `bg2exp`, `tileset_ice`, `inimigo2-Sheet`),
   `rubik_blue` (blue is not playable), `rubik.png` (duplicate of white rows 0–4), 37
   unused Tile slices and the whole `player/` folder (a generic third-party pack, license
-  unverified, never used by the original game).
+  unverified, never used by the original game). **The itch.io ZIP withholds
+  `player/`** (`itch.json` `withhold`, studio decision for v1.0): the repository keeps
+  all 103 images byte-identical, and the packaged gallery shows the 17 withheld entries
+  as "not in this build" notes. Details are in `ITCH_IO.md`.
 
 Runtime-only effects (time-of-day tints, the grey card, the colorized forest) are
 derived canvases; no asset file is modified.
@@ -289,7 +336,7 @@ own kit), `openMap(id?)`, `resetSave()`, `campaign` (the `campaign.mjs` module).
 `stomps`, `spotted`, `knockouts`, `medals` (after a win: `fullFace` = 3/3 this run,
 `neverSpotted`, `quickGetaway` = 1-6 par or `null` elsewhere), `escapeTime`,
 `finishTime`, `checkpoint`, `hint`, `guards`, `stones`, `events`, `camera`,
-`settings`, `audio {musicDecoded, musicPlaying, musicRate, context}` and `player {x, y,
+`settings`, `motion {reduced, source}`, `effects {shake, flash, particles, squash, iris}`, `audio {musicDecoded, musicPlaying, musicRate, context}` and `player {x, y,
 color, jumps, grounded, vy, dashTime, dashCooldown, dashCharge, …}`. New fields:
 `levelId`, `level {id, name, idea, kit, gets, par, cols}`, `dashUnlocked`, `gets`,
 `doorCue` (1-6: the sealed-door cue is drawn),
@@ -306,6 +353,23 @@ starts from `startLevel(id)` / `createGame(id)`. `BASELINE_ROUTE` / `MASTERY_ROU
 remain as aliases for 1-6's routes.
 
 ## Validation (actual results)
+
+**v1.0 release candidate (release squad), 2026-11-10:** see `ITCH_IO.md` "Release gate"
+for the gate tables before and after.
+
+- `npm test`: **115/115**. New tests cover the save v2 migration fixtures, the
+  settings, the assist's timings, assisted clears and stamps, every route winning with
+  the assist on, and the release facts.
+- Movement audit: still 27 PASS / 2 WARN / 0 FAIL (no physics or route changed).
+  `tests/browser-movement.mjs` passes 21/21 against the source.
+- Root QA `ONLY=CTS`: **14/14** on the packaged ZIP. New: the withheld-pack gallery
+  check (86 images and 17 notes), and reduced motion from the system and from Options
+  together with the assist.
+- Colour vision: real frames (1-3, 1-5 white and green, 1-6 inbound and escape, the HUD)
+  were captured under emulated protanopia, deuteranopia, tritanopia and achromatopsia,
+  before and after the badges.
+- The ZIP now has 112 files: 17 `assets/player/` files and 5 research or audit docs
+  were removed, and `CHANGELOG.md` was added.
 
 **Revision five, critic round two (cards with teeth, Ghost/Takedown), 2026-11-10:**
 

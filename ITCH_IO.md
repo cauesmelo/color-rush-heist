@@ -77,7 +77,19 @@ The failures were all release chores:
 
 The ZIP had 133 files and was 7.09 MiB. The probe was ready in 601 ms with 0.24 MiB loaded before ready, and the game booted with storage blocked.
 
-**After:** see the table below, filled in from the actual run.
+**After** (2026-11-10 15:12 UTC, `main` 0fd2b4d, clean and pushed, report `common/artifacts/release-gate/2026-11-10T15-12-06-412Z/`): overall **PASS**, with 0 FAIL and 0 WARN.
+
+| Repo | Build | ZIP | Refs | Meta | Tests | RootZIP | BrowserQA | Probe | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| PASS | PASS | PASS | PASS | PASS | PASS 115/115 | PASS 1/1 | PASS 14/14 | PASS | **PASS** |
+
+- **ZIP:** 112 files, 7.03 MiB (7,368,659 bytes), 7.33 MiB unpacked. Only two Markdown docs ship (0.04 MiB). The largest file is `assets/track.mp3` at 6.69 MiB. SHA-256 is `a0a4c0db463ba4a5241515dd95cee4eb555417a29f8440fd740780b942e4145f`. The exporter is deterministic, and this file is not shipped, so later commits that touch only repository docs build the same bytes.
+- **Refs:** 35 references checked, all relative and present with exact case, with no external loads.
+- **Meta:** found the version label `"v1.0"`, plus 1.0.0, the credits, the changelog heading and the decided embed.
+- **Probe:** ready in 599 ms, with 0.24 MiB loaded before ready (about 0.2 s at 10 Mbit/s). Title frames had a median of 16.7 ms and a p95 of 16.8 ms on SwiftShader. `v1.0` is visible on the title. There were no requests outside the ZIP and no console errors. The game **boots and starts with storage blocked** (304 ms).
+- **BrowserQA:** 14/14 checks on the packaged ZIP. They include the withheld-pack gallery (86 images, 17 notes), reduced motion from the system and from Options with the assist, all six levels on the baseline and mastery routes, the itch iframe and the mobile embed.
+
+No gate check had to change for CRH. The only edits to `common/` were the CTS block of `tests/browser.mjs` (the gallery check now expects the withheld pack; there is a new motion and assist check).
 
 ## Page copy (DRAFT for the owner to approve)
 

@@ -1120,6 +1120,43 @@ test('awareness: "?" after 0.25 s, "!" at 0.6 s, calm again after losing sight',
   assert.equal(d.state, "calm");
   assert.equal(q.spotted, 0);
 });
+test('assist "Slow spotting": "?" after 0.5 s and "!" at 1.2 s; off by default; switching it on marks the run assisted', () => {
+  assert.equal(M.ASSIST.spotScale, 2);
+  const g = fresh("1-5", { slowSpotting: true }),
+    c = only(g, "teacher");
+  assert.deepEqual([g.slowSpotting, g.assisted], [true, true]);
+  Object.assign(c, { x: 900, dir: -1, state: "calm", turning: 0 });
+  place(g, 700, c.floor);
+  ticks(g, seconds(0.45));
+  assert.equal(c.state, "calm", "no '?' at 0.45 s (0.25 s without the assist)");
+  ticks(g, seconds(0.07));
+  assert.equal(c.state, "suspect");
+  ticks(g, seconds(0.6));
+  assert.equal(c.state, "suspect", "no '!' at 1.12 s");
+  ticks(g, seconds(0.1));
+  assert.equal(c.state, "alert");
+  assert.equal(g.spotted, 1);
+  // The cone itself, the patrol and the turn timers are the same.
+  const plain = fresh("1-5");
+  assert.deepEqual(
+    plain.guards.map((x) => [x.reach, x.turnEvery, x.min, x.max]),
+    fresh("1-5", { slowSpotting: true }).guards.map((x) => [x.reach, x.turnEvery, x.min, x.max]),
+  );
+  assert.deepEqual([plain.slowSpotting, plain.assisted], [false, false], "off by default");
+  // Switched on mid-run, the run stays assisted after it is switched off.
+  M.setSlowSpotting(plain, true);
+  M.setSlowSpotting(plain, false);
+  assert.deepEqual([plain.slowSpotting, plain.assisted], [false, true]);
+});
+test("Slow spotting keeps every level winnable: baseline and mastery routes still win with 0 deaths", () => {
+  for (const id of LEVEL_IDS)
+    for (const kind of ["baseline", "mastery"]) {
+      const g = replay(id, ROUTES[id][kind], undefined, { slowSpotting: true });
+      assert.equal(g.phase, "won", `${id} ${kind}`);
+      assert.equal(g.deaths, 0, `${id} ${kind}`);
+      assert.equal(g.medals.assisted, true);
+    }
+});
 test("body contact only knocks Rubik back the way he came; a calm card's back can be brushed; cards are solid", () => {
   const g = fresh("1-5"),
     c = only(g, "teacher");

@@ -43,7 +43,16 @@ function clearWith(save, id, kind = "baseline") {
 
 test("a new save: only 1-1 open, nothing collected, the comic not yet seen", () => {
   const save = C.newSave();
-  assert.deepEqual(save, { v: 1, last: "1-1", comicSeen: false, hints: {}, levels: {} });
+  assert.deepEqual(save, {
+    v: 2,
+    last: "1-1",
+    comicSeen: false,
+    migratedFrom: null,
+    hints: {},
+    levels: {},
+    settings: { sfx: true, music: true, timer: false, slowSpotting: false, reduceMotion: null },
+  });
+  assert.equal(C.SAVE_KEY, "color-rush-heist:v2:save", "versioned and game-prefixed (itch serves many games from one origin)");
   assert.deepEqual(C.unlockedIds(save), ["1-1"]);
   assert.equal(C.stickerTotal(save), 0);
   assert.equal(C.TOTAL_STICKERS, 18);
@@ -163,10 +172,12 @@ test("save / load / reset round-trip through storage", () => {
   assert.equal(C.writeSave(storage, save), true);
   assert.ok(storage.data.has(C.SAVE_KEY));
   assert.deepEqual(C.loadSave(storage), save);
-  const reset = C.resetSave(storage);
-  assert.deepEqual(reset, C.newSave());
-  assert.equal(storage.data.has(C.SAVE_KEY), false);
-  assert.deepEqual(C.loadSave(storage), C.newSave());
+  // Reset erases progress but keeps the player's settings, and is written.
+  const settings = { ...C.defaultSettings(), music: false, slowSpotting: true };
+  const reset = C.resetSave(storage, settings);
+  assert.deepEqual(reset, C.newSave(settings));
+  assert.deepEqual(C.loadSave(storage), C.newSave(settings));
+  assert.deepEqual(C.loadSave(storage).levels, {});
 });
 test("storage that throws never breaks the game: load gives a fresh save, write and reset just return", () => {
   assert.deepEqual(C.loadSave(throwing), C.newSave());
@@ -201,4 +212,108 @@ test("corrupt or hostile saves are sanitized, never trusted", () => {
   assert.deepEqual(save.hints, { move: "done" });
   assert.deepEqual(Object.keys(save.levels), ["1-1"]);
   assert.deepEqual(save.levels["1-1"], { clear: true, best: null, stickers: [1, 3], unseen: false, takedown: false, takedownBest: 0, quick: true, color: null });
+});
+
+// --------------------------------------------------------- v1.0 save ----
+/** A 0.x player's storage as the owner left it: a v1 save plus the separate
+ * setting keys (and, from before World 1, "comic seen"). */
+function legacyStorage({ v1 = true, settings = true, storySeen = false } = {}) {
+  const storage = memoryStorage();
+  if (v1)
+    storage.setItem(
+      C.LEGACY_KEYS.save,
+      JSON.stringify({
+        v: 1,
+        last: "1-4",
+        comicSeen: false,
+        hints: { move: "done", airjump: "shown" },
+        levels: {
+          "1-1": { clear: true, best: 14.2, stickers: [1, 2, 3], unseen: false, quick: false, color: "white" },
+          "1-2": { clear: true, best: 30.5, stickers: [2], color: "green" },
+          "1-3": { clear: true, best: 41, stickers: [], unseen: true, takedown: false, takedownBest: 0, color: "green" },
+        },
+      }),
+    );
+  if (settings) {
+    storage.setItem(C.LEGACY_KEYS.sfx, "false");
+    storage.setItem(C.LEGACY_KEYS.music, "false");
+    storage.setItem(C.LEGACY_KEYS.timer, "true");
+  }
+  if (storySeen) storage.setItem(C.LEGACY_KEYS.storySeen, "true");
+  return storage;
+}
+test("migration: a 0.x save and its setting keys become one v2 save, once, and the old keys stay", () => {
+  const storage = legacyStorage({ storySeen: true });
+  const before = new Map(storage.data);
+  const save = C.loadSave(storage);
+  assert.equal(save.v, 2);
+  assert.equal(save.migratedFrom, 1);
+  assert.equal(save.last, "1-4");
+  assert.equal(save.comicSeen, true, "the pre-World-1 storySeen flag carries over");
+  assert.deepEqual(save.hints, { move: "done", airjump: "shown" });
+  assert.deepEqual(C.unlockedIds(save), ["1-1", "1-2", "1-3", "1-4"]);
+  assert.deepEqual(save.levels["1-1"].stickers, [1, 2, 3]);
+  assert.equal(save.levels["1-2"].best, 30.5);
+  assert.equal(save.levels["1-3"].unseen, true, "the Ghost stamp survives");
+  assert.deepEqual(save.settings, { sfx: false, music: false, timer: true, slowSpotting: false, reduceMotion: null });
+  // Written back as v2 at once; the 0.x keys are untouched (rollback-safe).
+  assert.deepEqual(JSON.parse(storage.data.get(C.SAVE_KEY)), save);
+  for (const [k, v] of before) assert.equal(storage.data.get(k), v, k);
+  // Once: later 0.x writes (a rollback build) never overwrite v2 progress.
+  storage.setItem(C.LEGACY_KEYS.save, JSON.stringify({ v: 1, levels: {} }));
+  storage.setItem(C.LEGACY_KEYS.music, "true");
+  assert.deepEqual(C.loadSave(storage), save);
+});
+test("migration: settings-only or progress-only 0.x storage, a corrupt v1, and nothing at all", () => {
+  const settingsOnly = C.loadSave(legacyStorage({ v1: false }));
+  assert.equal(settingsOnly.migratedFrom, 1);
+  assert.deepEqual(settingsOnly.levels, {});
+  assert.deepEqual([settingsOnly.settings.sfx, settingsOnly.settings.music, settingsOnly.settings.timer], [false, false, true]);
+  const progressOnly = C.loadSave(legacyStorage({ settings: false }));
+  assert.deepEqual(progressOnly.settings, C.defaultSettings(), "missing setting keys take the defaults");
+  assert.equal(progressOnly.levels["1-1"].clear, true);
+  const corrupt = memoryStorage();
+  corrupt.setItem(C.LEGACY_KEYS.save, "{oops");
+  corrupt.setItem(C.LEGACY_KEYS.sfx, '"loud"');
+  const fromCorrupt = C.loadSave(corrupt);
+  assert.deepEqual(fromCorrupt.levels, {});
+  assert.equal(fromCorrupt.settings.sfx, true, "a non-boolean setting falls back");
+  const empty = memoryStorage();
+  assert.deepEqual(C.loadSave(empty), C.newSave());
+  assert.equal(empty.data.size, 0, "a first visit writes nothing until there is something to keep");
+  // A corrupt or unknown v2 value is a fresh save, never a re-import of 0.x.
+  const bad = legacyStorage();
+  bad.setItem(C.SAVE_KEY, "{not json");
+  assert.deepEqual(C.loadSave(bad), C.newSave());
+  bad.setItem(C.SAVE_KEY, JSON.stringify({ v: 3, levels: { "1-1": { clear: true } } }));
+  assert.deepEqual(C.loadSave(bad), C.newSave());
+  // Blocked storage: no migration attempt, no throw.
+  assert.deepEqual(C.loadSave(throwing), C.newSave());
+});
+test("v2 settings are sanitised one by one", () => {
+  const s = C.sanitize({ v: 2, settings: { sfx: false, music: "yes", timer: 1, slowSpotting: true, reduceMotion: "always", extra: 1 } });
+  assert.deepEqual(s.settings, { sfx: false, music: true, timer: false, slowSpotting: true, reduceMotion: null });
+  assert.equal(C.sanitize({ v: 2, settings: { reduceMotion: false } }).settings.reduceMotion, false);
+  assert.equal(C.sanitize({ v: 2, migratedFrom: "x" }).migratedFrom, null);
+});
+test("Slow spotting: the save turns it on in new games; an assisted clear counts but earns no stamps", () => {
+  let save = C.newSave({ ...C.defaultSettings(), slowSpotting: true });
+  const g = M.createGame("1-5", C.gameOptions(save, "1-5"));
+  assert.equal(g.slowSpotting, true);
+  assert.equal(g.assisted, true);
+  assert.equal(M.createGame("1-5", C.gameOptions(C.newSave(), "1-5")).slowSpotting, false, "off by default");
+  const cards = getLevel("1-5").guards.length;
+  const run = { time: 30, stickers: [1, 2], spotted: 0, takedowns: cards, cards, escapeTime: null, assisted: true };
+  save = C.recordClear(save, "1-5", run);
+  const r = C.levelRecord(save, "1-5");
+  assert.deepEqual([r.clear, r.best, r.stickers], [true, 30, [1, 2]], "clear, time and stickers count");
+  assert.deepEqual([r.unseen, r.takedown, r.takedownBest], [false, false, 0], "no Ghost or Takedown");
+  assert.equal(C.isUnlocked(save, "1-6"), true, "an assisted clear opens the next level");
+  // Earned stamps are never taken away by a later assisted clear.
+  save = C.recordClear(save, "1-5", { ...run, assisted: false });
+  save = C.recordClear(save, "1-5", run);
+  assert.deepEqual([C.levelRecord(save, "1-5").unseen, C.levelRecord(save, "1-5").takedown], [true, true]);
+  // 1-6's Quick par: the baseline escape earns it, but not assisted.
+  const quick = C.recordClear(C.newSave(), "1-6", { time: 40, stickers: [], spotted: 1, escapeTime: 1, assisted: true });
+  assert.equal(C.levelRecord(quick, "1-6").quick, false);
 });

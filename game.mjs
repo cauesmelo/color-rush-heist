@@ -23,30 +23,13 @@ const W = 960,
 const canvas = document.querySelector("#game"),
   ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
-const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const $ = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------- storage --
-// Private windows and sandboxed iframes may throw on storage access.
-const store = {
-  get(key, fallback) {
-    try {
-      const v = localStorage.getItem("color-rush-heist:" + key);
-      return v === null ? fallback : JSON.parse(v);
-    } catch {
-      return fallback;
-    }
-  },
-  set(key, value) {
-    try {
-      localStorage.setItem("color-rush-heist:" + key, JSON.stringify(value));
-    } catch {
-      /* storage unavailable: settings last for this visit only */
-    }
-  },
-};
-/** Campaign progress (campaign.mjs): stickers, clears, stamps, hint budget. If
- * storage is blocked, loadSave/writeSave quietly keep it for this visit. */
+/** Campaign progress and settings in one versioned save (campaign.mjs,
+ * "color-rush-heist:v2:save"; 0.x keys are migrated once). Private windows
+ * and sandboxed iframes may throw on storage access: loadSave/writeSave
+ * quietly keep everything for this visit, and play never depends on it. */
 const storage = (() => {
   try {
     return window.localStorage;
@@ -55,18 +38,32 @@ const storage = (() => {
   }
 })();
 let save = C.loadSave(storage);
-// The previous build remembered only "comic seen"; carry that over.
-if (!save.comicSeen && store.get("storySeen", false)) save.comicSeen = true;
+/** The live settings object (sound, music, timer, the Slow spotting assist,
+ * the motion choice); persist() copies it into the save. */
+const settings = { ...save.settings };
 function persist() {
+  save.settings = { ...settings };
   C.writeSave(storage, save);
 }
-const settings = {
-  sfx: store.get("sfx", true),
-  // On by default, but nothing streams before the player's first key or tap
-  // (browsers require that gesture anyway); the choice is remembered.
-  music: store.get("music", true),
-  timer: store.get("timer", false),
-};
+// Reduced motion: the player's pause-menu choice, else the system setting.
+// Under it: no shake, flashes, particles, squash or iris (cuts instead);
+// state cues stay (steady instead of pulsing).
+const motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+let reducedMotion = settings.reduceMotion ?? motionQuery.matches;
+function syncMotion() {
+  reducedMotion = settings.reduceMotion ?? motionQuery.matches;
+  document.documentElement.dataset.motion = reducedMotion ? "reduced" : "full";
+  if (reducedMotion) {
+    cam.shake = 0;
+    fx.flash = 0;
+    fx.squash = null;
+    fx.particles.length = 0;
+  }
+}
+motionQuery.addEventListener?.("change", () => {
+  syncMotion();
+  syncSettingsLabels();
+});
 
 // ----------------------------------------------------------------- assets --
 const FILES = {
@@ -492,7 +489,6 @@ function startLevel(id, { intro = true, skipIntro = false } = {}) {
   newGame();
   if (!save.comicSeen) {
     save.comicSeen = true;
-    store.set("storySeen", true);
     persist();
   }
   setScreen("play");
@@ -588,13 +584,17 @@ function showPanel(name) {
 function syncSettingsLabels() {
   // Toggle chips carry their state in aria-pressed (styled as on/off).
   for (const id of ["opt-sfx", "opt-music", "opt-timer"]) $(id).setAttribute("aria-pressed", String(settings[id.slice(4)]));
+  $("opt-assist").setAttribute("aria-pressed", String(settings.slowSpotting));
+  // Less motion shows the effective state; "(system)" until the player picks.
+  $("opt-motion").setAttribute("aria-pressed", String(reducedMotion));
+  $("opt-motion").dataset.source = settings.reduceMotion === null ? "system" : "player";
   ui.music.setAttribute("aria-pressed", String(settings.music));
   ui.music.classList.toggle("off", !settings.music);
   ui.music.title = settings.music ? "Music on" : "Music off";
 }
 function toggleSetting(key) {
   settings[key] = !settings[key];
-  store.set(key, settings[key]);
+  persist();
   syncSettingsLabels();
   syncMusic();
   play("ui");
@@ -798,6 +798,18 @@ ui.music.addEventListener("click", (event) => {
 $("opt-sfx").addEventListener("click", () => toggleSetting("sfx"));
 $("opt-music").addEventListener("click", () => toggleSetting("music"));
 $("opt-timer").addEventListener("click", () => toggleSetting("timer"));
+$("opt-assist").addEventListener("click", () => {
+  toggleSetting("slowSpotting");
+  // Applies at once to the level in play; the run is then assisted.
+  M.setSlowSpotting(game, settings.slowSpotting);
+});
+$("opt-motion").addEventListener("click", () => {
+  settings.reduceMotion = !reducedMotion;
+  syncMotion();
+  persist();
+  syncSettingsLabels();
+  play("ui");
+});
 $("opt-retry").addEventListener("click", () => {
   togglePause(false);
   retryCheckpoint();
@@ -814,8 +826,7 @@ $("opt-map").addEventListener("click", () => {
 });
 $("opt-reset-yes").addEventListener("click", () => {
   // Erases clears, stickers, stamps and the hint budget; settings stay.
-  save = C.resetSave(storage);
-  persist();
+  save = C.resetSave(storage, settings);
   play("ui");
   toggleMapMenu(false);
   openMap(C.WORLD1[0]);
@@ -1082,7 +1093,7 @@ function recordWin() {
     collected = game.stickers.filter((x) => x.collected).map((x) => x.id),
     stamps = C.levelStamps(id);
   rememberHints();
-  save = C.recordClear(save, id, { time: game.finishTime, stickers: collected, spotted: game.spotted, takedowns: game.takedowns.length, cards: game.guards.length, escapeTime: game.escapeTime, color: game.player.color });
+  save = C.recordClear(save, id, { time: game.finishTime, stickers: collected, spotted: game.spotted, takedowns: game.takedowns.length, cards: game.guards.length, escapeTime: game.escapeTime, color: game.player.color, assisted: game.assisted });
   persist();
   const after = C.levelRecord(save, id);
   fx.result = {
@@ -1092,9 +1103,11 @@ function recordWin() {
     newBest: before.best === null || game.finishTime < before.best,
     firstClear: !before.clear,
     stickers: game.stickers.map((x) => ({ id: x.id, got: x.collected, owned: x.owned })), // owned = in the save before this run
-    unseen: stamps.unseen ? game.spotted === 0 : null, // the Ghost stamp
-    takedown: stamps.takedown ? { got: !!game.medals?.takedown, n: game.takedowns.length, of: game.guards.length, best: after.takedownBest } : null,
-    quick: stamps.quick ? !!game.medals?.quickGetaway : null,
+    // An assisted run shows the stamps it could have earned, unearned.
+    assisted: game.assisted,
+    unseen: stamps.unseen ? !game.assisted && game.spotted === 0 : null, // the Ghost stamp
+    takedown: stamps.takedown ? { got: !game.assisted && !!game.medals?.takedown, n: game.takedowns.length, of: game.guards.length, best: after.takedownBest } : null,
+    quick: stamps.quick ? !game.assisted && !!game.medals?.quickGetaway : null,
     unlocked: C.unlockedIds(save).find((x) => !wasOpen.includes(x)) || null,
   };
 }
@@ -2743,6 +2756,7 @@ function drawResults() {
     sy += 92;
   }
   if (r.quick !== null) stamp("Quick", r.quick, sx, sy);
+  if (r.assisted && (r.unseen !== null || r.takedown || r.quick !== null)) text("Slow spotting: no stamps", sx, py + ph - 62, 16, "#cfc6d6", "center", null);
   if (r.unlocked) text(`${r.unlocked} is open!`, W / 2, py + ph - 26, 32, "#9be36a", "center", null);
 }
 /** World clear: the old results screen, retitled, with world totals and the
@@ -3062,6 +3076,7 @@ function getState() {
     result: fx.result ? structuredClone(fx.result) : null,
     camera: { x: cam.x, y: cam.y },
     settings: { ...settings },
+    motion: { reduced: reducedMotion, source: settings.reduceMotion === null ? "system" : "player" },
     audio: { musicDecoded: !!track.buffer, musicPlaying: !!track.source, musicRate: track.rate, context: audio?.state ?? "none" },
     // 1-6: the sealed-door cue is drawn (drawDoorCue) while this is true.
     doorCue: doorSealed(),
@@ -3105,8 +3120,7 @@ window.__game = {
   },
   /** Erase campaign progress (clears, stickers, stamps, hints); settings stay. */
   resetSave() {
-    save = C.resetSave(storage);
-    persist();
+    save = C.resetSave(storage, settings);
     return getState();
   },
   setManual(value) {
@@ -3134,6 +3148,7 @@ window.__game = {
 };
 
 // ------------------------------------------------------------------- boot --
+syncMotion();
 syncSettingsLabels();
 fitSurface();
 setScreen("boot");

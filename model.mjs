@@ -141,6 +141,21 @@ export const GUARD = Object.freeze({
   escapeSuspect: 0.15, // ...and grow suspicious sooner (escape pressure, no timer)
 });
 
+/** The one assist (pause menu -> Options, off by default): "Slow spotting"
+ * multiplies how long a card must keep Rubik in sight before "?" and before
+ * "!" (0.25 -> 0.5 s, 0.6 -> 1.2 s, the escape's 0.15 -> 0.3 s; 1-3's catch
+ * comes with the "!"). Cones, patrols, turns, the spear and every physics
+ * number are untouched, so each level reads and routes the same; only the
+ * margin for a misread cone grows. A searching card still re-alerts on a
+ * glimpse (it already knows Rubik is near). A run that had the assist on at
+ * any moment is `assisted`, and the campaign awards it no stamps. */
+export const ASSIST = Object.freeze({ spotScale: 2 });
+export function setSlowSpotting(g, on) {
+  g.slowSpotting = !!on;
+  if (g.slowSpotting) g.assisted = true;
+  return g;
+}
+
 /** Sight cone = cone_de_visao.png (176x47) drawn at 2x. Per source column, the
  * first and last row whose alpha is > 0 (-1 = empty column). tests/
  * model.test.mjs re-derives these from the PNG, so detection IS the drawing.
@@ -289,6 +304,7 @@ export const HINT_IDS = Object.freeze(["move", "airjump", "behind", "white", "gr
  *   once after three deaths at its checkpoint).
  * @param options.owned  sticker numbers already in the save: drawn as faint
  *   outlines; touching one again counts for this run's tally only.
+ * @param options.slowSpotting  the Slow spotting assist (ASSIST), off by default.
  * The kit (forms, start form, dash) comes from the level and is the same on
  * every replay, so sticker gates and QA routes stay valid. */
 export function createGame(level = "1-1", options = {}) {
@@ -342,6 +358,8 @@ export function createGame(level = "1-1", options = {}) {
     hintAge: 0,
     hintData: { idle: 0, zoneTime: 0, zoneJumps: 0, gapFails: 0, reoffered: {} },
     medals: null,
+    slowSpotting: !!options.slowSpotting,
+    assisted: !!options.slowSpotting, // sticky for the run: no stamps (campaign)
     events: [],
     eventId: 0,
   };
@@ -769,7 +787,7 @@ function updateGuard(g, guard, dt) {
       }
       if (sees) {
         guard.sight += dt;
-        if (guard.sight >= (g.stolen ? GUARD.escapeSuspect : GUARD.suspectAfter)) {
+        if (guard.sight >= (g.stolen ? GUARD.escapeSuspect : GUARD.suspectAfter) * (g.slowSpotting ? ASSIST.spotScale : 1)) {
           guard.state = "suspect";
           guard.locked = true;
           guard.lost = 0;
@@ -809,7 +827,7 @@ function updateGuard(g, guard, dt) {
         guard.lost = 0;
         guard.sight += dt;
         // A searching card already knows Rubik is near: one glimpse re-alerts.
-        if (guard.state === "search" || guard.sight >= GUARD.alertAfter) alertGuard(g, guard);
+        if (guard.state === "search" || guard.sight >= GUARD.alertAfter * (g.slowSpotting ? ASSIST.spotScale : 1)) alertGuard(g, guard);
       } else {
         guard.lost += dt;
         guard.sight = Math.max(0, guard.sight - dt * 0.5);
@@ -1426,6 +1444,7 @@ function win(g) {
     takedowns: g.takedowns.length,
     cards: g.guards.length,
     quickGetaway: g.level.par === null ? null : g.escapeTime !== null && g.escapeTime <= g.level.par,
+    assisted: g.assisted, // Slow spotting was on: the campaign awards no stamps
   };
   event(g, "win", g.player.x, g.player.y, { color: g.player.color });
 }

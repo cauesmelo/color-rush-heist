@@ -221,6 +221,21 @@ a {
   content: " on";
   color: var(--focus);
 }
+.toggles.options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.toggles.options .small {
+  margin: 0 4px 6px;
+}
+/* Less motion following the system says so, until the player picks. */
+#opt-motion[data-source="system"]::after {
+  content: " off (system)";
+}
+#opt-motion[data-source="system"][aria-pressed="true"]::after {
+  content: " on (system)";
+}
 .menu .primary,
 .results-actions .primary {
   background: var(--red);
@@ -569,4 +584,9 @@ kbd {
     transition: none !important;
     animation: none !important;
   }
+}
+/* The pause menu's Less motion choice, whatever the system says. */
+[data-motion="reduced"] * {
+  transition: none !important;
+  animation: none !important;
 }

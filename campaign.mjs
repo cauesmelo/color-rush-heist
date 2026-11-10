@@ -4,30 +4,60 @@
  * those is wrapped in try so a private window or a sandboxed iframe (where
  * localStorage throws) simply plays without saving.
  *
- * Save format (RESEARCH_PROGRESSION.md section 9.6), key "color-rush-heist:save":
- *   { v: 1, last: "1-3", comicSeen: true,
+ * Save format v2 (since 1.0.0), one versioned key "color-rush-heist:v2:save"
+ * (itch.io serves many games from one origin, so every key is game-prefixed):
+ *   { v: 2, last: "1-3", comicSeen: true, migratedFrom: 1 | null,
  *     hints: { move: "done", airjump: "shown", ... },
  *     levels: { "1-1": { clear: true, best: 52.4, stickers: [1, 3],
  *                        unseen: false, takedown: false, takedownBest: 0,
- *                        quick: false, color: "white" } } }
+ *                        quick: false, color: "white" } },
+ *     settings: { sfx: true, music: true, timer: false,
+ *                 slowSpotting: false, reduceMotion: null } }
  * `unseen` is the Ghost stamp (its old name, kept so older saves load);
  * `takedownBest` is the most cards put down in one clear of that level.
+ * `reduceMotion: null` follows the system setting; true/false is the
+ * player's own choice from the pause menu.
  * A sticker is saved the moment it is touched and never removed; a clear is
  * saved at the goal. Mid-level positions are never saved.
+ *
+ * Older builds (0.x) wrote progress as v1 under "color-rush-heist:save" and
+ * each setting under its own key ("color-rush-heist:sfx", ":music", ":timer",
+ * and ":storySeen" before World 1). loadSave migrates them once: when the v2
+ * key is absent it reads them, writes v2 and leaves the old keys untouched
+ * (a rollback to 0.x still finds its save; the v2 key marks the migration).
  */
 import { LEVELS, LEVEL_IDS, getLevel } from "./levels/index.mjs";
 import { HINT_IDS } from "./model.mjs";
 
-export const SAVE_KEY = "color-rush-heist:save";
-export const SAVE_VERSION = 1;
+export const SAVE_KEY = "color-rush-heist:v2:save";
+export const SAVE_VERSION = 2;
+/** The 0.x keys loadSave migrates from (never written by 1.x). */
+export const LEGACY_KEYS = Object.freeze({
+  save: "color-rush-heist:save",
+  sfx: "color-rush-heist:sfx",
+  music: "color-rush-heist:music",
+  timer: "color-rush-heist:timer",
+  storySeen: "color-rush-heist:storySeen",
+});
 export const WORLD1 = LEVEL_IDS;
 export const STICKERS_PER_LEVEL = 3;
 export const TOTAL_STICKERS = LEVELS.reduce((sum, level) => sum + level.stickers.length, 0);
 /** Forest color on the world map: 0.12 per cleared level 1-1..1-5, full at 1-6. */
 export const COLOR_PER_CLEAR = 0.12;
 
-export function newSave() {
-  return { v: SAVE_VERSION, last: WORLD1[0], comicSeen: false, hints: {}, levels: {} };
+/** Settings defaults: sound and music on, no timer, assist off, motion
+ * following the system. */
+export const defaultSettings = () => ({ sfx: true, music: true, timer: false, slowSpotting: false, reduceMotion: null });
+export function newSave(settings = defaultSettings()) {
+  return { v: SAVE_VERSION, last: WORLD1[0], comicSeen: false, migratedFrom: null, hints: {}, levels: {}, settings: sanitizeSettings(settings) };
+}
+/** Unknown or malformed settings fall back to the defaults one by one. */
+export function sanitizeSettings(raw) {
+  const out = defaultSettings();
+  if (!raw || typeof raw !== "object") return out;
+  for (const key of ["sfx", "music", "timer", "slowSpotting"]) if (typeof raw[key] === "boolean") out[key] = raw[key];
+  if (typeof raw.reduceMotion === "boolean") out.reduceMotion = raw.reduceMotion;
+  return out;
 }
 const emptyRecord = () => ({ clear: false, best: null, stickers: [], unseen: false, takedown: false, takedownBest: 0, quick: false, color: null });
 export const levelRecord = (save, id) => ({ ...emptyRecord(), ...(save.levels[id] || {}) });
@@ -85,7 +115,7 @@ export function collectSticker(save, id, n) {
 
 /** A level was finished. `result` comes from the model at the win:
  * { time, stickers: [ids collected this run], spotted, takedowns, cards,
- *   escapeTime, color }.
+ *   escapeTime, color, assisted }.
  * Best time and the best takedown tally only improve; stickers and stamps
  * only accumulate. */
 export function recordClear(save, id, result) {
@@ -93,7 +123,11 @@ export function recordClear(save, id, result) {
   let next = clone(save);
   for (const n of result.stickers || []) next = collectSticker(next, id, n);
   const record = levelRecord(next, id),
-    stamps = levelStamps(id),
+    // An assisted run (Slow spotting on at any moment) still clears, unlocks,
+    // keeps its stickers and best time, but awards no stamp: Ghost, Takedown
+    // and Quick measure exactly the reading of cones the assist relaxes.
+    // Stamps already earned are never taken away.
+    stamps = result.assisted ? { unseen: false, takedown: false, quick: false } : levelStamps(id),
     level = getLevel(id);
   record.clear = true;
   if (Number.isFinite(result.time)) record.best = record.best === null ? result.time : Math.min(record.best, result.time);
@@ -142,12 +176,18 @@ export function forestColor(save) {
 }
 
 /** Never trust stored data: keep only known levels, valid sticker numbers,
- * finite times and known hint states. Anything else falls back to defaults. */
+ * finite times, known hint states and known settings. Anything else falls
+ * back to defaults. Reads v2 and the identical v1 progress fields (the
+ * migration); any other version is a fresh save. */
 export function sanitize(raw) {
   const save = newSave();
-  if (!raw || typeof raw !== "object" || raw.v !== SAVE_VERSION) return save;
+  if (!raw || typeof raw !== "object" || ![1, SAVE_VERSION].includes(raw.v)) return save;
   if (WORLD1.includes(raw.last)) save.last = raw.last;
   save.comicSeen = raw.comicSeen === true;
+  if (raw.v === SAVE_VERSION) {
+    save.settings = sanitizeSettings(raw.settings);
+    if (raw.migratedFrom === 1) save.migratedFrom = 1;
+  }
   if (raw.hints && typeof raw.hints === "object")
     for (const id of HINT_IDS) if (["shown", "done"].includes(raw.hints[id])) save.hints[id] = raw.hints[id];
   if (raw.levels && typeof raw.levels === "object")
@@ -169,13 +209,51 @@ export function sanitize(raw) {
   return save;
 }
 
-export function loadSave(storage) {
+const readJson = (storage, key) => {
   try {
-    const text = storage?.getItem(SAVE_KEY);
-    return text ? sanitize(JSON.parse(text)) : newSave();
+    const text = storage?.getItem(key);
+    return text === null || text === undefined ? undefined : JSON.parse(text);
   } catch {
-    return newSave(); // blocked or corrupt storage: progress lasts for this visit
+    return undefined; // blocked storage or corrupt JSON: as if absent
   }
+};
+/** 0.x -> v2, once: progress from the v1 save, each setting from its own
+ * key, and the pre-World-1 "comic seen" flag. Null when nothing old exists. */
+export function migrateLegacy(storage) {
+  const v1 = readJson(storage, LEGACY_KEYS.save),
+    old = Object.fromEntries(["sfx", "music", "timer", "storySeen"].map((k) => [k, readJson(storage, LEGACY_KEYS[k])]));
+  if (v1 === undefined && Object.values(old).every((v) => v === undefined)) return null;
+  const save = v1 && typeof v1 === "object" && v1.v === 1 ? sanitize(v1) : newSave();
+  save.settings = sanitizeSettings({ sfx: old.sfx, music: old.music, timer: old.timer });
+  if (old.storySeen === true) save.comicSeen = true;
+  save.migratedFrom = 1;
+  return save;
+}
+
+/** The v2 save, else a one-time migration of the 0.x keys (written back as
+ * v2 at once), else a fresh save. Never throws. The v2 key's presence marks
+ * the migration as done: a corrupt or unknown-version v2 value gives a fresh
+ * save rather than re-importing stale 0.x progress. */
+export function loadSave(storage) {
+  let text;
+  try {
+    text = storage?.getItem(SAVE_KEY);
+  } catch {
+    return newSave(); // storage blocked: progress lasts for this visit
+  }
+  if (text !== null && text !== undefined) {
+    try {
+      return sanitize(JSON.parse(text));
+    } catch {
+      return newSave();
+    }
+  }
+  const migrated = migrateLegacy(storage);
+  if (migrated) {
+    writeSave(storage, migrated);
+    return migrated;
+  }
+  return newSave();
 }
 export function writeSave(storage, save) {
   try {
@@ -185,16 +263,17 @@ export function writeSave(storage, save) {
     return false;
   }
 }
-export function resetSave(storage) {
-  try {
-    storage.removeItem(SAVE_KEY);
-  } catch {
-    /* nothing stored, or storage blocked: a fresh save either way */
-  }
-  return newSave();
+/** Erase campaign progress (clears, stickers, stamps, hints, the comic) and
+ * keep the player's settings. The fresh save is written, so the old 0.x keys
+ * (left in place for rollback) are never migrated again. */
+export function resetSave(storage, settings = defaultSettings()) {
+  const fresh = newSave(settings);
+  writeSave(storage, fresh); // storage blocked: a fresh save for this visit either way
+  return fresh;
 }
 
-/** Options for model.createGame from the save: hint states and owned stickers. */
+/** Options for model.createGame from the save: hint states, owned stickers
+ * and the Slow spotting assist. */
 export function gameOptions(save, id) {
-  return { hints: { ...save.hints }, owned: levelRecord(save, id).stickers };
+  return { hints: { ...save.hints }, owned: levelRecord(save, id).stickers, slowSpotting: save.settings?.slowSpotting === true };
 }

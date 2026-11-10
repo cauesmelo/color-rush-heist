@@ -39,7 +39,7 @@
             <div class="row toggles">
               <button id="opt-sfx" type="button" aria-pressed="true">Sound</button>
               <button id="opt-music" type="button" aria-pressed="false">Music</button>
-              <button id="opt-timer" type="button" aria-pressed="false">Timer</button>
+              <button data-show="options" type="button">Options</button>
             </div>
             <div class="row">
               <button data-show="controls" type="button">Controls</button>
@@ -53,6 +53,20 @@
             <p class="rule">Erase every clear, sticker and stamp? This can't be undone.</p>
             <button id="opt-reset-yes" type="button">Yes, erase</button>
             <button data-show="menu" class="primary" type="button">Keep my progress</button>
+          </div>
+          <!-- Options: the timer, reduced motion and the one assist. Both
+               accessibility choices are saved and off unless chosen (motion
+               follows the system setting until the player picks). -->
+          <div data-panel="options" class="menu" hidden>
+            <h2>Options</h2>
+            <div class="toggles options">
+              <button id="opt-assist" type="button" aria-pressed="false" aria-describedby="assist-note">Slow spotting</button>
+              <p id="assist-note" class="small">Assist: cards take twice as long to spot Rubik. Runs with it on earn no stamps.</p>
+              <button id="opt-motion" type="button" aria-pressed="false" aria-describedby="motion-note">Less motion</button>
+              <p id="motion-note" class="small">No shake, flashes, particles or squash. Follows your system setting until you choose.</p>
+              <button id="opt-timer" type="button" aria-pressed="false">Timer</button>
+            </div>
+            <button data-show="menu" type="button">Back</button>
           </div>
           <div data-panel="controls" class="menu" hidden>
             <h2>Controls</h2>

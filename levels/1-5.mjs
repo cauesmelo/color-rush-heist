@@ -97,7 +97,7 @@ export default defineLevel({
     { id: "enforcer", job: "gate", kind: "red", mode: "sentry", x: px(72) + 16, floor: px(16), dir: -1, min: px(68) + 16, max: px(76) + 16, turnEvery: 3 },
     // The floor's red sentry sees green: stomp it from behind when it faces
     // the goal block (its 3 s stun covers the walk and the climb).
-    { id: "cross-red", job: "gate", kind: "red", mode: "sentry", x: px(101) + 16, floor: px(16), dir: -1, min: px(99) + 16, max: px(103) + 16, turnEvery: 2.5 },
+    { id: "cross-red", job: "gate", type: "sentinel", kind: "red", mode: "sentry", x: px(101) + 16, floor: px(16), dir: -1, min: px(99) + 16, max: px(103) + 16, turnEvery: 2.5 },
     // Paces the goal block (113.5-117.5; the goal face stands past its far
     // bound): its body stops white, its cone sees white, green walks through.
     { id: "cross-green", job: "swap", kind: "green", mode: "patrol", x: px(115) + 16, floor: px(12), dir: -1, min: px(113) + 16, max: px(117) + 16 },

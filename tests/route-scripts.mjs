@@ -3,6 +3,15 @@
  * baseline = the guided main line; mastery = all three stickers. */
 import * as M from "../model.mjs";
 
+/** A card that was stomped or knocked: dazed (an armoured card) or defeated (a poof). */
+const isDown = (card) => ["stunned", "defeated", "drained"].includes(card.state);
+/** An armoured card (a red, mobile one) is only dazed by the first stomp: land on
+ * the same card again while the ring runs and it is defeated. */
+function finishCard(pl, id, offset = 10) {
+  pl.steerTo((p) => p.guard(id).x - offset);
+  pl.check(pl.guard(id).state === "defeated", `${id} defeated by the second stomp`);
+}
+
 const T = 32;
 const tx = (tiles) => tiles * T;
 
@@ -136,7 +145,7 @@ export const SCRIPTS = {
       // refills the dash for the second half.
       pl.right().to(tx(101) + 24).jump().apex().dash();
       pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").steerTo((p) => p.guard("pillar").x - 6);
-      pl.check(pl.guard("pillar").state === "stunned", "pillar stomped");
+      pl.check(isDown(pl.guard("pillar")), "pillar stomped");
       pl.settle().apex().dash();
       pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").landAt(tx(123) + 16);
       pl.check(Math.abs(pl.feet - tx(16)) < 1, "over the pillar gap");
@@ -194,7 +203,7 @@ export const SCRIPTS = {
       pl.to(tx(85)).stop();
       pl.until((p) => p.guard("cross-red").dir === 1 && p.guard("cross-red").turning <= 0, {}, 900, "red away");
       pl.right().to(pl.guard("cross-red").x - 230).jump().steerTo((p) => p.guard("cross-red").x - 10);
-      pl.check(pl.guard("cross-red").state === "stunned", "red sentry stomped");
+      pl.check(isDown(pl.guard("cross-red")), "red sentry stomped");
       // Down from the bounce between slabs 2 and 3 (a held bounce would reach
       // the high line: that is the mastery's way).
       pl.landAt(tx(103) + 16);
@@ -251,7 +260,7 @@ export const SCRIPTS = {
       pl.color("green").right().to(tx(27) + 16).stop();
       pl.until((p) => teacher(p).dir < 0 && teacher(p).x < p.cx - 50 && teacher(p).x > tx(24), {}, 1200, "teacher passed");
       pl.jump().steerTo((p) => teacher(p).x + 8);
-      pl.check(teacher(pl).state === "stunned", "teacher stomped");
+      pl.check(isDown(teacher(pl)), "teacher stomped");
       pl.landAt(tx(27));
       // P1: the timed climb, then wait behind it in green (it can't see
       // green) for its next look-away, and jump onto its back.
@@ -261,7 +270,7 @@ export const SCRIPTS = {
       pl.landAt((p) => p1(p).x - 72);
       pl.stop().until((p) => p1(p).dir === 1 && p1(p).turning <= 0 && p1(p).turnClock < 0.3, {}, 1200, "p1 looks away again");
       pl.right().jump().steerTo((p) => p1(p).x - 6);
-      pl.check(p1(pl).state === "stunned", "p1 stomped from behind");
+      pl.check(isDown(p1(pl)), "p1 stomped from behind");
       pl.land();
       p2Climb(pl);
       enforcerStomp(pl);
@@ -270,7 +279,7 @@ export const SCRIPTS = {
       pl.to(tx(85)).stop();
       pl.until((p) => p.guard("cross-red").dir === 1 && p.guard("cross-red").turning <= 0, {}, 900, "red away");
       pl.right().to(pl.guard("cross-red").x - 230).jump().steerTo((p) => p.guard("cross-red").x - 10);
-      pl.check(pl.guard("cross-red").state === "stunned", "red sentry stomped");
+      pl.check(isDown(pl.guard("cross-red")), "red sentry stomped");
       pl.landAt(tx(103) + 16);
       const block = (p) => p.guard("cross-green");
       pl.right().to(tx(111) + 16).stop();
@@ -280,7 +289,7 @@ export const SCRIPTS = {
       // Green on the block: it can't see him; follow it and jump onto its back.
       pl.stop().until((p) => block(p).dir === 1 && block(p).turning <= 0 && block(p).x > p.cx + 60 && block(p).x < p.cx + 110, {}, 1200, "block card ahead, walking away");
       pl.right().jump().steerTo((p) => block(p).x - 6);
-      pl.check(block(pl).state === "stunned", "block card stomped from behind");
+      pl.check(isDown(block(pl)), "block card stomped from behind");
       pl.landAt(tx(118));
       if (pl.g.phase !== "won") pl.right().to(tx(120));
       pl.check(pl.g.phase === "won", "goal face");
@@ -338,10 +347,10 @@ function p2Climb(pl, { quick = false } = {}) {
     pl.right();
   }
   pl.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
-  pl.until((p) => p.p.grounded || p.g.stomps > 0 && s(p).state === "stunned", { right: true }, 240, "onto P2's post");
-  if (s(pl).state !== "stunned" && s(pl).dir === 1) {
+  pl.until((p) => p.p.grounded || p.g.stomps > 0 && isDown(s(p)), { right: true }, 240, "onto P2's post");
+  if (!isDown(s(pl)) && s(pl).dir === 1) {
     pl.right().jump().steerTo((p) => s(p).x - 6);
-    pl.check(s(pl).state === "stunned", "p2 stomped from behind");
+    pl.check(isDown(s(pl)), "p2 stomped from behind");
   }
   pl.until((p) => p.p.grounded && p.feet > tx(15), (p) => (p.cx < tx(61) ? { right: true } : {}), 600, "down to the post");
 }
@@ -355,7 +364,8 @@ function enforcerStomp(pl) {
   pl.until((p) => e(p).dir === 1 && e(p).turning <= 0 && e(p).turnClock < 1.2, {}, 900, "enforcer away");
   pl.right().jump().landAt(tx(65) + 8); // up the step
   pl.right().jump().steerTo((p) => e(p).x - 10);
-  pl.check(e(pl).state === "stunned", "enforcer stomped from behind");
+  pl.check(isDown(e(pl)), "enforcer stomped from behind");
+  finishCard(pl, "enforcer");
 }
 
 /** 1-6 inbound: corridor in green, white up the ledge, green past the lookout
@@ -371,7 +381,7 @@ function heistInbound(pl, { alcove = false } = {}) {
   const red = (p) => p.guard("ledge-red"),
     unseen = pl.g.spotted;
   pl.choose(
-    [0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3, 3.3, 3.6, 3.9, 4.2, 4.5].map((w) => (f) => {
+    [0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3, 3.3, 3.6, 3.9, 4.2, 4.5].flatMap((w) => [140, 160, 180].map((run) => [w, run])).map(([w, run]) => (f) => {
       f.stop().wait(w).right().to(tx(42) + 8);
       f.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
       f.until((p) => p.p.grounded && Math.abs(p.feet - tx(12)) < 1, { right: true }, 240, "ledge");
@@ -383,8 +393,12 @@ function heistInbound(pl, { alcove = false } = {}) {
         f.color("green").stop();
         f.until((p) => red(p).dir === 1 && red(p).turning <= 0 && red(p).turnClock < 1, {}, 900, "ledge sentry away (alcove)");
       }
-      f.right().to(tx(50) + 4).jump().steerTo((p) => red(p).x - 8);
-      f.check(red(f).state === "stunned", "ledge sentry stomped");
+      // The takeoff is 140+ px back: the jump must be FALLING when it meets the
+      // card's body (a card is a body that hurts), or the stomp becomes a bump.
+      const from = red(f).x - run;
+      if (f.cx > from) f.left().until((p) => p.cx <= from, { left: true }, 240, "back to the takeoff");
+      f.right().to(from).jump().steerTo((p) => red(p).x - 8);
+      f.check(isDown(red(f)), "ledge sentry stomped");
       // The stomp refilled the dash: dash at the bounce's apex onto the island.
       f.right().apex().dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash").landAt(tx(66));
@@ -407,7 +421,7 @@ function heistInbound(pl, { alcove = false } = {}) {
   pl.until(away, {}, 1200, "vault guard away again");
   pl.jump().landAt((p) => p.guard("vault-guard").x - 180);
   pl.jump().steerTo((p) => p.guard("vault-guard").x - 8);
-  pl.check(pl.guard("vault-guard").state === "stunned", "vault guard stomped");
+  pl.check(isDown(pl.guard("vault-guard")), "vault guard stomped");
   pl.right().land();
   pl.until((p) => p.g.stolen, { right: true }, 240, "theft");
   pl.settle();
@@ -424,7 +438,7 @@ function heistEscape(pl, { roof = false, alcove = false, knockAll = false } = {}
     pl.right();
     pl.until((p) => Math.abs(p.guard("alarm").x - p.cx) < 110, pl.dir, 600, "near the alarm card").dash();
     pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "knock");
-    pl.check(pl.guard("alarm").state === "stunned", "alarm card knocked");
+    pl.check(isDown(pl.guard("alarm")), "alarm card knocked");
     pl.to(tx(129)).dash();
     pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "alcove smash");
     pl.check(pl.g.stickers[1].collected, "alcove sticker");
@@ -446,6 +460,8 @@ function heistEscape(pl, { roof = false, alcove = false, knockAll = false } = {}
   // jump + dash from the lip reaches the ledge. The first option that reaches
   // the ledge unseen and alive is kept.
   spotted = pl.g.spotted;
+  const hits = pl.g.hits,
+    stomps = pl.g.stomps;
   const island = tx(67); // the island's right edge
   pl.choose(
     [0, 0.3, 0.6, 0.9, 1.2, 1.5].flatMap((wait) => [0, 120, 240].flatMap((vy) => (knockAll ? [false] : [true, false]).map((green) => [wait, vy, green]))).map(([wait, vy, green]) => (f) => {
@@ -454,22 +470,22 @@ function heistEscape(pl, { roof = false, alcove = false, knockAll = false } = {}
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash");
       if (green) f.color("green"); // green lands unseen and walks through it
       f.until((p) => p.p.grounded || p.g.phase !== "playing", (p) => (p.cx - M.PLAYER.foot > island - 4 ? { left: true } : {}), 240, "island");
-      if (!green && f.guard("ambush").state !== "stunned") {
+      if (!green && !isDown(f.guard("ambush"))) {
         f.until((p) => p.p.dashCooldown <= 0, {}, 60, "cooldown").left().dash();
         f.until((p) => p.p.dashTime <= 0, f.dir, 60, "knock");
       }
       f.left().to(tx(64) + 8).jump().apex().dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash").landAt(tx(50));
     }),
-    (f) => f.g.deaths === deaths && (knockAll ? f.guard("ambush").state === "stunned" : f.g.spotted === spotted) && Math.abs(f.feet - tx(12)) < 1 && f.g.phase === "playing",
+    (f) => f.g.deaths === deaths && f.g.hits === hits && (knockAll ? isDown(f.guard("ambush")) : f.g.spotted === spotted && f.g.stomps === stomps) && Math.abs(f.feet - tx(12)) < 1 && f.g.phase === "playing",
     "island crossing",
   );
   // The ledge pair on the way home: red walks past the red sentry; the green
   // lookout sees red, so knock it aside with a red dash.
   pl.left().color("red");
-  pl.until((p) => Math.abs(p.guard("lookout").x - p.cx) < 120 || p.guard("lookout").state === "stunned", pl.dir, 240, "near the lookout");
-  if (pl.guard("lookout").state !== "stunned") pl.dash().until((p) => p.p.dashTime <= 0, pl.dir, 60, "knock the lookout");
-  pl.check(pl.guard("lookout").state === "stunned", "lookout knocked");
+  pl.until((p) => Math.abs(p.guard("lookout").x - p.cx) < 120 || isDown(p.guard("lookout")), pl.dir, 240, "near the lookout");
+  if (!isDown(pl.guard("lookout"))) pl.dash().until((p) => p.p.dashTime <= 0, pl.dir, 60, "knock the lookout");
+  pl.check(isDown(pl.guard("lookout")), "lookout knocked");
   if (roof) {
     // Sticker 3: from the ledge's left edge, jump and red-dash into the stacked
     // gate, run the roof, dash the mid gate, drop home.
@@ -485,9 +501,9 @@ function heistEscape(pl, { roof = false, alcove = false, knockAll = false } = {}
     // Red into the corridor and a dash through its patrol (it sees red: go
     // before its wind-up ends).
     pl.to(tx(43)).land();
-    pl.until((p) => Math.abs(p.guard("corridor").x - p.cx) < 130 || p.guard("corridor").state === "stunned", { left: true }, 600, "near the corridor card");
-    if (pl.guard("corridor").state !== "stunned") pl.dash().until((p) => p.p.dashTime <= 0, pl.dir, 60, "knock the corridor card");
-    pl.check(pl.guard("corridor").state === "stunned", "corridor card knocked");
+    pl.until((p) => Math.abs(p.guard("corridor").x - p.cx) < 130 || isDown(p.guard("corridor")), { left: true }, 600, "near the corridor card");
+    if (!isDown(pl.guard("corridor"))) pl.dash().until((p) => p.p.dashTime <= 0, pl.dir, 60, "knock the corridor card");
+    pl.check(isDown(pl.guard("corridor")), "corridor card knocked");
     pl.left().to(tx(21) + 8).land();
   } else {
     pl.color("green").to(tx(43)).land(); // drop into the corridor, green past the patrol
@@ -509,7 +525,7 @@ function stompIntoPit(pl) {
   const card = (p) => p.guard("pit");
   pl.until((p) => card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(14) + 24 && card(p).x < tx(15) + 24, {}, 1500, "pit card walking away");
   pl.right().until((p) => !p.p.grounded, { right: true }, 120, "off the edge").steerTo((p) => card(p).x - 6);
-  pl.check(card(pl).state === "stunned", "pit card stomped");
+  pl.check(isDown(card(pl)), "pit card stomped");
   pl.jump().landAt(tx(29) + 16);
   pl.check(Math.abs(pl.feet - tx(12)) < 1, "far rim");
 }
@@ -519,7 +535,7 @@ function islandChain(pl, slab) {
   pl.right().to(tx(32) + 10).jump();
   for (const id of ["isle-a", "isle-b", "isle-c", "isle-d"]) {
     pl.steerTo((p) => p.guard(id).x - 4);
-    pl.check(pl.guard(id).state === "stunned", `${id} stomped`);
+    pl.check(isDown(pl.guard(id)), `${id} stomped`);
   }
   if (slab) {
     pl.right().airJump().landAt(tx(61) + 16);
@@ -537,15 +553,15 @@ function wallStomp(pl, { ledge }) {
   const card = (p) => p.guard("wall"); // waits on the block, above the patrol's cone
   pl.until((p) => card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(74) && card(p).x < tx(76), {}, 1200, "wall card walking to the wall");
   pl.right().jump().steerTo((p) => card(p).x - 6);
-  pl.check(card(pl).state === "stunned", "wall card stomped");
+  pl.check(isDown(card(pl)), "wall card stomped");
   if (ledge) {
     pl.airJump().landAt(tx(75));
     pl.check(pl.g.stickers[1].collected, "the 8-tile ledge");
     // Off the ledge's left end, behind the patrol, for a second stomp.
     pl.left().until((p) => !p.p.grounded, { left: true }, 120, "off the ledge").landAt(tx(71) + 16);
-    pl.until((p) => card(p).state !== "stunned" && card(p).dir === 1 && card(p).turning <= 0 && card(p).x > tx(74) && card(p).x < tx(76), {}, 1500, "wall card again");
+    // The flattened card is a springboard for good: bounce on it again.
     pl.right().jump().steerTo((p) => card(p).x - 6);
-    pl.check(card(pl).state === "stunned", "wall card stomped again");
+    pl.check(pl.g.bounces >= 1, "wall card bounced again");
   }
   pl.right().airJump();
   pl.until((p) => p.p.grounded, { right: true }, 240, "on the wall");
@@ -595,7 +611,7 @@ function chainCard(pl, color = null) {
   pl.until((p) => c(p).dir === 1 && c(p).turning <= 0 && c(p).turnClock < 0.3, {}, 1200, "chain card faces away");
   pl.right().to(tx(125) + 26).jump().apex().dash();
   pl.until((p) => p.p.dashTime <= 0, pl.dir, 60, "dash").steerTo((p) => c(p).x - 6);
-  pl.check(c(pl).state === "stunned", "chain card stomped");
+  pl.check(isDown(c(pl)), "chain card stomped");
 }
 /** 1-4: jump at the lip, dash at the apex, land on the far bank (floor y). */
 function jumpDash(pl, lip, floor, label) {
@@ -657,7 +673,7 @@ export const EXPERT = {
     dashJumpAt(tx(101) + 24);
     pl.apex().dash();
     dashEnd().steerTo((p) => p.guard("pillar").x - 6);
-    pl.check(pl.guard("pillar").state === "stunned", "pillar stomped");
+    pl.check(isDown(pl.guard("pillar")), "pillar stomped");
     pl.settle().apex().dash();
     dashEnd().landAt(tx(123) + 16);
     // The chain card, without the guided wait: if it faces the island, a
@@ -673,7 +689,7 @@ export const EXPERT = {
       f.until((p) => p.p.dashCooldown <= 0 && p.p.grounded && p.g.hitstop <= 0, f.dir, 60, "cooldown").dash();
       f.wait(0.06).jump().apex().dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash end").steerTo((p) => c(p).x - 6);
-      f.check(c(f).state === "stunned", "chain stomped");
+      f.check(isDown(c(f)), "chain stomped");
       f.jump().settle().apex().dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash end").landAt(tx(155));
     };
@@ -682,7 +698,7 @@ export const EXPERT = {
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash end").airJump();
       f.until((p) => p.cx > c(p).x + over || p.p.grounded || p.g.phase !== "playing", { right: true }, 200, "over the card");
       f.left().steerTo((p) => c(p).x + 4);
-      f.check(c(f).state === "stunned", "chain stomped from behind");
+      f.check(isDown(c(f)), "chain stomped from behind");
       f.right().apex().jump().apex().dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash end").color("green").landAt(tx(155));
     };

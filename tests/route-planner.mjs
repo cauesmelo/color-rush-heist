@@ -34,12 +34,18 @@ export class Planner {
   /** Try alternative command sequences on forks; apply the first one for
    * which ok(fork) holds. Used where a moving card makes timing matter. */
   choose(options, ok, label = "choose") {
+    const hurt = this.g.hits + this.g.falls;
     for (const option of options) {
       const trial = this.fork();
       try {
         option(trial);
-        if (!ok(trial)) continue;
-      } catch {
+        // Every route is clean: an option that costs a heart is never kept.
+        if (!ok(trial) || trial.g.hits + trial.g.falls !== hurt) {
+          if (process.env.PLAN_DEBUG) console.error(`${label} option ${options.indexOf(option)}: rejected (${JSON.stringify(trial.g.events.filter((e) => e.type === 'hurt').map((e) => [e.source, e.guard, +e.time.toFixed(2), Math.round(e.x), JSON.stringify(e.was)]))} hits ${trial.g.hits}, spotted ${trial.g.spotted}, deaths ${trial.g.deaths}, x ${trial.cx.toFixed(0)}, feet ${trial.feet.toFixed(0)})`);
+          continue;
+        }
+      } catch (error) {
+        if (process.env.PLAN_DEBUG) console.error(`${label} option ${options.indexOf(option)}: ${error.message.slice(0, 90)}`);
         continue;
       }
       option(this);
@@ -168,6 +174,7 @@ export class Planner {
       phase: g.phase,
       time: +g.time.toFixed(2),
       deaths: g.deaths,
+      hits: g.hits + g.falls, // hearts lost: every route is clean
       spotted: g.spotted,
       stickers: M.stickerCount(g),
       stickerIds: g.stickers.filter((s) => s.collected).map((s) => s.id),

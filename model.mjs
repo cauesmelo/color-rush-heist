@@ -94,14 +94,32 @@ export const WORLD = Object.freeze({
   // saw a frozen Rubik and thought the game was broken.) Released and pressed
   // again it counts at once. Every checkpoint has runway for it (tested).
   respawnHold: 0.2,
-  bumpGrace: 0.6,
   // After a respawn (and after the theft's cards) every card holds still: a
   // respawn is never an instant alert, and the REVERSE cards never cover a charge.
   respawnCalm: 0.75,
   theftCalm: 1.9, // REVERSE sweep (1.1 s) + 0.8 s to act, counted after the GET card
   // get: the ability GET card (Mega Man's "weapon get") freezes the world for
   // 1.2 s; it is part of the simulation so routes replay identically.
-  hitstop: { stomp: 0.08, smash: 0.09, knock: 0.09, theft: 0.25, get: 1.2 },
+  hitstop: { stomp: 0.08, smash: 0.09, knock: 0.12, theft: 0.25, get: 1.2, hurt: 0.12 },
+  // ---- Health (RESEARCH_COMBAT.md section 3) ------------------------------
+  // Three hearts; every enemy hit, body bump and water fall costs exactly one,
+  // so "what hurt me" is always a single readable thing. Zero hearts is a real
+  // death (the checkpoint restore the game always had). A new checkpoint
+  // refills them, and so does a death; a stomp chain of `chainHeal` pays one.
+  hearts: 3,
+  invuln: 1.5, // s untouchable after a hit (blinking), long enough to leave the fight
+  hurtKnock: 300, // px/s sideways from a bump...
+  hurtKnockSpear: 380, // ...and from a spear
+  hurtPop: 280, // px/s up: a hop, so the knock clears the card's feet
+  hurtStun: 0.2, // s without steering after a hit (shorter than the 0.22 s it was)
+  hurtReact: 0.35, // s of the hit pose (presentation)
+  // ---- The stomp (RESEARCH_COMBAT.md section 5) ---------------------------
+  stompDepth: 34, // px: feet this far below the head's top still stomp while falling
+  stompWiden: 14, // px each side of the 48 px body: the stomp head is 76 px wide
+  chainBounceStep: 20, // px/s more bounce per chained stomp after the first...
+  chainBounceMax: 2, // ...for at most two steps: +40 px/s is about +14 px of apex
+  chainHeal: 3, // a chain this long (stomps and knocks before touching ground) pays a heart
+  chainHitstop: 0.015, // s of extra freeze per chain step (capped at +0.04)
   orbRespawn: 2.5,
   goalReach: 220, // px above a goal face's floor that still touches it
 });
@@ -123,30 +141,50 @@ export const GUARD = Object.freeze({
   w: 48,
   h: 84,
   patrolSpeed: 100, // the original 50 px/s at 2x
-  chargeSpeed: 240, // slower than Rubik's 330: a chase you can escape
-  suspectAfter: 0.25, // s continuously seen -> "?" (stops, cone orange)
-  alertAfter: 0.6, // s seen -> "!" (charge)
-  searchTime: 1, // s unseen before "?" calms down again
+  suspectAfter: 0.25, // s continuously seen -> "?" (stops, turns to face Rubik, cone orange)
+  alertAfter: 0.6, // s seen -> "!"
+  searchTime: 1.2, // s unseen: the card looks around ("?") before it gives up and patrols again
   lookBack: 0.4, // telegraph pause before every turn
-  windup: 0.35, // attack frames 0-3
-  lunge: 0.25, // attack frames 4-6: travels up to lungeDistance
-  lungeDistance: 128, // 4 tiles
-  recover: 0.7, // frames 7-9: stompable opening
-  stun: 3,
-  spearReach: 66, // px beyond the body edge: 8-12 px short of the drawn tip (generous)
-  // Spear band, px above the card's floor = the drawn spear head in the lunge
-  // frames (green sheet: 50-68 px, red sheet: 46-64 px). Rubik (52 px tall)
-  // can never pass under it, so only the top edge decides a jump over it.
+  notice: 0.45, // s a card stands on "!" before it moves: time to back off or go green
+  // The spear is exactly the drawn spear, measured from the lunge frames 4-6
+  // (tests: C2): tip 102 px (green) / 98 px (red) from the body centre, 2 px
+  // inside the art. Spear band, px above the card's floor = the drawn spear
+  // head (green 50-68, red 46-64). Rubik (52 px tall) can't pass under it, so
+  // only its top edge decides a jump over.
+  spearReach: Object.freeze({ green: 76, red: 72 }), // px beyond the 24 px half body
   spearBand: Object.freeze({ green: Object.freeze([50, 68]), red: Object.freeze([46, 64]) }),
-  lungeRange: 150, // start a windup when Rubik is this close in front
-  bumpReaction: 0.6, // s a bumped card stands, "!" up, before it may attack
-  notice: 0.45, // s a card stands on "!" before charging: time to back off or go green
-  bumpKnock: 300, // px/s knockback from an unaware card...
-  awareKnock: 440, // ...and from an aware one: thrown back the way he came
-  spearOnBump: 3, // the 3rd bump on an aware card is answered with the spear
+  bumpReaction: 0.3, // s a card bumped by Rubik stands on "!" before it acts
   escapeSpeed: 1.6, // after the theft green cards patrol faster...
   escapeSuspect: 0.15, // ...and grow suspicious sooner (escape pressure, no timer)
+  defeatTime: 0.5, // s the defeat poof is on screen (the card has no body from the first tick)
 });
+
+/** Enemy types (RESEARCH_COMBAT.md section 4): one state machine - calm ->
+ * suspect "?" -> alert "!" -> windup -> strike -> recover -> search -> calm -
+ * and a table of numbers, so a type is a different spatial problem, not a
+ * different rulebook. Every windup is >= 0.4 s of telegraph (tested). The
+ * windup is committed (no turning), the strike is the only moment the spear
+ * hurts, and the recovery is Rubik's opening (no body damage, stompable).
+ *   chase:    px/s it walks toward Rubik while aware (0 = holds its post);
+ *   range:    start a windup when Rubik is this far ahead (centre to centre);
+ *   travel:   px it moves during the strike (clamped to its patrol bounds);
+ *   stomp:    "defeat" (a poof) or "daze" (armoured: flipped and ringed for
+ *             `daze` s, a second stomp or a dash-knock defeats it);
+ *   wallDaze: s it stays dazed when a strike ends against its bound or a wall. */
+export const ENEMY = Object.freeze({
+  walker: Object.freeze({ chase: 190, range: 150, windup: 0.55, strike: 0.2, travel: 72, recover: 0.9, stomp: "defeat" }),
+  sentinel: Object.freeze({ chase: 0, range: 130, windup: 0.65, strike: 0.16, travel: 0, recover: 1.0, stomp: "defeat" }),
+  charger: Object.freeze({ chase: 120, range: 260, windup: 0.8, strike: 0.6, travel: 288, recover: 1.1, stomp: "daze", daze: 2.0, wallDaze: 1.6 }),
+});
+/** A card's type: explicit (`type` in its level data) or derived from how the
+ * level already describes it. Patrols walk (a red patrol charges); a sentry
+ * with 4+ tiles of room is mobile too (a red one charges), and a sentry that
+ * is nailed to its post holds it and jabs. */
+export function enemyType(spec) {
+  if (spec.type) return spec.type;
+  const mobile = spec.mode === "patrol" || spec.max - spec.min >= 128;
+  return mobile ? (spec.kind === "red" ? "charger" : "walker") : "sentinel";
+}
 
 /** The one assist (pause menu -> Options, off by default): "Slow spotting"
  * multiplies how long a card must keep Rubik in sight before "?" and before
@@ -267,7 +305,12 @@ function makePlayer(x, floor, color, direction) {
     heldLock: { left: false, right: false },
     holdLock: 0,
     knock: 0,
-    bumpGrace: 0,
+    hp: WORLD.hearts,
+    invuln: 0, // s untouchable (blinking) after a hit
+    hurt: 0, // s of the hit pose (presentation)
+    chain: 0, // stomps and knocks since Rubik last touched the ground or was hit
+    stomped: 0, // s after a stomp in which card bodies cannot hurt him
+    safe: null, // last good ground {x, floor}: where a fall into water puts him back
     grace: WORLD.respawnGrace,
     storm: 0,
     stormFrom: color,
@@ -278,6 +321,10 @@ function makePlayer(x, floor, color, direction) {
 function makeGuard(spec) {
   return {
     ...spec,
+    type: enemyType(spec), // walker | sentinel | charger (ENEMY): one rulebook, three spatial problems
+    defeatT: 0, // s since the defeat poof started
+    lungeFrom: spec.x,
+    bonk: false, // the strike in progress ends on its bound (a charger daze)
     // Every card is awake: patrols walk, sentries turn on timers (or hold one
     // facing: `fixed`). Escape-only cards are "away" (no body) until the theft.
     state: spec.escapeOnly ? "away" : "calm",
@@ -337,7 +384,11 @@ export function createGame(level = "1-1", options = {}) {
     bounces: 0,
     smashes: 0,
     knockouts: 0,
-    takedowns: [], // ids of the cards stomped or knocked in this run (the Takedown stamp)
+    takedowns: [], // ids of the cards defeated in this run (the Takedown stamp)
+    hits: 0, // hearts lost to cards in this run (damage taken, for the tally and the proxies)
+    hitsBy: {}, // ... by source: spear, bump
+    falls: 0, // hearts lost to water (a survivable fall puts Rubik back on safe ground)
+    chainBest: 0, // the longest stomp/knock chain of this run (the Chain stamp)
     respawns: 0,
     dashes: 0,
     stolen: false,
@@ -404,7 +455,7 @@ function saveCheckpoint(g, index) {
     // Awareness never persists into a respawn: a card mid-charge at save time
     // is restored calm where it stood, so a respawn is never an instant alert.
     guards: g.guards.map((guard) =>
-      ["drained", "stunned", "calm", "away"].includes(guard.state)
+      ["drained", "stunned", "calm", "away", "defeated"].includes(guard.state)
         ? { ...guard, locked: false }
         : { ...guard, state: "calm", sight: 0, lost: 0, timer: 0, locked: false },
     ),
@@ -422,17 +473,44 @@ function saveCheckpoint(g, index) {
     takedowns: g.takedowns,
     color: g.player.color,
   });
-  if (g.phase === "playing" && g.time > 0) event(g, "checkpoint", cp.x, cp.floor, { id2: cp.id });
+  if (g.phase === "playing" && g.time > 0) {
+    event(g, "checkpoint", cp.x, cp.floor, { id2: cp.id });
+    // A checkpoint refills every heart (the chalk face is a rest).
+    while (g.player.hp < WORLD.hearts) heal(g, "checkpoint");
+  }
 }
 
 /** Rewind to the last checkpoint snapshot. Rubik faces the way the level
  * continues (home, i.e. left, during the getaway). */
 const RESTORED = ["guards", "stones", "orbs", "pickups", "unlocked", "dashUnlocked", "stolen", "theftTime", "stomps", "bounces", "smashes", "knockouts", "takedowns"];
 export function respawn(g) {
-  const s = structuredClone(g.snapshot),
-    cp = g.level.checkpoints[g.checkpointIndex];
-  for (const key of RESTORED) g[key] = s[key];
-  g.player = makePlayer(cp.x - PLAYER.w / 2, cp.floor, s.color, g.stolen ? -1 : cp.dir ?? 1);
+  // A fall into water that left hearts (g.deathKind "fall") puts Rubik back on
+  // the last safe ground with the world as it is (what he defeated stays
+  // defeated); zero hearts, a spear or a catch restores the checkpoint segment.
+  const partial = g.deathKind === "fall",
+    cp = g.level.checkpoints[g.checkpointIndex],
+    before = g.player;
+  let at = { x: cp.x, floor: cp.floor },
+    color,
+    dir;
+  if (partial) {
+    at = before.safe || at;
+    color = before.color;
+    dir = before.direction;
+  } else {
+    const s = structuredClone(g.snapshot);
+    for (const key of RESTORED) g[key] = s[key];
+    color = s.color;
+    dir = g.stolen ? -1 : cp.dir ?? 1;
+  }
+  g.player = makePlayer(at.x - PLAYER.w / 2, at.floor, color, dir);
+  g.player.safe = { ...at };
+  if (partial) {
+    g.player.hp = before.hp;
+    g.player.invuln = WORLD.invuln; // the blink: a fall is never followed by a hit
+    g.player.dashCharge = 1;
+  }
+  g.deathKind = null;
   // A direction held continuously since the death waits WORLD.respawnHold
   // (0.2 s), then moves Rubik as if pressed; one released and pressed again
   // during the hop counts at once. A retry (R) while alive locks nothing: the
@@ -452,7 +530,7 @@ export function respawn(g) {
   g.pendingAbsorb = 0;
   g.colorCooldown = 0;
   g.respawns++;
-  event(g, "respawn", g.player.x, g.player.y);
+  event(g, "respawn", g.player.x, g.player.y, { partial });
   return g;
 }
 
@@ -461,6 +539,7 @@ export function die(g, reason) {
   if (g.phase !== "playing") return false;
   if (reason !== "water" && p.grace > 0) return false;
   g.phase = "dead";
+  g.deathKind = "death";
   g.deathHeld = { left: true, right: true }; // cleared per key once released
   g.deaths++;
   g.deathsHere++;
@@ -470,6 +549,49 @@ export function die(g, reason) {
   if (reason === "water" && inDashZone(g)) g.hintData.gapFails++;
   event(g, "die", p.x, p.y, { reason });
   return true;
+}
+
+/** Water costs a heart whatever the blink says (a pit has no i-frames). With
+ * hearts left Rubik hops back onto the last safe ground in 0.45 s and the cards
+ * hold still for 0.75 s: a failed jump over water costs seconds, not a
+ * checkpoint's worth of walking. The last heart is a real death. */
+function fall(g) {
+  const p = g.player;
+  if (g.phase !== "playing") return;
+  p.hp -= 1;
+  g.falls++;
+  p.chain = 0;
+  if (inDashZone(g)) g.hintData.gapFails++;
+  if (p.hp <= 0) {
+    die(g, "water");
+    return;
+  }
+  g.phase = "dead";
+  g.deathKind = "fall";
+  g.deathHeld = { left: true, right: true };
+  g.deathTimer = WORLD.respawnDelay;
+  g.deathReason = "water";
+  g.deathAt = { x: p.x, y: p.y, color: p.color, direction: p.direction };
+  event(g, "fall", p.x + p.w / 2, p.y, { hp: p.hp });
+}
+
+/** Remember ground worth coming back to: Rubik is standing at least 14 px
+ * inside both edges of it, no card that can hurt is within 130 px on his
+ * floor, and he is not being knocked about. */
+function trackSafe(g) {
+  const p = g.player,
+    cx = p.x + p.w / 2,
+    row = Math.round((p.y + p.h) / TILE);
+  if (p.knock > 0 || p.dashTime > 0 || p.invuln > 0) return;
+  for (const off of [-14, 14]) {
+    const tx = Math.floor((cx + off) / TILE);
+    if (!blocked(g, tx, row)) return;
+  }
+  for (const c of g.guards) {
+    if (["away", "defeated", "drained", "stunned"].includes(c.state)) continue;
+    if (Math.abs(c.x - cx) < 130 && Math.abs(c.floor - (p.y + p.h)) < 60) return;
+  }
+  p.safe = { x: cx, floor: p.y + p.h };
 }
 
 export function switchColor(g, color) {
@@ -686,11 +808,12 @@ export const guardBox = (guard) => ({
 });
 export function spearBox(guard) {
   const front = guard.x + guard.dir * (GUARD.w / 2),
+    reach = GUARD.spearReach[guard.kind] ?? GUARD.spearReach.green,
     [low, high] = GUARD.spearBand[guard.kind] || GUARD.spearBand.green;
   return {
-    x: guard.dir > 0 ? front : front - GUARD.spearReach,
+    x: guard.dir > 0 ? front : front - reach,
     y: guard.floor - high,
-    w: GUARD.spearReach,
+    w: reach,
     h: high - low,
   };
 }
@@ -735,36 +858,62 @@ function alertGuard(g, guard, counted = true) {
   guard.state = "alert";
   guard.lost = 0;
   guard.turning = 0;
-  // "!" is a beat, not an attack: the card stands before it charges.
+  // "!" is a beat, not an attack: the card stands before it moves.
   guard.timer = wasAware ? 0 : GUARD.notice;
   if (counted && !wasAware) {
     g.spotted++;
     event(g, "spotted", guard.x, guard.floor - GUARD.h, { guard: guard.id });
-    // Caught (level.caught, 1-3): before 1-5 teaches the spear, a card that
-    // says "!" raises the alarm and Rubik is sent back to the last checkpoint
-    // (Ocarina of Time's castle courtyard: seen = thrown out, no death). The
-    // "?" before it (0.25 s seen) is the warning: 0.35 s to leave the cone.
+    // Caught (level.caught, 1-3): the stealth lesson. A card that says "!"
+    // raises the alarm and Rubik is sent back to the last checkpoint (Ocarina
+    // of Time's castle courtyard: seen = thrown out, no heart lost). The "?"
+    // before it (0.25 s seen) is the warning: 0.35 s to leave the cone.
     if (g.level.caught) die(g, "caught");
   }
+}
+
+/** The ground a strike will sweep: from the card's front edge to the tip of
+ * its spear at the end of the travel (clamped to its patrol bounds), at the
+ * spear's height. The renderer draws it during the windup (the telegraph is
+ * the hit shape), and the tests compare it with the drawn spear. */
+export function strikeZone(guard) {
+  const prof = ENEMY[guard.type] || ENEMY.walker,
+    room = Math.max(0, guard.dir > 0 ? guard.max - guard.x : guard.x - guard.min),
+    travel = Math.min(prof.travel, room),
+    reach = GUARD.spearReach[guard.kind] ?? GUARD.spearReach.green,
+    [low, high] = GUARD.spearBand[guard.kind] || GUARD.spearBand.green,
+    front = guard.x + guard.dir * (GUARD.w / 2),
+    end = front + guard.dir * (travel + reach);
+  return { x: Math.min(front, end), w: Math.abs(end - front), y: guard.floor - high, h: high - low, travel };
 }
 
 function updateGuard(g, guard, dt) {
   const p = g.player;
   guard.anim += dt;
+  if (guard.state === "defeated") {
+    guard.defeatT += dt;
+    return;
+  }
   if (guard.state === "drained" || guard.state === "away") return;
   guard.reach = coneReach(g, guard);
+  const prof = ENEMY[guard.type] || ENEMY.walker;
   if (guard.state === "stunned") {
+    // Dazed (an armoured card stomped once, or a charge that ended on its
+    // bound): flipped, ringed, harmless. Not a timer to wait out: a second
+    // stomp or a dash-knock defeats it, and when the ring runs out it is up
+    // again and angry (search -> it sees Rubik at once if he is in its cone).
     guard.sees = false;
     guard.locked = false;
     guard.timer -= dt;
     if (guard.timer <= 0) {
       guard.state = "search";
-      guard.timer = GUARD.searchTime;
+      guard.timer = 0;
+      guard.lost = 0;
+      event(g, "recovered", guard.x, guard.floor - GUARD.h, { guard: guard.id });
     }
     return;
   }
   guard.squash = tick(guard.squash, dt);
-  if (g.calm > 0 && guard.state !== "stunned") {
+  if (g.calm > 0) {
     // The calm hold: nothing advances, nothing moves (respawns, the theft).
     guard.sees = false;
     guard.disguiseSeen = false;
@@ -839,6 +988,9 @@ function updateGuard(g, guard, dt) {
       if (sees) {
         guard.lost = 0;
         guard.sight += dt;
+        // "?" is a card that stopped and turned to look: facing him is how
+        // the player reads what it noticed (a patrol no longer walks on).
+        if (Math.abs(dx) > 4 && guard.state === "suspect") guard.dir = Math.sign(dx);
         // A searching card already knows Rubik is near: one glimpse re-alerts.
         if (guard.state === "search" || guard.sight >= GUARD.alertAfter * (g.slowSpotting ? ASSIST.spotScale : 1)) alertGuard(g, guard);
       } else {
@@ -849,6 +1001,7 @@ function updateGuard(g, guard, dt) {
           guard.sight = 0;
           guard.turnClock = 0;
           guard.bumps = 0;
+          event(g, "gaveup", guard.x, guard.floor - GUARD.h, { guard: guard.id });
         }
       }
       break;
@@ -870,53 +1023,69 @@ function updateGuard(g, guard, dt) {
         guard.timer = tick(guard.timer, dt);
         break;
       }
-      const sameFloor = Math.abs(p.y + p.h - guard.floor) < 48,
+      const attacks = g.level.spears !== false,
+        sameFloor = Math.abs(p.y + p.h - guard.floor) < 48,
         atBound = guard.dir > 0 ? guard.x >= guard.max - 0.5 : guard.x <= guard.min + 0.5,
-        room = Math.max(0, guard.dir > 0 ? guard.max - guard.x : guard.x - guard.min),
-        // How far ahead the spear can land from here, given the patrol bound.
-        spearReach = Math.min(GUARD.lungeDistance, room) + GUARD.w / 2 + GUARD.spearReach,
-        inReach = Math.abs(dx) - p.w / 2 <= spearReach;
-      // Before 1-5 teaches the full ladder, a card that spots Rubik only
-      // charges and bumps him back (level.spears === false): no spear yet.
-      if (g.level.spears !== false && sees && sameFloor && inReach && Math.abs(dx) <= GUARD.lungeRange && Math.sign(dx) === guard.dir) {
+        facing = Math.sign(dx) === guard.dir,
+        zone = strikeZone(guard),
+        // Could the strike from here connect with Rubik's body? A card never
+        // starts a windup it could not finish with a hit (no bluffing from
+        // out of reach), and the 24 px of slack is the telegraph's grace.
+        inReach = Math.abs(dx) - p.w / 2 <= GUARD.w / 2 + zone.travel + (GUARD.spearReach[guard.kind] ?? GUARD.spearReach.green) + 24;
+      if (attacks && sees && sameFloor && inReach && facing && Math.abs(dx) <= prof.range) {
         guard.state = "windup";
-        guard.timer = GUARD.windup;
+        guard.timer = prof.windup;
         guard.stuck = 0;
-        event(g, "windup", guard.x, guard.floor - GUARD.h, { guard: guard.id });
+        event(g, "windup", guard.x, guard.floor - GUARD.h, { guard: guard.id, etype: guard.type, windup: prof.windup });
         break;
       }
-      // Pinned at its patrol bound with Rubik out of reach: it gives up after
-      // 0.8 s and turns back (no endless wind-ups 10 px short).
-      if (atBound && !inReach) {
+      // Give up: a card that cannot reach Rubik - pinned at its bound, nailed
+      // to its post, or he is on another floor - stands on "!" for a second
+      // and then looks around instead of staring at him forever.
+      const stalled = !sameFloor || prof.chase === 0 || (atBound && facing);
+      if (stalled) {
         guard.stuck += dt;
-        if (guard.stuck >= 0.8) {
+        if (guard.stuck >= 1) {
           guard.stuck = 0;
-          guard.dir *= -1;
           guard.state = "search";
           guard.lost = 0;
           guard.sight = 0;
+          event(g, "gaveup", guard.x, guard.floor - GUARD.h, { guard: guard.id });
           break;
         }
-      } else guard.stuck = 0;
-      guard.x += guard.dir * GUARD.chargeSpeed * dt;
-      clampX();
+      } else {
+        guard.stuck = 0;
+        guard.x += guard.dir * prof.chase * dt;
+        clampX();
+      }
       break;
     }
     case "windup": {
+      // Committed: it cannot turn or move, so a dodge is a read of a fixed line.
       guard.timer -= dt;
       if (guard.timer <= 0) {
         guard.state = "lunge";
-        guard.timer = GUARD.lunge;
-        guard.lungeTarget = Math.max(guard.min, Math.min(guard.max, guard.x + guard.dir * GUARD.lungeDistance));
+        guard.timer = prof.strike;
+        guard.lungeFrom = guard.x;
+        guard.lungeTarget = Math.max(guard.min, Math.min(guard.max, guard.x + guard.dir * prof.travel));
+        // A strike cut short by its bound or a wall (>= 24 px) is a bonk for a charger.
+        guard.bonk = Math.abs(guard.x + guard.dir * prof.travel - guard.lungeTarget) >= 24;
+        event(g, "strike", guard.x, guard.floor - GUARD.h, { guard: guard.id, etype: guard.type });
       }
       break;
     }
     case "lunge": {
       guard.timer -= dt;
-      guard.x = toward(guard.x, guard.lungeTarget, (GUARD.lungeDistance / GUARD.lunge) * dt);
+      if (prof.travel > 0) guard.x = toward(guard.x, guard.lungeTarget, (prof.travel / prof.strike) * dt);
       if (guard.timer <= 0) {
-        guard.state = "recover";
-        guard.timer = GUARD.recover;
+        if (guard.bonk && prof.wallDaze) {
+          guard.state = "stunned";
+          guard.timer = prof.wallDaze;
+          event(g, "bonk", guard.x + guard.dir * (GUARD.w / 2), guard.floor - GUARD.h / 2, { guard: guard.id });
+        } else {
+          guard.state = "recover";
+          guard.timer = prof.recover;
+        }
       }
       break;
     }
@@ -925,7 +1094,7 @@ function updateGuard(g, guard, dt) {
       if (guard.timer <= 0) {
         guard.state = sees ? "alert" : "search";
         guard.lost = 0;
-        guard.timer = 0;
+        guard.timer = sees ? 0.3 : 0; // a short beat: never an instant second attack
       }
       break;
     }
@@ -936,12 +1105,59 @@ function updateGuard(g, guard, dt) {
 function takedown(g, guard) {
   if (!g.takedowns.includes(guard.id)) g.takedowns.push(guard.id);
 }
+/** A card is defeated: a poof, no body, no cone, gone for the rest of the
+ * segment (a death restores it with the rest of the world), unless it is a
+ * `pad`. `how` is "stomp" or "knock"; the renderer reads `defeatHow` and
+ * `defeatDir`. */
+function defeat(g, guard, how, dir = 0) {
+  guard.sees = false;
+  guard.locked = false;
+  guard.sight = 0;
+  takedown(g, guard);
+  if (guard.pad) {
+    // A springboard card (level data `pad`): the level needs its bounce, so a
+    // failed attempt must never strand Rubik below a wall with the card gone.
+    // It is flattened for good - grey, harmless, bounce on it as often as you
+    // like (no chain: nothing is farmed) - the glow card's rule.
+    guard.state = "drained";
+    event(g, "defeat", guard.x, guard.floor - GUARD.h / 2, { guard: guard.id, how, etype: guard.type, pad: true });
+    return;
+  }
+  guard.state = "defeated";
+  guard.defeatT = 0;
+  guard.defeatHow = how;
+  guard.defeatDir = dir || guard.dir;
+  event(g, "defeat", guard.x, guard.floor - GUARD.h / 2, { guard: guard.id, how, etype: guard.type, pad: false });
+}
+/** One more stomp or knock in the chain Rubik has not interrupted by touching
+ * the ground or being hit. The third pays a heart (Super Mario World's 1-Up
+ * on the long chain, at a size this game's short levels can reach). */
+function chainUp(g, x, y) {
+  const p = g.player;
+  p.chain++;
+  g.chainBest = Math.max(g.chainBest, p.chain);
+  event(g, "chain", x, y, { n: p.chain });
+  if (p.chain === WORLD.chainHeal) heal(g, "chain");
+  return p.chain;
+}
+function heal(g, source) {
+  const p = g.player;
+  if (p.hp >= WORLD.hearts) return false;
+  p.hp++;
+  event(g, "heal", p.x + p.w / 2, p.y, { source, hp: p.hp });
+  return true;
+}
 function stomp(g, guard) {
   const p = g.player;
   // Hold jump (or press it as you land: up to 0.12 s before, or during the
-  // freeze and 0.05 s after) for the high bounce; otherwise a hop.
-  const high = p.jumpHeld || p.jumpBuffer > 0;
-  p.vy = -(high ? WORLD.stompBounce : WORLD.stompBounceLow);
+  // freeze and 0.05 s after) for the high bounce; otherwise a hop. Each stomp
+  // chained before touching ground adds a little bounce (never more than
+  // +40 px/s, about +14 px of apex), so the chain keeps its height.
+  const drained = guard.state === "drained",
+    high = p.jumpHeld || p.jumpBuffer > 0,
+    chain = drained ? 0 : chainUp(g, guard.x, guard.floor - GUARD.h),
+    step = Math.min(WORLD.chainBounceMax, Math.max(0, chain - 1)) * WORLD.chainBounceStep;
+  p.vy = -((high ? WORLD.stompBounce : WORLD.stompBounceLow) + step);
   p.jumpHeld = high;
   p.jumpBuffer = 0;
   p.bounce = high ? 0 : WORLD.hitstop.stomp + WORLD.stompGrace;
@@ -949,12 +1165,13 @@ function stomp(g, guard) {
   p.airJumped = false; // a bounce refreshes white's air jump
   p.rising = false;
   p.grounded = false;
-  g.hitstop = Math.max(g.hitstop, WORLD.hitstop.stomp);
+  p.stomped = 0.2; // no contact damage while he rises out of the card he landed on
+  g.hitstop = Math.max(g.hitstop, WORLD.hitstop.stomp + Math.min(0.04, Math.max(0, chain - 1) * WORLD.chainHitstop));
   refill(g, "stomp");
   guard.squash = 0.16;
-  if (guard.state === "drained") {
+  if (drained) {
     // The drained card stays dazed forever: a springboard (a bounce, not a
-    // stun, so nothing is farmed).
+    // defeat, so nothing is farmed).
     g.bounces++;
     event(g, "bounce", guard.x, guard.floor - GUARD.h, { guard: guard.id });
     return;
@@ -968,13 +1185,21 @@ function stomp(g, guard) {
     event(g, "drain", guard.x, guard.floor - GUARD.h / 2, { guard: guard.id });
     return;
   }
-  takedown(g, guard);
-  guard.state = "stunned";
-  guard.timer = GUARD.stun;
-  guard.sight = 0;
   g.stomps++;
   if (g.hints.behind === "shown") g.hints.behind = "done";
-  event(g, "stomp", guard.x, guard.floor - GUARD.h, { guard: guard.id });
+  event(g, "stomp", guard.x, guard.floor - GUARD.h, { guard: guard.id, chain, etype: guard.type, high });
+  const prof = ENEMY[guard.type] || ENEMY.walker;
+  if (prof.stomp === "daze" && guard.state !== "stunned") {
+    // Armoured: the first stomp flips it and starts a visible ring. The second
+    // stomp (or a dash-knock) defeats it; neither, and it gets up angry.
+    guard.state = "stunned";
+    guard.timer = prof.daze;
+    guard.sight = 0;
+    guard.bumps = 0;
+    event(g, "daze", guard.x, guard.floor - GUARD.h, { guard: guard.id, chain });
+    return;
+  }
+  defeat(g, guard, "stomp", Math.sign(guard.x - (p.x + p.w / 2)));
 }
 
 /** A GET moment: the ability is unlocked, the world freezes for the GET card
@@ -1015,118 +1240,104 @@ function separate(g, box) {
 const AWARE = ["alert", "windup", "lunge", "recover", "search", "suspect"];
 /** How far Rubik's centre is ahead of a card, along the way it faces (px). */
 const aheadOf = (g, guard) => (g.player.x + g.player.w / 2 - guard.x) * guard.dir;
-/** Head stomps work from above or behind. A card that faces Rubik raises its
- * spear (drawn), and an aware card ("!", wind-up, lunge) always has it up; its
- * 0.7 s recovery after a lunge is the stompable opening. */
+/** Every card can be stomped from above, whatever it faces or is doing: the
+ * old rule (a card facing Rubik raised its spear and a landing "popped" him)
+ * was the unreadable half of the stomp. The danger is the strike in front of
+ * a card and its body, never its head. */
 export function stompable(g, guard) {
-  if (guard.state === "drained" || guard.state === "recover") return true;
-  // The card holding Rubik's green (1-2) carries it, not a spear: always.
-  if (guard.absorb && !g.unlocked.green) return true;
-  if (["alert", "windup", "lunge", "stunned"].includes(guard.state)) return false;
-  // Came at its face (the last side Rubik was on while clear of its head is
-  // the side it looks at): it saw him coming, even if the jump carries him
-  // over onto its back half. Run-and-jump can't skip a lookout; drop from
-  // above or come from behind.
-  if (guard.sideX * guard.dir > 0) return false;
-  return aheadOf(g, guard) <= 12; // up to half the head ahead of centre still counts as "above"
+  return !["away", "defeated"].includes(guard.state);
 }
-/** Landing on a raised spear: a failed stomp. Rubik is knocked aside off its
- * head (no damage) and the card turns on him. The pop is a hit reaction, not
- * a springboard: -150 px/s lifts him ~10 px (the old -360 lifted ~55 px and a
- * cone-blind player chained it with white's air jump over 1-2's wall and
- * 1-5's P2 card). The sideways push (440 px/s, 0.22 s of no control) clears
- * the 68 px head from any landing point, so there is no spike-spike loop. */
-function spike(g, guard) {
-  const p = g.player,
-    away = Math.sign(p.x + p.w / 2 - guard.x) || guard.dir;
-  p.vy = -WORLD.spikePop;
-  p.vx = away * GUARD.awareKnock;
-  p.knock = 0.22;
-  p.jumps = 1;
+
+/** The one way a card, a bump or a fall takes a heart. Returns false when
+ * Rubik is untouchable (respawn / theft grace, or the blink after a hit).
+ * The hit: hit-stop, knockback away from the source, a short loss of steering,
+ * `invuln` seconds of blinking, the chain broken. Zero hearts is a death. */
+function hurt(g, source, fromX, guard = null) {
+  const p = g.player;
+  if (g.phase !== "playing" || p.grace > 0 || p.invuln > 0) return false;
+  const away = Math.sign(p.x + p.w / 2 - fromX) || -(guard?.dir || 1),
+    was = { vy: Math.round(p.vy), grounded: p.grounded, feet: Math.round(p.y + p.h) };
+  p.hp -= 1;
+  p.invuln = WORLD.invuln;
+  p.hurt = WORLD.hurtReact;
+  p.chain = 0;
+  p.vx = away * (source === "spear" ? WORLD.hurtKnockSpear : WORLD.hurtKnock);
+  p.vy = -WORLD.hurtPop;
+  p.knock = WORLD.hurtStun;
+  p.dashTime = 0;
   p.grounded = false;
-  p.bumpGrace = WORLD.bumpGrace;
-  event(g, "spike", guard.x, guard.floor - GUARD.h, { guard: guard.id });
-  // 1-2's bubble: the first spear-up teaches "from behind" (drawn, no text).
+  p.carry = 0;
+  g.hits++;
+  g.hitsBy[source] = (g.hitsBy[source] || 0) + 1;
+  g.hitstop = Math.max(g.hitstop, WORLD.hitstop.hurt);
+  event(g, "hurt", p.x + p.w / 2, p.y + p.h / 2, { source, hp: p.hp, guard: guard?.id, dir: away, was });
+  // 1-2's bubble: the first hit teaches the stomp (a card, an arrow onto its head).
   if (levelHint(g, "behind") && g.hints.behind === "pending") showHint(g, "behind");
-  if (guard.state === "recover" || guard.state === "drained") return;
-  guard.dir = away;
-  alertGuard(g, guard, canSee(guard, p.color));
+  if (p.hp <= 0) die(g, source);
+  return true;
 }
+
 function guardContacts(g, prevBottom) {
   const p = g.player;
   for (const guard of g.guards) {
-    if (guard.state === "away") continue;
+    if (guard.state === "away" || guard.state === "defeated") continue;
     // Which world side Rubik approaches from (kept while he is over its head).
     const rel = p.x + p.w / 2 - guard.x;
     if (Math.abs(rel) > 40) guard.sideX = Math.sign(rel);
     const box = guardBox(guard),
       top = guard.floor - GUARD.h,
-      widen = guard.catch ?? 10;
-    // Stomps use a head wider than the body (Mario-style forgiveness; the
-    // dozing first card is wider still); the previous foot height keeps side
-    // contact from counting as a stomp.
+      widen = guard.catch ?? WORLD.stompWiden;
+    // The stomp: Rubik is falling and his feet were no more than `stompDepth`
+    // below the card's top on the previous tick, over a head wider than the
+    // body (Mario-style forgiveness). Landing from the side or from behind on
+    // the card's upper third is a stomp too, never a hit.
     const head = { x: box.x - widen, y: box.y, w: box.w + widen * 2, h: box.h };
-    if (p.vy > 0 && prevBottom <= top + 10 && guard.state !== "stunned" && overlaps(p, head)) {
-      if (stompable(g, guard)) stomp(g, guard);
-      else if (p.bumpGrace > 0) separate(g, box); // just spiked: slide off, no loop
-      else spike(g, guard);
+    if (p.vy > 0 && prevBottom <= top + WORLD.stompDepth && overlaps(p, head)) {
+      stomp(g, guard);
       continue;
     }
     if (!overlaps(p, box)) continue;
-    if (guard.state === "drained" || guard.state === "stunned") continue;
     // Disguised: a card lets its own colour through, unless it is locked on
     // (it watched him swap, so it still sees him): then its body blocks him
-    // like any other colour's. Before this a cone-blind player could take a
-    // "?" as white, swap, and walk straight through the card that asked.
-    if (p.color === guard.kind && !guard.sees) continue;
+    // like any other colour's.
+    if (p.color === guard.kind && !guard.sees && guard.state !== "stunned") continue;
+    if (guard.state === "drained") continue;
     if (p.color === "red" && p.dashTime > 0) {
-      // Red dash knocks a card aside and refunds the dash (M5/M7 power).
-      guard.state = "stunned";
-      guard.timer = GUARD.stun;
-      guard.sight = 0;
-      guard.bumps = 0;
-      guard.x = Math.max(guard.min, Math.min(guard.max, guard.x + p.dashDirection * 40));
+      // Red dash knocks a card out (the second way to defeat one, and the
+      // only way to finish a dazed armoured card without a second stomp) and
+      // refunds the dash (M5/M7 power). It joins the stomp chain.
+      const dir = p.dashDirection;
       g.knockouts++;
-      takedown(g, guard);
       g.hitstop = Math.max(g.hitstop, WORLD.hitstop.knock);
       refill(g, "knock");
-      event(g, "knock", guard.x, guard.floor - GUARD.h / 2, { guard: guard.id });
+      chainUp(g, guard.x, guard.floor - GUARD.h / 2);
+      defeat(g, guard, "knock", dir);
+      event(g, "knock", guard.x, guard.floor - GUARD.h / 2, { guard: guard.id, dir });
       continue;
     }
-    if (p.bumpGrace > 0 || p.grace > 0) {
-      separate(g, box); // solid, but no new bump during grace
-      continue;
-    }
-    if (guard.state === "calm" && aheadOf(g, guard) < -4) {
-      // Brushing a calm card's back: it doesn't notice (sneak up, don't shove).
+    if (guard.state === "stunned") continue; // dazed: walk through, or stomp it
+    // Solid but unhurt: respawn grace, the blink after a hit, the rise out of
+    // a stomp, and an open card (its recovery is the player's opening).
+    if (p.grace > 0 || p.invuln > 0 || p.stomped > 0 || guard.state === "recover") {
       separate(g, box);
       continue;
     }
-    // Body contact never kills by itself: Rubik is thrown back the way he came
-    // and the card notices. Ramming an aware card escalates: 0.6 s, then
-    // 0.3 s to react, and the 3rd bump is answered with the spear.
-    const aware = AWARE.includes(guard.state),
+    // Body contact hurts (one heart, a small bump), from the front, the side
+    // or behind; only a head-first landing is free. A calm card that is
+    // walked into from behind does not notice (it is a bump, not an alarm).
+    const behindCalm = guard.state === "calm" && aheadOf(g, guard) < -4,
       away = Math.sign(p.x + p.w / 2 - guard.x) || -guard.dir;
-    guard.bumps = aware ? guard.bumps + 1 : 1;
     separate(g, box);
-    p.vx = away * (aware ? GUARD.awareKnock : GUARD.bumpKnock);
-    p.vy = aware ? -300 : -260;
-    p.knock = aware ? 0.22 : 0.16;
-    p.dashTime = 0;
-    p.bumpGrace = WORLD.bumpGrace;
-    p.grounded = false;
-    event(g, "bump", p.x + p.w / 2, p.y + p.h / 2, { guard: guard.id, bumps: guard.bumps });
-    guard.dir = away; // turn to face Rubik
-    alertGuard(g, guard);
-    if (guard.bumps >= GUARD.spearOnBump && g.level.spears !== false) {
-      guard.state = "lunge";
-      guard.timer = GUARD.lunge;
-      guard.lungeTarget = Math.max(guard.min, Math.min(guard.max, guard.x + guard.dir * GUARD.lungeDistance));
-      event(g, "windup", guard.x, guard.floor - GUARD.h, { guard: guard.id });
-    } else guard.timer = guard.bumps === 2 ? GUARD.bumpReaction / 2 : GUARD.bumpReaction;
+    if (!hurt(g, "bump", guard.x, guard)) continue;
+    event(g, "bump", p.x + p.w / 2, p.y + p.h / 2, { guard: guard.id });
+    if (!behindCalm && g.phase === "playing") {
+      guard.dir = away; // turn to face the one it bumped
+      alertGuard(g, guard);
+      guard.timer = GUARD.bumpReaction;
+    }
   }
   for (const guard of g.guards)
-    if (guard.state === "lunge" && p.grace <= 0 && overlaps(p, spearBox(guard))) die(g, "spear");
+    if (guard.state === "lunge" && overlaps(p, spearBox(guard))) hurt(g, "spear", guard.x, guard);
 }
 
 function steal(g) {
@@ -1343,7 +1554,9 @@ export function update(g, dt, input = {}) {
   }
   g.colorCooldown = tick(g.colorCooldown, dt);
   p.grace = tick(p.grace, dt);
-  p.bumpGrace = tick(p.bumpGrace, dt);
+  p.invuln = tick(p.invuln, dt);
+  p.hurt = tick(p.hurt, dt);
+  p.stomped = tick(p.stomped, dt);
   p.storm = tick(p.storm, dt);
   p.dashCooldown = tick(p.dashCooldown, dt);
   if (!(p.dashTime > 0 && p.dashAir)) p.jumpBuffer = tick(p.jumpBuffer, dt);
@@ -1408,6 +1621,8 @@ export function update(g, dt, input = {}) {
     p.airJumped = false;
     if (p.dashTime <= 0) p.carry = 0;
     if (p.dashTime <= 0) p.dashCharge = 1;
+    p.chain = 0; // touching ground ends a chain (the third stomp already paid)
+    trackSafe(g);
     if (!wasGrounded) {
       p.landed = 0.1;
       event(g, "land", p.x + p.w / 2, p.y + p.h, { speed: p.vx });
@@ -1424,7 +1639,7 @@ export function update(g, dt, input = {}) {
   interactions(g, dt);
   if (g.phase !== "playing") return;
   updateHints(g, dt, input, wasGrounded);
-  if (p.y + p.h > WATER_ROW * TILE + 16 || p.y > WORLD.height) die(g, "water");
+  if (p.y + p.h > WATER_ROW * TILE + 16 || p.y > WORLD.height) fall(g);
   if (g.phase !== "playing") return;
   // Death hints: three deaths at one checkpoint re-offer its bubble once (only
   // a bubble this level teaches, and only if it was never completed).
@@ -1457,6 +1672,8 @@ function win(g) {
     takedown: g.guards.length > 0 && g.guards.every((c) => g.takedowns.includes(c.id)),
     takedowns: g.takedowns.length,
     cards: g.guards.length,
+    chain: g.chainBest, // the longest stomp/knock chain (the Chain stamp when >= level.chainPar)
+    hits: g.hits + g.falls, // hearts lost in this run
     quickGetaway: g.level.par === null ? null : g.escapeTime !== null && g.escapeTime <= g.level.par,
     assisted: g.assisted, // Slow spotting was on: the campaign awards no stamps
   };

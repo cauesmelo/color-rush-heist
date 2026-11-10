@@ -67,7 +67,7 @@ export function runFrom(id, stop, delay, label, mode = "smart", focus = null) {
   const cards = {};
   for (const gd of g.guards) {
     const ahead = (gd.x - cx0) * dir > 0 && gd.state !== "drained" && (!gd.escapeOnly || g.stolen);
-    if (ahead) cards[gd.id] = { id: gd.id, job: gd.job, offLine: !!gd.offLine, passed: null, clean: false, zoneDeaths: null, stomp: 0, bounce: 0, drain: 0, knock: 0, suspect: 0, spotted: 0, bump: 0, spike: 0, killed: 0, caught: 0 };
+    if (ahead) cards[gd.id] = { id: gd.id, job: gd.job, offLine: !!gd.offLine, passed: null, clean: false, zoneDeaths: null, stomp: 0, bounce: 0, drain: 0, knock: 0, hurt: 0, defeat: 0, suspect: 0, spotted: 0, bump: 0, spike: 0, killed: 0, caught: 0 };
   }
   let lastEv = g.eventId, prevJump = false, t = 0;
   const deaths = [], bot = makeBot(mode, {}), deaths0 = g.deaths;
@@ -104,13 +104,13 @@ export function runFrom(id, stop, delay, label, mode = "smart", focus = null) {
       const beyond = (cx - (dir > 0 ? gd.max : gd.min)) * dir;
       if (!c.done && beyond > 96 && p.grounded) {
         c.done = true;
-        c.clean = c.stomp + c.bounce + c.drain + c.knock === 0 && g.deaths === c.zoneDeaths;
+        c.clean = c.stomp + c.bounce + c.drain + c.knock + c.hurt === 0 && g.deaths === c.zoneDeaths;
       }
     }
   }
   // Reaching the goal (or home) passes every card still ahead.
-  if (g.phase === "won") for (const c of Object.values(cards)) if (!c.done) c.clean = c.stomp + c.bounce + c.drain + c.knock === 0 && g.deaths === (c.zoneDeaths ?? g.deaths);
-  const rows = Object.values(cards).map((c) => ({ ...c, free: c.passed != null && c.stomp + c.bounce + c.drain + c.knock === 0 && c.suspect + c.spotted + c.bump + c.spike + c.killed + c.caught === 0, engaged: c.stomp + c.bounce + c.drain + c.knock > 0 }));
+  if (g.phase === "won") for (const c of Object.values(cards)) if (!c.done) c.clean = c.stomp + c.bounce + c.drain + c.knock + c.hurt === 0 && g.deaths === (c.zoneDeaths ?? g.deaths);
+  const rows = Object.values(cards).map((c) => ({ ...c, free: c.passed != null && c.stomp + c.bounce + c.drain + c.knock + c.hurt === 0 && c.suspect + c.spotted + c.bump + c.spike + c.killed + c.caught === 0, engaged: c.stomp + c.bounce + c.drain + c.knock > 0 }));
   return { label, delay, won: g.phase === "won", stuck: bot.stuck, endCol: Math.floor((g.player.x + 20) / 32), deaths, rows, smashes: g.smashes, knocks: g.knockouts };
 }
 

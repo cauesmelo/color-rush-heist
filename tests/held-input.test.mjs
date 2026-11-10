@@ -169,7 +169,8 @@ test("knockback (a card's bump) ends and the held key moves Rubik again", () => 
   while (g.player.knock <= 0 && n++ < 120) ticks(g, 1, { right: true });
   assert.ok(g.player.knock > 0, "bumped");
   assert.ok(g.player.vx < 0, "thrown back the way he came");
-  ticks(g, Math.ceil(g.player.knock * 120), { right: true });
+  // The hit also freezes the world for WORLD.hitstop.hurt: wait that out too.
+  ticks(g, Math.ceil((g.player.knock + g.hitstop) * 120) + 1, { right: true });
   const vx0 = g.player.vx;
   ticks(g, 4, { right: true });
   assert.ok(g.player.vx > vx0, "right pulls him back toward the card after the knock");

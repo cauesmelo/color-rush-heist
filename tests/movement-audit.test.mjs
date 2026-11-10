@@ -691,11 +691,12 @@ test("C2: hazard colliders match the drawn hazards; every generous shrink is mea
       }
     }
     const [low, high] = M.GUARD.spearBand[kind],
-      reach = M.GUARD.w / 2 + M.GUARD.spearReach;
+      reach = M.GUARD.w / 2 + M.GUARD.spearReach[kind];
     out[kind] = { spearDrawn: `${-bottom}..${-top} px up, tip ${-tip} px`, spearBox: `${low}..${high} px up, tip ${reach} px`, bodyDrawn: `${bx0}..${bx1}`, bodyBox: `${-M.GUARD.w / 2}..${M.GUARD.w / 2}` };
     assert.ok(Math.abs(-top - high) <= 2, `${kind}: spear top ${-top} vs ${high}`);
     assert.ok(Math.abs(-bottom - low) <= 2, `${kind}: spear bottom ${-bottom} vs ${low}`);
     assert.ok(reach <= -tip, `${kind}: the spear box never reaches past the drawn tip`);
+    assert.ok(-tip - reach <= 2, `${kind}: the hit shape is the drawn spear within 2 px (tip ${-tip}, box ${reach})`);
     assert.ok(M.GUARD.w / 2 <= -bx0 && M.GUARD.w / 2 <= bx1, `${kind}: the body box sits inside the drawn card`);
   }
   // Water kills 16 px under its row top; the drawn surface line is at +4..6.
@@ -743,18 +744,19 @@ test("C3: no tunnelling - the box never overlaps a solid tile, at every max spee
   assert.ok(W.dashSpeed / 120 < M.PLAYER.w && W.maxFall / 120 < T, "per-tick moves are far below a tile");
 });
 
-test("C4: contact rules - only the lunging spear and water kill; everything else bumps or is safe", (t) => {
+test("C4: contact rules - hearts: only a strike, a body and water cost one; only water, the last heart and a catch end the try", (t) => {
   const src = readFileSync(path.join(demo, "model.mjs"), "utf8");
   const kills = [...src.matchAll(/die\(g, "(\w+)"\)/g)].map((m) => m[1]);
   // "caught" is not a hazard: in a level with `caught` (only 1-3), a card's
   // "!" sends Rubik back to the checkpoint. No contact or hitbox decides it.
-  assert.deepEqual([...new Set(kills)].sort(), ["caught", "spear", "water"]);
+  assert.deepEqual([...new Set(kills)].sort(), ["caught", "water"]);
   assert.match(src, /if \(g\.level\.caught\) die\(g, "caught"\);/);
   assert.deepEqual(LEVELS.filter((l) => l.caught).map((l) => l.id), ["1-3"]);
-  // The spear-up tell is drawn from the same rule that refuses the stomp.
-  const game = readFileSync(path.join(demo, "game.mjs"), "utf8");
-  assert.match(game, /M\.stompable\(game, guard\)\) return;/);
-  report(t, "C4 kill sources", "spear (lunge frames only), water; 1-3 sends a spotted Rubik back (caught); body contact knocks back; a raised spear pops");
+  // Every heart lost goes through one function with three sources.
+  const sources = [...src.matchAll(/hurt\(g, "(\w+)"/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(sources)].sort(), ["bump", "spear"]);
+  assert.match(src, /function fall\(g\)/);
+  report(t, "C4 heart sources", "spear (strike frames only), body bump, water; the last heart is a death; 1-3 sends a spotted Rubik back (caught)");
 });
 
 // ================================================ D. expression and ceiling
@@ -842,13 +844,14 @@ test("D3: small mistakes have readable recoveries", (t) => {
     for (let i = 0; i < 200 && g.phase === "playing" && !(g.player.grounded && feet(g) <= 10 * T + 1); i++) ticks(g, 1, { right: true });
     if (g.phase === "playing" && feet(g) <= 10 * T + 1) rescues++;
   }
-  // Brushing a card's body, landing on a raised spear or being seen never kill.
-  const front = cardDrop(30, { face: 1, from: 1 }); // at its face: spear up
+  // Landing at a card's face is a stomp (it used to be a "pop" off a raised
+  // spear); being seen never kills.
+  const front = cardDrop(30, { face: 1, from: 1 });
   report(t, "D3 air-jump rescue window over 1-1's first water (ms of air-jump timing that still lands on the bank)", msOf(rescues));
-  report(t, "D3 landing on a raised spear", `${events(front.g, "spike").length} spike, ${front.g.deaths} deaths`);
+  report(t, "D3 landing at a card's face", `${front.g.stomps} stomp, ${front.g.hits} hits, ${front.g.deaths} deaths`);
   assert.ok(msOf(rescues) >= 120, "at least 120 ms of rescue timings");
-  assert.equal(events(front.g, "spike").length, 1);
-  assert.equal(front.g.deaths, 0);
+  assert.equal(front.g.stomps, 1);
+  assert.equal(front.g.hits + front.g.deaths, 0);
 });
 
 // ================================================= E. feedback, readability
@@ -896,11 +899,11 @@ test("F: stomp windows, respawn runway and the gap rules after tuning", (t) => {
     }
   const minRunway = Math.min(...Object.values(runway));
   report(t, "F stomp window from behind: centre offsets that stomp (px)", `${behind[0]}..${behind[behind.length - 1]} (${behind.length * 2} px wide)`);
-  report(t, "F stomp window at a calm card's face (came from its front)", front.length ? `${front[0]}..${front[front.length - 1]}` : "none (spear up)");
+  report(t, "F stomp window at a calm card's face (came from its front)", front.length ? `${front[0]}..${front[front.length - 1]}` : "none");
   report(t, "F shortest respawn runway (px of floor ahead)", minRunway);
   report(t, "F runways", runway);
   assert.ok(behind.length * 2 >= 64, "the stomp window from behind is at least the drawn card's width");
-  assert.equal(front.length, 0, "from the front the spear is up");
+  assert.ok(front.length * 2 >= 64, "from the front the window is just as wide (no spear-up rule)");
   // 1-4 late (80 px) is a 4-tile bank between two gaps: the held-lock means
   // nothing moves until a fresh press, and 80 px is 0.24 s of running.
   assert.ok(minRunway >= 64, "every respawn has >= 2 tiles before water");

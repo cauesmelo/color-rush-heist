@@ -152,7 +152,7 @@ export default defineLevel({
     // up, so no stomp). Safe line: swap to green after the last dash and land
     // through it. Red line: land clear of it and knock it with a ground dash
     // (the knock refunds the dash for the jump + dash to the ledge).
-    { id: "ambush", job: "swap", kind: "green", mode: "patrol", x: px(65) + 16, floor: px(14), dir: 1, min: px(64) + 24, max: px(67) + 8, escapeOnly: true },
+    { id: "ambush", job: "knock", kind: "green", mode: "patrol", x: px(65) + 16, floor: px(14), dir: 1, min: px(64) + 24, max: px(67) + 8, escapeOnly: true },
   ],
 
   /** cofre.png drawn at 4x on a carved dais, raised 24 px (old cx 6064 - 2240). */

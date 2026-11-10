@@ -85,12 +85,12 @@ export default defineLevel({
   guards: [
     // Lookouts on pillars, staring ahead (the way Rubik flies): stomp their
     // backs to refill the dash mid-gap.
-    { id: "pillar", job: "refill", kind: "green", mode: "sentry", fixed: true, x: px(112) + 16, floor: px(18), dir: 1, min: px(112) + 16, max: px(112) + 16 },
+    { id: "pillar", job: "refill", pad: true, kind: "green", mode: "sentry", fixed: true, x: px(112) + 16, floor: px(18), dir: 1, min: px(112) + 16, max: px(112) + 16 },
     // The conclude's card turns: 2.2 s facing the bank (spear up: landing
     // on it pops Rubik into the water), 1.8 s facing the island, with the
     // "…" look-back before each turn. Jump (+ dash) onto its back while it
     // faces away; its stomp refills the dash for the island.
-    { id: "chain", job: "refill", kind: "green", mode: "sentry", x: px(139) + 16, floor: px(18), dir: -1, min: px(139) + 16, max: px(139) + 16, turnEvery: [2.2, 1.8] },
+    { id: "chain", job: "refill", pad: true, kind: "green", mode: "sentry", x: px(139) + 16, floor: px(18), dir: -1, min: px(139) + 16, max: px(139) + 16, turnEvery: [2.2, 1.8] },
     // Revision five's island patrol is gone: green landed through it, a
     // disguise pass with nothing to time.
   ],

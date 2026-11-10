@@ -32,6 +32,7 @@ import { defineLevel, px } from "./builder.mjs";
 const lookout = (id, col, floorRow, dir = 1, extra = {}) => ({
   id,
   job: "gate", // every card here is a stomp the guided line needs
+  pad: true, // ...and its bounce is the way over: stomped, it stays flat as a springboard
   kind: "green",
   mode: "sentry",
   fixed: true, // stares one way; the chain reads at a glance
@@ -107,12 +108,12 @@ export default defineLevel({
   ],
   guards: [
     // A slow patrol: it walks at 60% pace and turns with a readable look-back.
-    { id: "pit", job: "gate", kind: "green", mode: "patrol", pace: 0.6, x: px(16) + 16, floor: px(18), dir: 1, min: px(14) + 16, max: px(18) + 16 },
+    { id: "pit", job: "gate", pad: true, kind: "green", mode: "patrol", pace: 0.6, x: px(16) + 16, floor: px(18), dir: 1, min: px(14) + 16, max: px(18) + 16 },
     lookout("isle-a", 38, 16),
     lookout("isle-b", 45, 16),
     lookout("isle-c", 52, 16),
     lookout("isle-d", 58, 16),
-    { id: "wall", job: "gate", kind: "green", mode: "patrol", pace: 0.7, x: px(75) + 16, floor: px(18), dir: 1, min: px(73) + 16, max: px(79) + 16 },
+    { id: "wall", job: "gate", pad: true, kind: "green", mode: "patrol", pace: 0.7, x: px(75) + 16, floor: px(18), dir: 1, min: px(73) + 16, max: px(79) + 16 },
     // The green card: it holds Rubik's green and faces away from the drop. Its
     // stomp head is 24 px wider each side (not 10): with the overhang, every
     // way off the run-up lands on its back.

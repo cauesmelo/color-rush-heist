@@ -313,34 +313,32 @@ test("1-1: hints - move after 4 s idle at the start; jump-jump after two short j
 });
 
 // ------------------------------------------------- 1-2: bounce -> green -----
-test("1-2: stomp from above or behind stuns a card; a card facing Rubik raises its spear (no stomp)", () => {
-  const drop = (dir, offset) => {
+test("1-2: a stomp from above, behind or the front is a stomp; a springboard card flattens, a plain one is defeated", () => {
+  const drop = (dir, offset, id = "wall", extra = {}) => {
     const g = fresh("1-2"),
-      c = only(g, "wall");
-    Object.assign(c, { x: 76 * T, dir, state: "calm", turning: 0, turnClock: 0 });
+      c = only(g, id);
+    Object.assign(c, { x: 76 * T, dir, state: "calm", turning: 0, turnClock: 0, ...extra });
     place(g, c.x + offset, c.floor - M.GUARD.h - 30, { vy: 200, jumpHeld: true, jumps: 1 });
     g.player.grounded = false;
     ticks(g, seconds(0.2));
     return { g, c };
   };
-  const behind = drop(1, -14); // card faces right, Rubik lands on its back
-  assert.equal(behind.c.state, "stunned");
-  assert.equal(behind.g.stomps, 1);
-  const above = drop(1, 6); // right over its head (within half the head)
-  assert.equal(above.c.state, "stunned");
-  const front = drop(-1, -30); // card faces Rubik: spear up
-  assert.notEqual(front.c.state, "stunned");
-  assert.equal(events(front.g, "spike").length, 1);
-  assert.equal(front.g.deaths, 0, "a spike pops Rubik away, never kills");
-  assert.ok(front.g.player.x + M.PLAYER.w / 2 < front.c.x, "popped back the way he came");
-  // An aware card always has its spear up, from any side.
-  const g = fresh("1-2"),
-    c = only(g, "wall");
-  Object.assign(c, { x: 76 * T, dir: 1, state: "alert", timer: 1 });
-  place(g, c.x - 14, c.floor - M.GUARD.h - 30, { vy: 200 });
-  g.player.grounded = false;
-  ticks(g, seconds(0.2));
-  assert.equal(events(g, "spike").length, 1);
+  // 1-2's cards are springboards (level data `pad`): the bounce is the way over.
+  for (const [dir, offset, what] of [[1, -14, "behind"], [1, 6, "above"], [-1, -30, "its front"]]) {
+    const r = drop(dir, offset);
+    assert.equal(r.c.state, "drained", `${what}: flattened`);
+    assert.equal(r.g.stomps, 1);
+    assert.equal(r.g.deaths + r.g.hits, 0, `${what}: a stomp never hurts`);
+  }
+  // A plain card is defeated by a stomp from any side, whatever it is doing.
+  for (const [state, dir] of [["calm", 1], ["calm", -1], ["alert", 1], ["windup", 1]]) {
+    const r = drop(dir, -14, "wall", { pad: false, state, timer: 1 });
+    assert.equal(r.c.state, "defeated", `${state}/${dir}`);
+    assert.equal(r.g.hits, 0);
+    assert.deepEqual(r.g.takedowns, ["wall"]);
+  }
+  // The old spear-up pop is gone: no spike events exist.
+  assert.equal(events(drop(-1, -30).g, "spike").length, 0);
 });
 test("1-2: hold jump for the high bounce; a tap (or a walk-off) gives the short hop", () => {
   const bounce = (held) => {
@@ -571,7 +569,7 @@ test("1-4: two slow landings on Gap A's recovery rock offer the dash bubble", ()
 });
 
 // ------------------------------------------------------- 1-5: lookouts ----
-test("1-5: the full ladder in the open - ?, !, charge, wind-up, a jumpable spear, recovery", () => {
+test("1-5: the full ladder in the open - ?, !, chase, a 0.55 s wind-up, a jumpable spear, an open recovery", () => {
   const g = fresh("1-5"),
     c = only(g, "teacher");
   Object.assign(c, { x: 900, dir: -1, state: "calm", turning: 0 });
@@ -583,26 +581,41 @@ test("1-5: the full ladder in the open - ?, !, charge, wind-up, a jumpable spear
   assert.equal(g.spotted, 1);
   const x0 = c.x;
   ticks(g, seconds(0.7));
-  assert.ok(c.x < x0, "it charges after the 0.45 s beat");
-  ticks(g, seconds(1));
-  assert.ok(events(g, "windup").length >= 1, "in range: the wind-up");
-  // Jumping clears the spear band (30-70 px up) in the open.
+  assert.ok(c.x < x0, "it chases after the 0.45 s beat");
+  let windupAt = null;
+  for (let i = 0; i < seconds(4) && windupAt === null; i++) {
+    ticks(g, 1);
+    if (c.state === "windup") windupAt = i;
+  }
+  assert.notEqual(windupAt, null, "in range: the wind-up");
+  assert.ok(c.timer >= M.ENEMY.walker.windup - 0.02, "its telegraph is at least 0.4 s");
+  // Jumping clears the spear band in the open (a hold-jump is 93 px).
   const j = fresh("1-5"),
     u = only(j, "teacher");
-  Object.assign(u, { x: 900, dir: -1, state: "lunge", timer: M.GUARD.lunge, lungeTarget: 900 });
+  Object.assign(u, { x: 900, dir: -1, state: "lunge", timer: M.ENEMY.walker.strike, lungeTarget: 900 });
   place(j, 900 - 24 - 40, u.floor - 75, { vy: -100 });
   j.player.grounded = false;
   ticks(j, 1);
-  assert.equal(j.phase, "playing");
+  assert.equal(j.player.hp, 3, "a jump clears the spear");
+  // On the ground the strike costs exactly one heart, never the run.
   const d = fresh("1-5"),
     s = only(d, "teacher");
-  Object.assign(s, { x: 900, dir: -1, state: "lunge", timer: M.GUARD.lunge, lungeTarget: 900 });
+  Object.assign(s, { x: 900, dir: -1, state: "lunge", timer: M.ENEMY.walker.strike, lungeTarget: 900 });
   place(d, 900 - 24 - 40, s.floor);
   ticks(d, 1);
-  assert.equal(d.deathReason, "spear");
+  assert.equal(d.player.hp, 2);
+  assert.equal(d.hitsBy.spear, 1);
+  assert.equal(d.phase, "playing");
+  // The recovery after a strike is Rubik's opening: no body damage, stompable.
+  const r = fresh("1-5"),
+    w = only(r, "teacher");
+  Object.assign(w, { x: 900, dir: -1, state: "recover", timer: 0.8 });
+  place(r, 900 - 24 - 10, w.floor);
+  ticks(r, seconds(0.2), { right: true });
+  assert.equal(r.player.hp, 3, "an open card does not bump");
 });
-test("1-5: hold right and one jump no longer skips the red guard: facing Rubik, it can't be stomped", () => {
-  for (const id of ["enforcer", "cross-red", "p1"]) {
+test("1-5: a jump at the red guard's face is seen first, and lands as a stomp (a daze), not a free pass", () => {
+  for (const id of ["enforcer", "p1"]) {
     const g = fresh("1-5"),
       c = only(g, id);
     Object.assign(c, { dir: -1, state: "calm", turning: 0, turnClock: 0, fixed: true });
@@ -610,9 +623,8 @@ test("1-5: hold right and one jump no longer skips the red guard: facing Rubik, 
     g.unlocked.green = true;
     ticks(g, 1, { right: true, jump: true });
     for (let i = 0; i < seconds(1.2); i++) ticks(g, 1, { right: true });
-    assert.notEqual(c.state, "stunned", `${id}: no stomp from the front`);
-    // Getting past means a hop through its cone: it has noticed (at least "?").
-    if (M.canSee(c, "green")) assert.ok(c.state !== "calm" || events(g, "suspect").length > 0 || events(g, "spike").length > 0, `${id}: it noticed`);
+    // Getting past a card that can see him means it noticed (at least "?").
+    if (M.canSee(c, "green")) assert.ok(events(g, "suspect").length > 0 || g.spotted > 0 || g.stomps > 0, `${id}: it noticed`);
   }
 });
 test("1-5: a red card sees green (and white) but not red; green cards see white and red", () => {
@@ -1106,9 +1118,9 @@ test('awareness: "?" after 0.25 s, "!" at 0.6 s, calm again after losing sight',
   place(e, 1000, f.floor, { color: "green" }); // behind it, green
   ticks(e, 1);
   assert.equal(f.locked, false);
-  ticks(e, seconds(1.05));
+  ticks(e, seconds(1.25));
   assert.equal(f.state, "search");
-  ticks(e, seconds(1.05));
+  ticks(e, seconds(1.25));
   assert.equal(f.state, "calm");
   // A "?" that loses sight before 0.6 s calms down without spotting.
   const q = fresh("1-5"),
@@ -1118,7 +1130,7 @@ test('awareness: "?" after 0.25 s, "!" at 0.6 s, calm again after losing sight',
   ticks(q, seconds(0.3));
   assert.equal(d.state, "suspect");
   place(q, 1000, d.floor); // step behind it
-  ticks(q, seconds(1.1));
+  ticks(q, seconds(1.3));
   assert.equal(d.state, "calm");
   assert.equal(q.spotted, 0);
 });
@@ -1159,7 +1171,7 @@ test("Slow spotting keeps every level winnable: baseline and mastery routes stil
       assert.equal(g.medals.assisted, true);
     }
 });
-test("body contact only knocks Rubik back the way he came; a calm card's back can be brushed; cards are solid", () => {
+test("body contact costs one heart and knocks Rubik back the way he came; a calm card's back is a bump that goes unnoticed", () => {
   const g = fresh("1-5"),
     c = only(g, "teacher");
   Object.assign(c, { x: 900, dir: -1, state: "suspect", turning: 0, pace: 0 });
@@ -1168,19 +1180,21 @@ test("body contact only knocks Rubik back the way he came; a calm card's back ca
   ticks(g, seconds(0.4), { left: true });
   assert.equal(g.deaths, 0);
   assert.equal(events(g, "bump").length, 1);
+  assert.equal(g.player.hp, 2, "one heart");
   assert.ok(cx(g) > c.x, "pushed back the way he came");
   ticks(g, seconds(0.7), { right: true });
   assert.equal(g.phase, "playing", "running away after a bump is always possible");
-  // A calm card facing away doesn't notice Rubik brushing its back.
+  // A calm card facing away hurts too (a body is a body) but does not notice.
   const b = fresh("1-5"),
     d = only(b, "teacher");
   Object.assign(d, { x: 900, dir: -1, state: "calm", turning: 0, pace: 0 });
   d.min = d.max = 900;
   place(b, 960, d.floor);
   ticks(b, seconds(0.4), { left: true });
-  assert.equal(events(b, "bump").length, 0);
-  assert.equal(d.state, "calm");
-  assert.ok(cx(b) > d.x, "but it's still solid");
+  assert.equal(events(b, "bump").length, 1);
+  assert.equal(b.player.hp, 2);
+  assert.equal(d.state, "calm", "it did not notice");
+  assert.ok(cx(b) > d.x, "and it is solid");
   // Red Rubik walks straight through a red card.
   const r = fresh("1-5");
   r.unlocked.red = true;
@@ -1191,14 +1205,14 @@ test("body contact only knocks Rubik back the way he came; a calm card's back ca
   assert.ok(cx(r) > er.x);
   assert.equal(events(r, "bump").length, 0);
 });
-test("a card pinned at its patrol bound with Rubik out of reach gives up instead of spearing the air", () => {
+test("a card pinned at its patrol bound with Rubik out of reach gives up instead of striking the air", () => {
   const g = fresh("1-5"),
     c = only(g, "teacher");
   Object.assign(c, { x: c.min, dir: -1, state: "alert", timer: 0, turning: 0 });
-  place(g, c.min - M.GUARD.w / 2 - M.GUARD.spearReach - 60, c.floor); // just beyond the spear from the bound
-  ticks(g, seconds(1.5));
+  place(g, c.min - M.GUARD.w / 2 - M.GUARD.spearReach.green - 60, c.floor); // just beyond the spear from the bound
+  ticks(g, seconds(2.5));
   assert.equal(events(g, "windup").length, 0, "no endless wind-ups 10 px short");
-  assert.ok(["search", "calm"].includes(c.state) && c.dir === 1, `it turned back (${c.state})`);
+  assert.equal(events(g, "gaveup").length >= 1, true, "it looked around instead of staring at him");
 });
 test("mid-air swap: a green jump keeps white's unspent air jump; a spent one never refreshes", () => {
   const g = noCards(fresh("1-3"));
@@ -1231,7 +1245,7 @@ test("rising through a one-way slab never counts as standing on it (no free air-
   }
   assert.equal(groundedWhileRising, false);
 });
-test("red smash: stones break only to a red dash, which refunds it; a red dash knocks cards aside", () => {
+test("red smash: stones break only to a red dash, which refunds it; a red dash knocks cards out", () => {
   const setup = (color) => {
     const g = noCards(fresh("1-6"));
     g.unlocked.red = true;
@@ -1266,7 +1280,7 @@ test("red smash: stones break only to a red dash, which refunds it; a red dash k
   ticks(k, seconds(0.05));
   ticks(k, 1, { dash: true, left: true });
   ticks(k, seconds(0.15), { left: true });
-  assert.equal(c.state, "stunned");
+  assert.equal(c.state, "defeated", "a red dash knocks a card out");
   assert.equal(k.knockouts, 1);
   assert.equal(k.player.dashCharge, 1);
 });

@@ -52,6 +52,9 @@ export default defineLevel({
   kit: { forms: ["white"], start: "white", dash: false },
   spears: false,
   unseen: false, // a stomp lesson, not a stealth level: no Unseen stamp here
+  // The Chain stamp: the island run is four stomps without touching ground
+  // (the baseline route does it), so 4 is "kept the whole chain alive".
+  chainPar: 4,
   hints: ["behind"], // after the first spear-up: a card with an arrow onto its back
   beacon: 0.2,
   tint: null,

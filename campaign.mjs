@@ -10,11 +10,15 @@
  *     hints: { move: "done", airjump: "shown", ... },
  *     levels: { "1-1": { clear: true, best: 52.4, stickers: [1, 3],
  *                        unseen: false, takedown: false, takedownBest: 0,
- *                        quick: false, color: "white" } },
+ *                        quick: false, chain: false, chainBest: 0,
+ *                        color: "white" } },
  *     settings: { sfx: true, music: true, timer: false,
  *                 slowSpotting: false, reduceMotion: null } }
  * `unseen` is the Ghost stamp (its old name, kept so older saves load);
- * `takedownBest` is the most cards put down in one clear of that level.
+ * `takedownBest` is the most cards put down in one clear of that level;
+ * `chain` is the Chain stamp and `chainBest` the longest stomp/knock chain of
+ * any clear (both optional: a save written before them loads as false / 0,
+ * so the key stays v2).
  * `reduceMotion: null` follows the system setting; true/false is the
  * player's own choice from the pause menu.
  * A sticker is saved the moment it is touched and never removed; a clear is
@@ -59,7 +63,10 @@ export function sanitizeSettings(raw) {
   if (typeof raw.reduceMotion === "boolean") out.reduceMotion = raw.reduceMotion;
   return out;
 }
-const emptyRecord = () => ({ clear: false, best: null, stickers: [], unseen: false, takedown: false, takedownBest: 0, quick: false, color: null });
+const emptyRecord = () => ({ clear: false, best: null, stickers: [], unseen: false, takedown: false, takedownBest: 0, quick: false, chain: false, chainBest: 0, color: null });
+/** A chain longer than this is not a real run (the longest authored chain is
+ * 1-2's four islands); a hostile save is clamped to it. */
+export const CHAIN_CAP = 99;
 export const levelRecord = (save, id) => ({ ...emptyRecord(), ...(save.levels[id] || {}) });
 
 /** Which stamps a level can award. "Ghost" (never spotted; saved as
@@ -69,13 +76,17 @@ export const levelRecord = (save, id) => ({ ...emptyRecord(), ...(save.levels[id
  * false`). "Takedown" (every card stomped or knocked) only where putting a
  * card down is a choice, not the way through: 1-5 and 1-6 (`takedown: true`;
  * every 1-2/1-4 card is a gate or a springboard, and 1-3's corridor card
- * can't be reached from above). "Quick" only where there is a par (1-6). */
+ * can't be reached from above). "Quick" only where there is a par (1-6).
+ * "Chain" only where the level sets `chainPar` (1-2: its four islands are a
+ * four-stomp chain without touching ground, so the stamp asks the player to
+ * keep the whole chain going rather than island-hop). */
 export function levelStamps(id) {
   const level = getLevel(id);
   return {
     unseen: !!level && level.unseen !== false && level.guards.length > 0,
     takedown: !!level && level.takedown === true && level.guards.length > 0,
     quick: !!level && level.par !== null,
+    chain: !!level && Number.isInteger(level.chainPar) && level.chainPar > 0,
   };
 }
 
@@ -115,7 +126,7 @@ export function collectSticker(save, id, n) {
 
 /** A level was finished. `result` comes from the model at the win:
  * { time, stickers: [ids collected this run], spotted, takedowns, cards,
- *   escapeTime, color, assisted }.
+ *   escapeTime, chain (longest stomp chain), color, assisted }.
  * Best time and the best takedown tally only improve; stickers and stamps
  * only accumulate. */
 export function recordClear(save, id, result) {
@@ -127,7 +138,7 @@ export function recordClear(save, id, result) {
     // keeps its stickers and best time, but awards no stamp: Ghost, Takedown
     // and Quick measure exactly the reading of cones the assist relaxes.
     // Stamps already earned are never taken away.
-    stamps = result.assisted ? { unseen: false, takedown: false, quick: false } : levelStamps(id),
+    stamps = result.assisted ? { unseen: false, takedown: false, quick: false, chain: false } : levelStamps(id),
     level = getLevel(id);
   record.clear = true;
   if (Number.isFinite(result.time)) record.best = record.best === null ? result.time : Math.min(record.best, result.time);
@@ -138,6 +149,13 @@ export function recordClear(save, id, result) {
     if (n === level.guards.length) record.takedown = true;
   }
   if (stamps.quick && Number.isFinite(result.escapeTime) && result.escapeTime <= level.par) record.quick = true;
+  // The best chain is kept for every level (the tally shows it), like the
+  // best takedown tally only from unassisted clears; the stamp needs chainPar.
+  if (!result.assisted && Number.isInteger(result.chain)) {
+    const n = Math.max(0, Math.min(CHAIN_CAP, result.chain));
+    record.chainBest = Math.max(record.chainBest, n);
+    if (stamps.chain && n >= level.chainPar) record.chain = true;
+  }
   if (result.color) record.color = result.color;
   next.levels[id] = record;
   next.last = nextLevel(id) || id;
@@ -203,6 +221,8 @@ export function sanitize(raw) {
         takedown: r.takedown === true,
         takedownBest: Number.isInteger(r.takedownBest) ? Math.max(0, Math.min(getLevel(id).guards.length, r.takedownBest)) : 0,
         quick: r.quick === true,
+        chain: r.chain === true,
+        chainBest: Number.isInteger(r.chainBest) ? Math.max(0, Math.min(CHAIN_CAP, r.chainBest)) : 0,
         color: ["white", "green", "red"].includes(r.color) ? r.color : null,
       };
     }

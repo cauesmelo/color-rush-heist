@@ -36,6 +36,7 @@ function clearWith(save, id, kind = "baseline") {
     time: g.finishTime,
     stickers: g.stickers.filter((x) => x.collected).map((x) => x.id),
     spotted: g.spotted,
+    chain: g.medals.chain,
     escapeTime: g.escapeTime,
     color: g.player.color,
   });
@@ -109,16 +110,16 @@ test("full mastery of World 1 = 18/18 stickers, all three world medals", () => {
   const partial = clearWith(clearWith(C.newSave(), "1-3"), "1-5");
   assert.equal(C.worldMedals(partial).ghost, false, "1-6 not yet unseen");
 });
-test("stamps: Ghost (saved as unseen) on 1-3, 1-5, 1-6; Takedown on 1-5, 1-6; Quick only on 1-6; best time only improves", () => {
+test("stamps: Ghost (saved as unseen) on 1-3, 1-5, 1-6; Takedown on 1-5, 1-6; Quick only on 1-6; Chain only on 1-2; best time only improves", () => {
   assert.deepEqual(
     C.WORLD1.map((id) => C.levelStamps(id)),
     [
-      { unseen: false, takedown: false, quick: false },
-      { unseen: false, takedown: false, quick: false },
-      { unseen: true, takedown: false, quick: false },
-      { unseen: false, takedown: false, quick: false },
-      { unseen: true, takedown: true, quick: false },
-      { unseen: true, takedown: true, quick: true },
+      { unseen: false, takedown: false, quick: false, chain: false },
+      { unseen: false, takedown: false, quick: false, chain: true },
+      { unseen: true, takedown: false, quick: false, chain: false },
+      { unseen: false, takedown: false, quick: false, chain: false },
+      { unseen: true, takedown: true, quick: false, chain: false },
+      { unseen: true, takedown: true, quick: true, chain: false },
     ],
   );
   let save = C.recordClear(C.newSave(), "1-3", { time: 50, stickers: [], spotted: 2, escapeTime: null });
@@ -211,7 +212,7 @@ test("corrupt or hostile saves are sanitized, never trusted", () => {
   assert.equal(save.comicSeen, false);
   assert.deepEqual(save.hints, { move: "done" });
   assert.deepEqual(Object.keys(save.levels), ["1-1"]);
-  assert.deepEqual(save.levels["1-1"], { clear: true, best: null, stickers: [1, 3], unseen: false, takedown: false, takedownBest: 0, quick: true, color: null });
+  assert.deepEqual(save.levels["1-1"], { clear: true, best: null, stickers: [1, 3], unseen: false, takedown: false, takedownBest: 0, quick: true, chain: false, chainBest: 0, color: null });
 });
 
 // --------------------------------------------------------- v1.0 save ----
@@ -316,4 +317,29 @@ test("Slow spotting: the save turns it on in new games; an assisted clear counts
   // 1-6's Quick par: the baseline escape earns it, but not assisted.
   const quick = C.recordClear(C.newSave(), "1-6", { time: 40, stickers: [], spotted: 1, escapeTime: 1, assisted: true });
   assert.equal(C.levelRecord(quick, "1-6").quick, false);
+});
+test("Chain stamp: 1-2's baseline island chain earns it; the best chain only improves; assisted, short and hostile chains don't", () => {
+  assert.equal(getLevel("1-2").chainPar, 4);
+  const won = clearWith(C.newSave(), "1-2");
+  assert.deepEqual([C.levelRecord(won, "1-2").chain, C.levelRecord(won, "1-2").chainBest >= 4], [true, true], "the baseline route chains all four islands");
+  let save = C.recordClear(C.newSave(), "1-2", { time: 40, stickers: [], spotted: 0, chain: 3 });
+  assert.deepEqual([C.levelRecord(save, "1-2").chain, C.levelRecord(save, "1-2").chainBest], [false, 3], "3 < chainPar");
+  save = C.recordClear(save, "1-2", { time: 40, stickers: [], spotted: 0, chain: 5 });
+  save = C.recordClear(save, "1-2", { time: 40, stickers: [], spotted: 0, chain: 1 });
+  assert.deepEqual([C.levelRecord(save, "1-2").chain, C.levelRecord(save, "1-2").chainBest], [true, 5], "kept by a later short chain");
+  // No chainPar: the best chain is a tally, never a stamp.
+  const five = C.recordClear(C.newSave(), "1-5", { time: 40, stickers: [], spotted: 1, chain: 6 });
+  assert.deepEqual([C.levelRecord(five, "1-5").chain, C.levelRecord(five, "1-5").chainBest], [false, 6]);
+  const assisted = C.recordClear(C.newSave(), "1-2", { time: 40, stickers: [], spotted: 0, chain: 6, assisted: true });
+  assert.deepEqual([C.levelRecord(assisted, "1-2").chain, C.levelRecord(assisted, "1-2").chainBest], [false, 0], "assisted: no stamp, no record");
+  // Round trip through storage, a save from before the field, and hostile values.
+  const storage = memoryStorage();
+  C.writeSave(storage, save);
+  assert.deepEqual(C.loadSave(storage), save);
+  const old = C.sanitize({ v: 2, levels: { "1-2": { clear: true, best: 30, stickers: [1] } } });
+  assert.deepEqual([old.levels["1-2"].chain, old.levels["1-2"].chainBest], [false, 0], "an old save loads with no Chain");
+  const hostile = C.sanitize({ v: 2, levels: { "1-2": { chain: "yes", chainBest: 1e9 }, "1-3": { chainBest: -2 }, "1-4": { chainBest: 2.5 } } });
+  assert.deepEqual([hostile.levels["1-2"].chain, hostile.levels["1-2"].chainBest, hostile.levels["1-3"].chainBest, hostile.levels["1-4"].chainBest], [false, C.CHAIN_CAP, 0, 0]);
+  // World medals are untouched by the new stamp.
+  assert.deepEqual(Object.keys(C.worldMedals(save)), ["fullFace", "ghost", "quickGetaway"]);
 });

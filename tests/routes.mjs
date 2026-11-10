@@ -82,7 +82,7 @@ export const ROUTES = {
       [0.2, {}],
       [0.45, {"jump":true}],
       [0.758333, {"jump":true}],
-      [0.558333, {"right":true}],
+      [0.641667, {"right":true}],
     ],
   },
   "1-2": {

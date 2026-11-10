@@ -52,6 +52,7 @@ export const WORLD = Object.freeze({
   // 1.2 s; it is part of the simulation so routes replay identically.
   hitstop: { stomp: 0.06, smash: 0.09, knock: 0.09, theft: 0.25, get: 1.2 },
   orbRespawn: 2.5,
+  goalReach: 220, // px above a goal face's floor that still touches it
 });
 
 export const PLAYER = Object.freeze({ w: 40, h: 52 });
@@ -984,10 +985,12 @@ function interactions(g, dt) {
   });
   const vault = g.level.vault;
   if (vault && !g.stolen && overlaps(p, { x: vault.cx - vault.w / 2, y: vault.floor - vault.h, w: vault.w, h: vault.h })) steal(g);
-  // The goal face: an 80 px column from its floor to the sky, so no jump or
-  // dash (7 px per tick) can sail over it and leave the level unfinished.
+  // The goal face: an 80 px wide, 220 px tall trigger column (a checkpoint's),
+  // so a jump or dash from its floor (feet <= 175 px up) can't sail over it.
+  // Each goal stands before its level's end wall: passing above it from a
+  // high ledge only drops Rubik behind it, a 2-tile step from the face.
   const goal = g.level.goal;
-  if (goal && Math.abs(cx - goal.x) < 40 && feet <= goal.floor + 1) win(g);
+  if (goal && Math.abs(cx - goal.x) < 40 && feet <= goal.floor + 1 && feet > goal.floor - WORLD.goalReach) win(g);
 }
 
 export function update(g, dt, input = {}) {

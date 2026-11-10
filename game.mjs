@@ -2003,6 +2003,20 @@ function drawPlayer() {
     scaleX = sq ? 1 + (sq.sx - 1) * k : 1,
     scaleY = sq ? 1 + (sq.sy - 1) * k : 1;
   drawRubik(key, sx, sy, cx, feet, p.direction, blink ? (reducedMotion ? 0.65 : 0.45) : 1, 0, scaleX, scaleY);
+  // White's air jump, unspent while airborne: two small puffs under the feet
+  // (the air jump's own burst colour; they are what bursts when it fires), so
+  // the double jump reads on Rubik himself, like the dash's dim (rubric E2).
+  // 4 px each, outlined, below the feet: they never cover Rubik.
+  if (p.color === "white" && !p.grounded && !p.airJumped && p.storm <= 0 && game.phase === "playing") {
+    for (const side of [-1, 1]) {
+      const x = Math.round(cx + side * 13) - 2,
+        y = Math.round(feet) + 3;
+      ctx.fillStyle = "#1b1420";
+      ctx.fillRect(x - 1, y - 1, 6, 6);
+      ctx.fillStyle = "#f4f1e6";
+      ctx.fillRect(x, y, 4, 4);
+    }
+  }
   if (fx.swirl && !reducedMotion) {
     const t = fx.swirl.age / 0.7,
       sx0 = wx(fx.swirl.x),
@@ -2987,6 +3001,9 @@ function getState() {
     camera: { x: cam.x, y: cam.y },
     settings: { ...settings },
     audio: { musicDecoded: !!track.buffer, musicPlaying: !!track.source, musicRate: track.rate, context: audio?.state ?? "none" },
+    // QA: the performance.now() moment the simulation state corresponds to
+    // (loop.mjs), so a browser test can map a key's timeStamp to its tick.
+    simClock: stepper.time,
   };
 }
 /** Straight into play for QA (no card, no iris): the level's own kit. */

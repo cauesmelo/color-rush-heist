@@ -376,6 +376,19 @@ remain as aliases for 1-6's routes.
 
 ## Validation (actual results)
 
+**Combat redesign (combat squad), 2026-11-10** (`RESEARCH_COMBAT.md`; movement physics unchanged):
+
+- `npm test`: **145/145** (20 new in `tests/combat.test.mjs`: hearts, the blink, safe-ground respawn,
+  the 0.4 s windup and 1.5 s first-sight floors, the stomp window and chain numbers, defeat vs daze vs
+  flatten, the knock, clean routes, 1-3's catch). Every baseline, mastery and takedown route wins with
+  0 deaths and **0 hearts lost** (the planner rejects any option that costs one).
+- Movement audit: still 27 PASS / 2 WARN / 0 FAIL; C2 asserts the spear hit shape equals the drawn spear
+  within 2 px. `tests/browser-movement.mjs` 23/23 in Chrome.
+- Root QA `ONLY=CTS`: **15/15** on the packaged ZIP of a clean clone of the branch (new check: windup
+  telegraph, a heart lost with the blink and the HUD, the 4-stomp chain and Chain stamp, a water fall
+  that hops back). Release gate `--only=crh`: all steps PASS, one WARN (branch is not `main`).
+- Human proxies, hearts lost and deaths per level: PROXY_README_PLACEHOLDER
+
 **v1.0 release candidate (release squad), 2026-11-10:** see `ITCH_IO.md` "Release gate"
 for the gate tables before and after.
 

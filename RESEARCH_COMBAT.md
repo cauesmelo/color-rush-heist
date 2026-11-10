@@ -134,6 +134,12 @@ lead's request.
   (the strip is exactly the swept zone), and the largest reach from a windup start is 260 + 288 + 102 =
   650 px, inside the 960 px viewport (tested). From first sight to the first possible hit, a Rubik who
   ignores the card has at least **1.5 s** for every type (tested: walker 1.6, sentinel 1.7, charger 1.9).
+- **Hit shapes vs the art.** The spear is exactly the drawn spear (tip 102 px green / 98 px red from the
+  card's centre, band 50-68 / 46-64 px up; the box is 2 px inside the tip), tested against the PNG alpha
+  (`C2`). The card's **body box is deliberately 8 px inside each side of the 64 px drawn card** (48 px wide):
+  the owner asked for bodies that hurt, and a body that hurts must forgive the last few pixels of art, so
+  this is a documented exception to the 2 px rule, in the player's favour. Rubik's own box (40 x 52 in a
+  56 x 60 drawing) is unchanged.
 - **Baiting and dodging are the spatial problems.** A walker commits to a 72 px line: step back out of
   it, or hop it (a held jump is 93 px, the spear is 68 px) and land on its head or behind it. A charger's
   rush is a fixed line: let it run into its bound and stomp the dazed card, or jump the spear and stomp

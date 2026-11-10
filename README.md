@@ -21,7 +21,8 @@ plan is in the brief, §8). `LEVEL_DESIGN.md` covers each level beat by beat.
 
 ```sh
 npm run dev          # http://127.0.0.1:4174 (this folder only, loopback)
-npm test             # 97 tests: 64 model/level + 22 movement audit + 11 campaign (node:test)
+npm test             # 98 tests: 65 model/level + 22 movement audit + 11 campaign (node:test)
+node tests/cone-blind-audit.mjs   # ~40 s: what a cone-blind player gets past (LEVEL_DESIGN.md)
 npm run routes       # regenerate tests/routes.mjs after a level edit
 npm run build:itch   # dist/color-rush-heist-itch.zip
 ```
@@ -204,6 +205,16 @@ before and after the audit's tuning; every level gate test re-passes.
   nothing in there can hurt red, so it is never a trap. Respawns elsewhere hold every
   card for 0.75 s. A card whose cone is on Rubik in its own colour hums (♪), also
   while searching after a stun.
+- **Critic round (revision five):**
+  - **Vault room:** taking red drains the vault's red guard. The room's one threat after the
+    theft is the alarm card, which comes out at the back, turns and walks at the vault at 60%
+    pace (the card outside the door is gone).
+  - **Cone lock:** a card that has shown "?" keeps seeing Rubik in its cone whatever colour he
+    swaps to, until he leaves the cone; its "?" and lit cone persist.
+  - **Spear pop:** landing on a raised spear lifts Rubik only 150 px/s, a stumble, not a
+    springboard.
+  - **1-5:** the enforcer is the gate; no perch stands over it.
+  - **1-6 ledge:** a red/green pair, so no single colour passes.
 - **Checkpoints:** whole-segment restore; markers only advance in the direction of
   travel; signs stand beside the respawn spot; no respawn point lies inside any
   possible cone (the theft's in-room point is covered by its own test). The longest
@@ -290,6 +301,18 @@ starts from `startLevel(id)` / `createGame(id)`. `BASELINE_ROUTE` / `MASTERY_ROU
 remain as aliases for 1-6's routes.
 
 ## Validation (actual results)
+
+**Revision five, critic round, 2026-11-10:**
+
+- `npm test`: 98/98 pass.
+- Routes, baseline / mastery: 1-5 19.4 / 20.5 s; 1-6 35.1 / 36.3 s (escape 12.2 / 13.4).
+  All win with 0 deaths and unseen.
+- D2: 1-4 2.3%, 1-5 20.3%, 1-6 escape 8.0%.
+- Cone-blind audit:
+  - 1-6 escape: the bot wins 5/31, was 29/31.
+  - 1-5: the enforcer is passed 3/31, was 31/31.
+  - The full table is in LEVEL_DESIGN.md.
+- Root QA `ONLY=CTS` on the packaged ZIP: 12/12.
 
 **Revision five, 2026-11-10** (vault room rebuild, "every card has a job"; movement
 physics unchanged):

@@ -54,7 +54,7 @@ WARN band, and it counts as WARN only as a reasoned exception (see below).
 | C3 | No tunnelling | none found | 114,759 ticks (114,397 on the revision-five routes) (every route + 3000 fuzzed starts at dash 850 / fall 760 / bounce 520 / knock 440 px/s): the box never inside a solid | swept/sub-stepped safe | PASS → PASS | C3 |
 | C4 | Contact rules | spear + water only | `die()` sources are exactly spear (lunge frames) and water; the spear-up tell is drawn from `M.stompable` | consistent, visible | PASS → PASS | C4 |
 | D1 | Optional techniques | dash-jump, held stomp, saved air jump | dash-jump +26 px of flight; held stomp 198 vs 150 px; air jump saved for the fall +80 px; (new) a freeze press keeps the air jump | ≥ 2 that change outcomes | PASS → PASS | D1 |
-| D2 | Skill gradient | expert vs baseline: 1-4 9.1%, 1-6 escape 8.1% | 1-4 2.3%, 1-5 4.8%, 1-6 escape 8.4% (the 1-4 baseline itself got 1.1 s faster). Revision five (cards' jobs, same physics): 1-4 2.3%, 1-5 11.2%, 1-6 escape 8.0% | ≥ 15%, not required | WARN (exception) → WARN (exception) | D2 |
+| D2 | Skill gradient | expert vs baseline: 1-4 9.1%, 1-6 escape 8.1% | 1-4 2.3%, 1-5 4.8%, 1-6 escape 8.4% (the 1-4 baseline itself got 1.1 s faster). Revision five (cards' jobs, same physics): 1-4 2.3%, 1-5 11.2%, 1-6 escape 8.0%; critic round: 1-4 2.3%, 1-5 20.3%, 1-6 escape 8.0% | ≥ 15%, not required | WARN (exception) → WARN (exception) | D2 |
 | D3 | Recovery | — | air-jump rescue window over 1-1's first water: 425 ms of timings; landing on a raised spear pops (0 deaths); body contact knocks back | readable recovery | PASS → PASS | D3 |
 | E1 | Action feedback | sound + visual for 13 movement events | same, checked in source | same frame | PASS → PASS | E1-E2 |
 | E2 | Resource state on Rubik | form (sheet), dash (Dim/Flash); **white's air jump not shown anywhere** | + two puffs under the feet while the air jump is unspent | readable without the HUD | FAIL → PASS | E1-E2; screenshots |
@@ -124,6 +124,18 @@ real-Chrome checks pass on the new routes. D2 moved because the guided lines cha
 Guard design alone does not reach 15%. The expert lines (dash-jumps, perch to perch, the roof
 gates) gain most of their time over gaps the F rule gates by airtime, so the guided line and
 the expert line move across them at the same speed.
+
+### Critic round (same day)
+
+- **Spear pop:** landing on a raised spear now pops Rubik at -150 px/s (was -360) with the same
+  440 px/s sideways push and 0.22 s without control. This is a hit reaction, so I re-measured:
+  - D3 still shows 1 spike and 0 deaths.
+  - B13 airtimes and C3 tunnelling re-pass on the new routes.
+  - The 22 audit tests pass, and the scorecard stays 27 PASS / 2 WARN / 0 FAIL.
+- **Cone lock:** a card that has shown "?" keeps seeing Rubik in its cone through a swap. This
+  changes awareness, not movement.
+- **D2 for 1-5 is now 20.3%.** The guided line waits at the post for the enforcer's back; the
+  expert's timed double jump over it skips the wait. 1-4 (2.3%) and 1-6 (8.0%) still miss 15%.
 
 ## Not verified
 

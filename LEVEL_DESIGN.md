@@ -208,18 +208,43 @@ Safe line = the guided route; expert line = what rewards skill.
 | 1-4 island | disguise | land green through it | — |
 | 1-5 teacher | teach | the ladder in the open (green skips it) | stomp it on its recovery, ride the bounce: ★1 |
 | 1-5 p1 | watch | time the white climb to P2 to its back | — |
-| 1-5 p2 | swap | swap back to green before landing beside it | — |
-| 1-5 enforcer | gate | wait on the perch, stomp it when it faces away | perch to perch over its cone (no wait); ★2 on the far perch |
+| 1-5 p2 | gate | behind P2's cover, wait for its back, hop onto it (bounce to the post) | — |
+| 1-5 enforcer | gate | wait at the post (the step's riser cuts its cone) for its back, run off the step onto it | a timed white double jump over it; ★2 on the perch 8 tiles up, only off its back (bounce + air jump) |
 | 1-5 cross-red | gate | stomp it from behind when it faces the goal block | a held bounce off it reaches the high line |
 | 1-5 cross-green | swap | white up the goal block, green before landing, walk through it | stomp its back as it walks to the goal; the high line (★3) ends on its block |
 | 1-6 corridor | watch | inbound: the white climb at its end, green again in the air | escape: the roof gates above it: ★3 |
-| 1-6 lookout | watch | green past it, both ways | swap alcove inbound: ★1; the stacked gate on the escape |
-| 1-6 vault-guard | gate | wait on stair 3, go when it looks at the vault, stomp its back | — |
-| 1-6 landing | knock | the forced smash from the doorway carries into it | — (from deeper in: a second dash, or green) |
+| 1-6 lookout | watch (pair) | inbound green through it; home: knock it with a red dash | swap alcove inbound: ★1; the stacked gate on the escape |
+| 1-6 ledge-red | gate (pair) | wait in the corridor for its back, stomp it at the lip, dash at the bounce's apex to the island; home: red walks past it | wait in the swap alcove (above its cone) for its back |
+| 1-6 vault-guard | gate | wait on stair 3, go when it looks at the vault, stomp its back; taking red drains it | — |
+| 1-6 alarm | knock | (escape) out at the back, it turns and walks at the vault at 60% pace: smash the door and go | knock it aside to reach ★2 in the alcove behind it |
 | 1-6 ambush | swap | green after the last dash, land through it | land clear as red and knock it with a ground dash |
 
 Removed because no route needed them: 1-2 `chain-a`/`chain-b`, 1-3 `corridor-a`, 1-6
-`burst-a`/`burst-b`, and the inbound landing patrol (now an escape-only alarm card). 30 cards remain (was 35).
+`burst-a`/`burst-b`, and the inbound landing patrol. Added in the critic round: 1-6 `ledge-red` (a red sentry paired with the green lookout) and the escape-only `alarm` card, which replaced the alarm card outside the door. 31 cards remain (was 35).
+
+## Cone-blind audit (revision five, critic round)
+
+`node tests/cone-blind-audit.mjs` (~40 s, a dev tool) replays each baseline to every
+checkpoint, then hands control to a terrain-competent, guard-ignorant bot
+(`tests/cone-blind-bot.mjs`) at 31 arrival times. A card "gets passed" when the bot
+gets beyond it in at least 16 of 31 arrival times; "free" means passed with no
+stomp, knock, "?", "!", bump or spear.
+
+| Part | Before (`35cc204`) | After |
+| --- | --- | --- |
+| 1-2 | 3/7 passed, 3 free | 3/7, 3 free (unchanged) |
+| 1-3 | 9/9, 8 free | 9/9, 8 free (unchanged; no spears or water by design) |
+| 1-4 | 1/3, 0 free | 1/3, 0 free (unchanged) |
+| 1-5 | 4/6, 2 free | 3/6, 0 free: the enforcer is now passed 3/31 |
+| 1-6 inbound | 2/3, 0 free | 2/4, 0 free: the new ledge sentry is passed 0/31 |
+| 1-6 escape | 5/5, 3 free; the bot won 29/31 | 1/4, 0 free; the bot wins 5/31 |
+
+Still open:
+- **1-2:** the pit card can be double-jumped over. A low overhang over the pit would force
+  the drop.
+- **1-3:** the pillar hops leave the cone band fast, so a card sees white for under 0.25 s.
+- **1-4:** the chain card is skipped and the island card is a free disguise pass.
+- The Ghost / Takedown stamps the critic proposed are not built.
 
 ## Known design limits
 

@@ -21,10 +21,11 @@ plan is in the brief, §8). `LEVEL_DESIGN.md` covers each level beat by beat.
 
 ```sh
 npm run dev          # http://127.0.0.1:4174 (this folder only, loopback)
-npm test             # 115 tests: 69 model/level + 22 movement audit + 16 campaign/save + 5 cone-blind rule + 3 release (~20 s)
+npm test             # 162 tests: model, levels, movement audit, campaign/save, combat, held input, human proxies, release, pixel UI (~20 s)
 node tests/cone-blind-audit.mjs   # ~40 s: full report of what a cone-blind player gets past (LEVEL_DESIGN.md)
 npm run routes       # regenerate tests/routes.mjs after a level edit
 npm run build:itch   # dist/color-rush-heist-itch.zip
+npm run audit:pixels -- http://127.0.0.1:4174/ --out /tmp/pixel-audit   # Chrome: every screen's pixels vs the UI palette and grid (UI_STYLE.md)
 ```
 
 No CDN, account, backend or parent server. HTTP is needed for ES modules.
@@ -67,8 +68,10 @@ declared pair). `LEVEL_DESIGN.md` lists each card's safe and expert line.
 
 ## Front end (original art, original order)
 
+**All of it is pixel art** (`UI_STYLE.md`): every menu, panel, button, stamp, sticker socket, bubble, bar, icon, focus frame and transition is drawn on the art's own 2x pixel grid in a 22-colour palette taken from the art files (no new shade), with square corners, hard +1,+1 shadows, dithers instead of fades and gradients, and bitmap text. `ui-draw.mjs` draws it from state, `pixel-ui.mjs` is the kit, and `npm run audit:pixels` measures the real pixels in Chrome. The world's own art and Rubik and the cards' sprite transforms are untouched.
+
 1. **Boot:** a small spinning cube face while assets load.
-2. **Title:** full-frame `title_screen.png` (touch: a "Tap to start" pill). Music on
+2. **Title:** full-frame `title_screen.png` (touch: a "Tap to start" plate). Music on
    by default, nothing requested before the first key or tap.
 3. **First visit:** title → the comic (`bg1` drain, `bg_black`, the four panels in
    their `story.tscn` layout, the `cutout.png` iris) → 1-1 (skipping the comic still

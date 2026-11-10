@@ -62,7 +62,7 @@ test("palette: nearestColour always lands on the palette", () => {
 });
 test("style.css and embed.css: the colours are the palette, nothing else", () => {
   const allowed = new Set([...Object.values(PAL), "#168546"]); // the itch page behind the game
-  for (const file of ["style.css", "embed.css"]) {
+  for (const file of ["style.css", "embed.css", "gallery.css"]) {
     const found = read(file).match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
     for (const c of found) assert.ok(allowed.has(c.toLowerCase()), `${file}: ${c} is not a palette colour`);
   }
@@ -76,7 +76,7 @@ test("style.css and embed.css: the colours are the palette, nothing else", () =>
 
 // ----------------------------------------------------- the CSS rule list ----
 test("CSS: no rounded corners, blur, gradients, translucency, rotation or eased motion", () => {
-  for (const file of ["style.css", "embed.css"]) {
+  for (const file of ["style.css", "embed.css", "gallery.css"]) {
     const css = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
     assert.doesNotMatch(css, /border-radius/, `${file}: border-radius`);
     assert.doesNotMatch(css, /gradient\(/, `${file}: gradient`);
@@ -105,7 +105,7 @@ test("CSS: lengths are whole art pixels (var(--ap)); no stray px sizes except 0,
   assert.deepEqual(strays, [], `unexpected px lengths: ${strays.join(", ")}`);
 });
 test("index.html: no inline styles, no glyphs from a fallback font on buttons", () => {
-  const html = read("index.html");
+  const html = read("index.html") + read("gallery.html");
   assert.doesNotMatch(html, /\sstyle="/);
   assert.doesNotMatch(html, /&#(9835|10074|9656|9664|9654|8635);/, "icons are pixel sprites, not text glyphs");
 });

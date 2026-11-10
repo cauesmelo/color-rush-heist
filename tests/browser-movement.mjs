@@ -194,11 +194,18 @@ check("A3 right held through a death moves again <= 0.3 s after the respawn", de
 // C1 on the canvas itself: Rubik drawn standing at two spots (the camera is
 // clamped at the level start), the frames diffed: his drawn feet and body
 // against the collider (feet support +-11 px, box 40 x 52).
+// The frame diff needs a plain, grey backdrop behind Rubik: earlier checks cleared
+// levels, and the forest regains colour with progress (a dither now, whose dark
+// pixels can hide the left foot from a colour diff), so progress is reset first.
+// Dust and squash are random world effects: the check measures the sprite, so it
+// runs with reduced motion, which draws neither.
+await page.emulateMedia({ reducedMotion: "reduce" });
 const drawn = await page.evaluate(() => {
   const g = window.__game,
     canvas = document.getElementById("game"),
     ctx = canvas.getContext("2d"),
     out = {};
+  g.resetSave();
   g.startLevel("1-1");
   g.setManual(true);
   const grab = (cx, dir) => {
@@ -229,6 +236,7 @@ const drawn = await page.evaluate(() => {
   g.setManual(false);
   return out;
 });
+await page.emulateMedia({ reducedMotion: "no-preference" });
 check(
   "C1 canvas: feet line on the floor, drawn feet within 2 px of the +-11 support, box inside the body",
   Object.values(drawn).every((d) => d.feetLine === 384 && Math.abs(d.feet[0] + 11) <= 2 && Math.abs(d.feet[1] - 11) <= 2 && d.body[0] <= -20 && d.body[1] >= 20 && d.head <= 384 - 52),

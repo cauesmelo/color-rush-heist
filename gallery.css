@@ -1,40 +1,69 @@
+/* The original-art archive: a plain page, in the same pixel rules as the game
+ * (UI_STYLE.md): the palette only, square corners, hard shadows, text at one
+ * font pixel = 2 CSS px (16 px font x 2 = 32 px) and its multiples, sprites
+ * from pixel-ui.mjs (installCss in gallery.mjs). */
 @font-face {
   font-family: "monogram";
   src: url("./assets/font.ttf") format("truetype");
+}
+:root {
+  --ink: #000000;
+  --void: #25131a;
+  --plum: #3d253b;
+  --mauve: #523b40;
+  --stone: #737375;
+  --mist: #c9d2d4;
+  --white: #ffffff;
+  --cream: #f7fbe3;
+  --lemon: #f0f679;
+  --red: #dc3232;
+  --forest: #2e7d37;
+  --page: #168546;
+  --ap: 2px;
 }
 * {
   box-sizing: border-box;
 }
 html {
-  background: #168546;
+  background: var(--page);
 }
 body {
   margin: 0 auto;
   max-width: 1180px;
   padding: 24px 16px 40px;
   font-family: "monogram", ui-monospace, monospace;
-  font-size: 24px;
-  color: #fbf9f2;
+  font-size: 32px;
+  line-height: 22px;
+  color: var(--cream);
+  -webkit-font-smoothing: none;
 }
 h1 {
   margin: 12px 0 4px;
   font-size: 64px;
   font-weight: normal;
-  line-height: 1;
-  text-shadow: 0 4px 0 #0b3d20;
+  line-height: 40px;
+  text-shadow: 0 4px 0 var(--void);
 }
 header p,
 #count,
 footer {
   margin: 0 0 12px;
-  color: #dff2e4;
+  color: var(--cream);
 }
 a {
-  color: #ffcf2e;
+  color: var(--lemon);
 }
 .back {
   text-decoration: none;
-  font-size: 32px;
+}
+.back::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 14px;
+  margin-right: 8px;
+  background: var(--spr-arrow-left) no-repeat center / 100% 100%;
+  image-rendering: pixelated;
 }
 .filters {
   display: flex;
@@ -43,21 +72,26 @@ a {
   margin: 16px 0;
 }
 .filters button {
-  padding: 2px 12px 5px;
-  border: 2px solid #1b1420;
-  border-radius: 9px;
-  background: #2b1f2e;
-  color: #fbf9f2;
+  padding: 0 12px 4px;
+  border: solid 6px transparent;
+  border-image: var(--spr-btn) 3 fill / 6px / 0 stretch;
+  image-rendering: pixelated;
+  background: none;
+  color: var(--cream);
   font: inherit;
+  line-height: 22px;
   cursor: pointer;
 }
+.filters button:hover {
+  border-image-source: var(--spr-btn-hover);
+}
 .filters button[aria-pressed="true"] {
-  background: #fbf9f2;
-  color: #1b1420;
+  border-image-source: var(--spr-btn-on);
 }
 :focus-visible {
-  outline: 4px solid #ffcf2e;
-  outline-offset: 2px;
+  outline: 4px solid var(--lemon);
+  outline-offset: 0;
+  box-shadow: 0 0 0 6px var(--ink);
 }
 .art-grid {
   display: grid;
@@ -67,16 +101,17 @@ a {
 .art-card {
   margin: 0;
   padding: 8px;
-  border-radius: 14px;
-  background: #fbf9f2;
-  color: #1b1420;
+  border: 2px solid var(--ink);
+  background: var(--cream);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 var(--void);
 }
 .art-card a {
   display: grid;
   place-items: center;
   height: 140px;
-  border-radius: 8px;
-  background: repeating-conic-gradient(#d8d3c6 0 25%, #ece8dd 0 50%) 0 0 / 16px 16px;
+  background: var(--spr-checker) 0 0 / 16px 16px;
+  image-rendering: pixelated;
 }
 .art-card img {
   max-width: 100%;
@@ -87,38 +122,34 @@ figcaption {
   display: grid;
   gap: 2px;
   margin-top: 6px;
-  font-size: 20px;
-  line-height: 1;
+  font-size: 32px;
+  line-height: 22px;
 }
 figcaption b {
   font-weight: normal;
   word-break: break-all;
 }
 figcaption small {
-  font-size: 16px;
-  color: #5a5060;
+  color: var(--plum);
 }
 .badge {
   justify-self: start;
   padding: 0 6px 2px;
-  border-radius: 5px;
-  background: #e8382c;
-  color: #fff;
-  font-size: 16px;
+  background: var(--red);
+  color: var(--white);
 }
 .archive .badge {
-  background: #5a5060;
+  background: var(--stone);
 }
 /* Withheld from this build (itch.json "withhold"): a hatched blank, no request. */
 .art-blank {
   height: 140px;
-  border-radius: 8px;
-  background: repeating-linear-gradient(45deg, #e4dfd2 0 8px, #f4f1e8 8px 16px);
+  background: var(--spr-hatch) 0 0 / 16px 16px;
+  image-rendering: pixelated;
 }
 .withheld .badge {
-  background: #1b1420;
+  background: var(--ink);
 }
 footer {
   margin-top: 24px;
-  font-size: 20px;
 }

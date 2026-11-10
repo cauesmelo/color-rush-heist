@@ -3,6 +3,8 @@
  * The itch.io build withholds the unverified third-party player/ pack: its
  * packaged manifest marks those entries `packaged: false`, and they show as a
  * note card instead of an image request that would 404. */
+import { installCss } from "./pixel-ui.mjs";
+installCss(); // the pixel sprites the page's buttons and checker use
 const files = await fetch("./art-manifest.json").then((response) => {
   if (!response.ok) throw new Error("Art manifest unavailable");
   return response.json();

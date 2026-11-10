@@ -752,6 +752,9 @@ export function cssSprites() {
   out["--spr-expand"] = icon("expand", PAL.cream, 11, 11);
   out["--spr-arrow-right"] = icon("arrowRight", PAL.cream, 5, 7);
   out["--spr-arrow-left"] = icon("arrowLeft", PAL.cream, 5, 7);
+  // The archive page's transparency checker (2 art px squares) and its hatched blank.
+  out["--spr-checker"] = url(bake(4, 4, (g) => (g.rect(0, 0, 4, 4, PAL.mist), g.rect(0, 0, 2, 2, PAL.cream), g.rect(2, 2, 2, 2, PAL.cream))));
+  out["--spr-hatch"] = url(bake(8, 8, (g) => (g.rect(0, 0, 8, 8, PAL.cream), [0, 1, 2, 3, 4, 5, 6, 7].forEach((i) => g.px(i, 7 - i, PAL.mist)))));
   for (const color of ["white", "green", "red"]) out[`--spr-form-${color}`] = url(bake(20, 28, (g) => paintFormCard(g, 0, 0, 20, 28, color)));
   return out;
 }

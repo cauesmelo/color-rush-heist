@@ -2,8 +2,11 @@
  * not part of `npm test`: it needs Chrome through Playwright, e.g. the
  * workspace's common/node_modules). See UI_STYLE.md for the rules it checks.
  *
- *   node serve.mjs --port 4501 &
- *   node tests/pixel-audit.mjs http://127.0.0.1:4501/ --out <dir> [--label new] [--only title,results]
+ *   npm run dev &                      # or node serve.mjs --port 4501
+ *   npm run audit:pixels -- http://127.0.0.1:4174/ --out <dir> [--label new] [--only title,results] [--dpr 1,2]
+ *
+ * To judge another build with the same rectangles (the pre-pixel UI, say), pass
+ * its URL and `--world <url of a build with __game.worldColours()>`.
  *
  * It drives the real game in Chrome through every screen and state (boot, title,
  * story, map and its menu, HUD, hints, bubbles, pause, level card, GET card,
@@ -39,7 +42,7 @@ import { ROUTES } from "./routes.mjs";
 import { PAL } from "../pixel-ui.mjs";
 
 const args = process.argv.slice(2);
-const baseUrl = args.find((a) => a.startsWith("http")) || "http://127.0.0.1:4501/";
+const baseUrl = args.find((a) => a.startsWith("http")) || "http://127.0.0.1:4174/";
 const opt = (name, fallback) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback);
 const outDir = path.resolve(opt("out", "pixel-audit-out"));
 const label = opt("label", "run");

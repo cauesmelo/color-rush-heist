@@ -126,7 +126,8 @@ No gate check had to change for CRH. The only edits to `common/` were the CTS bl
   4. `04-vault-1-6.png`: the vault and its red guard's cone.
   5. `05-result-stamps.png`: the 1-5 clear with the Ghost and Takedown stamps.
   - Spare: `06-world-map.png`.
-  - Regenerate them from `dist/itch/` after any visual change.
+  - Regenerate them from `dist/itch/` after any visual change: `npm run build:itch`, serve `dist/itch`, then `npm run shots:itch -- <url> artifacts/itch` (frames are picked by game events, so a rerun lands on the same moments).
+  - **Regenerated 2026-11-10 for the pixel UI** (the old frames showed the smooth HUD, bubbles and result card): all six screenshots and cover B. Cover A is the untouched title art. The new set is also in `common/artifacts/revision-5/crh-pixel-ui/itch/`.
 
 ## Owner checklist before publishing (not run by the squad)
 

@@ -7,6 +7,9 @@
     "dev": "node serve.mjs --port 4174",
     "test": "node --test tests/*.test.mjs",
     "routes": "node tests/generate-routes.mjs",
-    "build:itch": "node package-itch.mjs"
+    "build:itch": "node package-itch.mjs",
+    "audit:pixels": "node tests/pixel-audit.mjs",
+    "sheets:pixels": "node tests/pixel-sheet.mjs",
+    "shots:itch": "node tests/itch-shots.mjs"
   }
 }

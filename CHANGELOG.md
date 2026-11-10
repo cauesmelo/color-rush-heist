@@ -4,6 +4,17 @@ Player-facing changes in Color Rush Heist. Versions follow `package.json`; the t
 
 ## [Unreleased]
 
+### Pixel UI
+
+- **Every menu is pixel art now.** The HUD, hearts, chain meter, hint and awareness bubbles, popups, level and GET and REVERSE cards, results and world-clear tallies, stamps, sticker sockets, world map, pause and options panels, buttons, toggles, keys, icons, the title's tap plate, the ending and the transitions are drawn on the same 2x pixel grid as the art, in 22 colours that all come from the art files. No rounded corners, soft shadows, gradients, translucency, rotation or system-font glyphs remain in the interface.
+- **Fades are dithers.** The screen dim behind a card, the forest regaining colour (on the map and in play), the comic's drain to grey, the hit flash, the vault's glow and the beacon are ordered dithers of palette pixels. The iris is a pixel-stepped zoom of the Rubik-face cut-out.
+- **Text is bitmap text** at two sizes on the grid (body and heading). The 16 px and 48 px sizes are gone.
+- **Keyboard focus is a pixel frame** (lemon over ink) on every control.
+- **Crisper scaling:** the game is shown at a whole number of device pixels per canvas pixel (on a 2x display, 960 CSS px), and the page's lengths are whole art pixels.
+- The stamps are pixel seals with their own icons (ghost, stomp, clock, chain): filled when earned, hollow when not. Heart, sticker, badge and form-card art were redrawn on the grid; the form glyphs (square, triangle, diamond) are unchanged.
+- The art archive page wears the same style.
+- Gameplay, levels and every number are unchanged. See `UI_STYLE.md`.
+
 ### Combat
 
 - **Three hearts.** A spear strike, a card's body and a fall into water each cost one. A hit freezes the world for a beat, knocks Rubik back and makes him blink for 1.5 seconds. A new checkpoint refills every heart; losing the last one sends you back to the checkpoint as before.

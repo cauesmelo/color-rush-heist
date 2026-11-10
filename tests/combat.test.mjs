@@ -168,7 +168,8 @@ test("a fall keeps what was defeated; a death restores the segment", () => {
 // --------------------------------------------------------------- enemies ---
 test("enemy types: patrols walk, a post-bound sentry holds, a red mobile card charges", () => {
   const types = (id) => Object.fromEntries(getLevel(id).guards.map((c) => [c.id, M.enemyType(c)]));
-  assert.equal(types("1-2").pit, "walker");
+  assert.equal(types("1-2").first, "sentinel");
+  assert.equal(types("1-2").wall, "walker");
   assert.equal(types("1-2")["isle-a"], "sentinel");
   assert.equal(types("1-5").enforcer, "charger");
   assert.equal(types("1-5")["cross-red"], "sentinel", "explicit type in level data wins");
@@ -305,9 +306,9 @@ test("stomp: walkers and sentinels are defeated, an armoured charger is dazed fi
   assert.equal(d.c.state, "stunned", "armoured: the first stomp flips it");
   assert.equal(d.c.timer > 1.2 && d.c.timer <= M.ENEMY.charger.daze, true, "with a 2 s ring, not an open-ended stun");
   assert.deepEqual([d.g.takedowns.length, d.g.stomps], [0, 1], "a daze is not yet a takedown");
-  const pad = drop("pit", 0, { level: "1-2", extra: { pad: true } });
+  const pad = drop("first", 0, { level: "1-2", extra: { pad: true } });
   assert.equal(pad.c.state, "drained");
-  assert.deepEqual(pad.g.takedowns, ["pit"]);
+  assert.deepEqual(pad.g.takedowns, ["first"]);
   // Bounce on the flat card again: a bounce, not a chain link.
   const chain = pad.g.chainBest;
   place(pad.g, pad.c.x, pad.c.floor - M.GUARD.h - 40, { vy: 300, grounded: false });
@@ -458,7 +459,7 @@ test("1-3 stays the stealth lesson: a card's '!' sends Rubik back (caught), it n
   assert.equal(g.hits, 0);
 });
 
-test("pads are exactly the springboard cards the levels need (1-2 pit, islands, wall; 1-4 pillar and chain)", () => {
+test("pads are exactly the springboard cards the levels need (1-2 wall and islands; 1-4 pillar and chain)", () => {
   const pads = LEVELS.flatMap((l) => l.guards.filter((c) => c.pad && !c.absorb).map((c) => `${l.id} ${c.id}`)).sort();
-  assert.deepEqual(pads, ["1-2 isle-a", "1-2 isle-b", "1-2 isle-c", "1-2 isle-d", "1-2 pit", "1-2 wall", "1-4 chain", "1-4 pillar"]);
+  assert.deepEqual(pads, ["1-2 isle-a", "1-2 isle-b", "1-2 isle-c", "1-2 isle-d", "1-2 wall", "1-4 chain", "1-4 pillar"]);
 });

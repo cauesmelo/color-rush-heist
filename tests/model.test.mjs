@@ -317,7 +317,8 @@ test("1-2: a stomp from above, behind or the front is a stomp; a springboard car
   const drop = (dir, offset, id = "wall", extra = {}) => {
     const g = fresh("1-2"),
       c = only(g, id);
-    Object.assign(c, { x: 76 * T, dir, state: "calm", turning: 0, turnClock: 0, ...extra });
+    Object.assign(c, { x: 44 * T, dir, state: "calm", turning: 0, turnClock: 0, ...extra });
+    c.min = c.max = c.x;
     place(g, c.x + offset, c.floor - M.GUARD.h - 30, { vy: 200, jumpHeld: true, jumps: 1 });
     g.player.grounded = false;
     ticks(g, seconds(0.2));
@@ -344,7 +345,7 @@ test("1-2: hold jump for the high bounce; a tap (or a walk-off) gives the short 
   const bounce = (held) => {
     const g = fresh("1-2"),
       c = only(g, "wall");
-    Object.assign(c, { x: 76 * T, dir: 1, state: "calm", turning: 0, turnClock: 0, pace: 0 });
+    Object.assign(c, { x: 44 * T, dir: 1, state: "calm", turning: 0, turnClock: 0, pace: 0 });
     c.min = c.max = c.x;
     Object.assign(g.player, { x: c.x - 34, y: c.floor - M.GUARD.h - 112, vy: 100, grounded: false, jumpHeld: held, jumps: held ? 1 : 0, grace: 0 });
     let top = Infinity;
@@ -360,17 +361,20 @@ test("1-2: hold jump for the high bounce; a tap (or a walk-off) gives the short 
   assert.ok(low < high - 40 && low > M.GUARD.h + 40, `tap bounce ${low.toFixed(1)} px`);
 });
 test("1-2: nothing 7+ tiles up is reachable without a stomp; stomp + air jump reaches 8 tiles", () => {
-  // The twist wall (7 tiles over the patrol's floor) and the 8-tile ledge.
+  // The dip's wall (7 tiles over the dip floor) and the 8-tile ledge.
   for (const target of [
-    { start: { x: 72 * T, feet: 18 * T }, top: 11 * T, past: 82 * T + 8 },
-    { start: { x: 71 * T, feet: 18 * T }, top: 10 * T, past: 73 * T },
+    { start: { x: 46 * T, feet: 18 * T }, top: 11 * T, past: 51 * T + 8 },
+    { start: { x: 38 * T, feet: 18 * T }, top: 10 * T, past: 40 * T },
   ])
     assert.equal(anyReaches("1-2", target, jumpFamily({ maxTakeoff: 140, air: true })), false, `a double jump never gets to ${target.top}`);
+  // Control: the harness does see a landing (the dip floor itself), so the
+  // two "false" above are the heights, not a start inside the water.
+  assert.equal(anyReaches("1-2", { start: { x: 46 * T, feet: 18 * T }, top: 18 * T, past: 47 * T }, jumpFamily({ maxTakeoff: 10 })), true);
   // Sticker 3's slab (row 8): the highest double jump from the block or the
   // far bank stays under it.
   for (const [x, floor] of [
-    [68 * T + 20, 16 * T],
-    [64 * T + 16, 18 * T],
+    [88 * T + 16, 16 * T], // the last island itself
+    [94 * T + 16, 18 * T], // the far bank under the slab
   ]) {
     const g = noCards(fresh("1-2"));
     place(g, x, floor);
@@ -385,7 +389,7 @@ test("1-2: nothing 7+ tiles up is reachable without a stomp; stomp + air jump re
   // The measured envelope: a held stomp + air jump clears the 8-tile ledge.
   const g = fresh("1-2"),
     c = only(g, "wall");
-  Object.assign(c, { x: 76 * T, dir: 1, state: "calm", turning: 0, pace: 0 });
+  Object.assign(c, { x: 44 * T, dir: 1, state: "calm", turning: 0, pace: 0 });
   c.min = c.max = c.x;
   Object.assign(g.player, { x: c.x - 34, y: c.floor - M.GUARD.h - 112, vy: 100, grounded: false, jumpHeld: true, jumps: 1, grace: 0 });
   let top = Infinity,
@@ -993,7 +997,9 @@ test("no respawn point in any level can be inside a sight cone (any card, any pa
       const box = { x: cp.x - M.PLAYER.w / 2, y: cp.floor - M.PLAYER.h, w: M.PLAYER.w, h: M.PLAYER.h };
       for (const card of g.guards.filter((c) => !c.absorb))
         for (let x = card.min; x <= card.max; x += 4)
-          for (const dir of [-1, 1]) {
+          // A `fixed` lookout never turns (nothing but being seen or bumped
+          // does), so only the facing its data gives is probed.
+          for (const dir of card.fixed ? [card.dir] : [-1, 1]) {
             const probe = { ...card, x, dir };
             assert.equal(M.boxInCone(probe, box, M.coneReach(g, probe)), false, `${level.id} ${cp.id} seen by ${card.id} at ${x} facing ${dir}`);
           }

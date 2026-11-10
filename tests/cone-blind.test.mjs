@@ -16,6 +16,7 @@ import { probeCard, isEnforced, ENFORCED_JOBS } from "./cone-blind-audit.mjs";
 /** Cards the rule does not cover, and why (LEVEL_DESIGN.md "Cone-blind
  * audit"). A new card is enforced unless it is listed here. */
 const EXEMPT = {
+  "1-2 first": "teach: the head stomp's first card, a sentinel met on flat ground; going past it is allowed, and its head is the lesson",
   "1-3 glade": "teach: the disguise's first card, met in the open; it is supposed to hum and walk through green",
   "1-3 corridor-b": "disguise: walking through it under the canopy is the lesson",
   "1-3 roof": "off the line: guards sticker 2's roof route, which the bot never takes",

@@ -1,28 +1,37 @@
-/** 1-2 "Stomping Ground": the head stomp -> stomp from behind -> GREEN GET.
- * White only at the start; every card is awake. Cards here only push
- * (`spears: false`): the spear arrives in 1-5.
+/** 1-2 "Stomping Ground": the head stomp -> the flat card is a springboard ->
+ * the island chain -> GREEN GET. White only at the start; every card is awake
+ * and, since the combat rebuild (RESEARCH_COMBAT.md), every card fights: a
+ * walker telegraphs a windup and strikes, a sentinel holds its post, and any
+ * of them costs a heart by body or spear. One stomp defeats a card; a `pad`
+ * card is flattened instead and stays a springboard.
  *
- * The stomp rules this level teaches (model.mjs `stompable`): land on a card's
- * head from above or behind and it is stunned for 3 s while Rubik bounces -
- * high if jump is held (195 px over the card's floor), a short hop if not. A
- * card that FACES Rubik raises its spear (drawn): landing on it pops him away.
+ * Levels round (LEVEL_DESIGN_V1.md): the previous layout opened with a pit a
+ * skilled player jumped over (so its card did nothing for him) and a 7-tile
+ * wall whose only way over was the pit card, flattened 8 tiles back: a naive
+ * player hopped at the wall for minutes, because nothing said the flat card
+ * was a springboard. Now every gate card stands at the foot of the thing it
+ * opens, and the failures before the first water are dry.
  *
- * introduce: a slow card patrols a dry pit 6 tiles below the start cliff; its
- *            cone is in the pit, so Rubik watches from above and drops on its
- *            back. A rock lip over the cliff's end means walking off is the
- *            only way on (no jump across), and the far rim is 6 tiles up: only
- *            the stomp's held bounce (or bounce + air jump) gets out.
- * develop:   a chain of lookouts on 1-tile islands over water, all staring
- *            ahead (fixed, facing the way Rubik travels): bounce from back to
- *            back. A checkpoint stands right before the chain.
- * twist:     a patrol paces in front of a 7-tile wall: only a stomp from
- *            behind while it walks toward the wall, then an air jump at the
- *            bounce's peak, gets up (a double jump tops out at 175 px). A
- *            short dip after the wall is a breather before the finale (it
- *            held a patrol and a pedestal lookout until revision five: the
- *            guided line double-jumped over both, so they did no work and
- *            were removed; the island chain already teaches back-to-back
- *            bounces).
+ * introduce: a sentinel on its post on 16 tiles of flat ground, staring at
+ *            the way Rubik comes. It cannot chase: it telegraphs (a 0.65 s
+ *            windup, the strike strip on the floor), jabs 100 px ahead, and
+ *            its head is the answer: a stomp (from the front, the side or
+ *            behind) bounces Rubik up through sticker 1. Nothing is gated by
+ *            it; walking past it costs a heart at worst, and the first hit
+ *            shows the "stomp" bubble.
+ * develop:   the wall duel. A dip two tiles below the flat ground ends at a
+ *            7-tile wall that no double jump tops (175 + 12 < 224). A walker
+ *            patrols the dip right up to the wall's foot. Pinned against the
+ *            wall by a card that chases at 190 px/s, jumping over it is the
+ *            instinct, and a landing on its head is the stomp: the bounce,
+ *            then the air jump at the peak (he already owns it from 1-1),
+ *            tops the wall. The card stays flat at the foot as a springboard,
+ *            so a missed bounce is a hop away from the next one. Sticker 2 on
+ *            an 8-tile ledge over the dip (the same trick, drifting left).
+ * twist:     the first water: four sentinels on 1-tile islands staring ahead,
+ *            bounce from back to back (the island chain: 4 stomps without
+ *            touching ground is the Chain stamp). A miss costs a heart and a
+ *            hop back, and a checkpoint stands on the wall's top.
  * conclude:  the old opening's overhang drop onto a green lookout facing
  *            away: every way off the run-up lands on its back; its green
  *            swirls in -> GREEN GET; the goal face fills green.
@@ -47,43 +56,34 @@ const lookout = (id, col, floorRow, dir = 1, extra = {}) => ({
 export default defineLevel({
   id: "1-2",
   name: "Stomping Ground",
-  idea: "Stomp a card from behind",
+  idea: "Land on a card's head",
   cols: 134,
   kit: { forms: ["white"], start: "white", dash: false },
-  spears: false,
   unseen: false, // a stomp lesson, not a stealth level: no Unseen stamp here
   // The Chain stamp: the island run is four stomps without touching ground
   // (the baseline route does it), so 4 is "kept the whole chain alive".
   chainPar: 4,
-  hints: ["behind"], // after the first spear-up: a card with an arrow onto its back
+  hints: ["behind"], // after the first hit: a card with an arrow onto its head
   beacon: 0.2,
   tint: null,
-  build({ fill, ground, ledge, water, back }) {
+  build({ fill, ground, ledge, water }) {
     fill(0, 2, 0, 21);
-    // --- Introduce (3-32): a slow card in a dry pit (13-20) -----------------
-    ground(3, 12, 12); // start cliff, 6 tiles over the pit floor
-    // A rock lip over the cliff's end and the pit's near edge, 2 tiles above
-    // the cliff top: no jump (coyote included) gets out from under it, and it
-    // is 6 rows thick, so no double jump goes over it. The only way on is
-    // walking off the edge: the drop onto the card's back. Revision five's
-    // open pit was double-jumped edge to edge (the critic's bot: 31/31).
-    fill(9, 14, 4, 9);
-    ground(13, 20, 18); // the pit (dry), 6 tiles deep: no double jump climbs out
-    ground(21, 32, 12); // far rim: only the stomp's held bounce (or bounce + air jump) reaches it
-    // --- Develop (33-70): lookouts on islands over water --------------------
-    water(33, 62);
-    for (const col of [38, 45, 52, 58]) ground(col, col, 16); // 1-tile islands, 4 below the rim
+    // --- Introduce (3-32): the first card, on flat ground --------------------
+    ground(3, 12, 12); // start cliff
+    ground(13, 16, 14); // 2-tile step down
+    ground(17, 32, 16); // 16 flat tiles: the teach card patrols cols 21-28
+    // --- Develop (33-62): a dip, a walker, a 7-tile wall ---------------------
+    ground(33, 50, 18); // the dip, dry, 2 below the flat ground (a 2-tile step back up)
+    ledge(40, 43, 10); // sticker 2: an 8-tile ledge over the dip
+    ground(51, 62, 11); // 7 tiles over the dip: only a stomp + air jump tops it
+    // --- Twist (63-92): the island chain --------------------------------------
+    water(63, 92);
+    for (const col of [68, 75, 82, 88]) ground(col, col, 16); // 1-tile islands, 5 below the wall top
     // Sticker 3's slab, 8 tiles over the last island: a held bounce off that
     // lookout plus an air jump (235 px feet) reaches it; a double jump from
     // the far bank (273 px feet) never does.
-    ledge(60, 62, 8);
-    ground(63, 67, 18); // far bank, 2 below the islands: under the last lookout's cone
-    ground(68, 69, 16); // a 2-tile block: its riser cuts the wall patrol's cone (mid face)
-    // --- Twist (71-108): stomp from behind, bounce + air jump ---------------
-    ground(70, 81, 18); // the patrol's floor
-    ledge(73, 76, 10); // sticker 2: an 8-tile ledge over the floor
-    ground(82, 93, 11); // 7-tile wall
-    ground(94, 106, 18); // a short dip: a breather before the finale
+    ledge(90, 92, 8);
+    ground(93, 106, 18); // far bank, 2 below the islands: under the last lookout's cone; a breather
     // --- Conclude (107-133): the overhang drop onto the green card ----------
     ground(107, 108, 16);
     ground(109, 117, 14); // run-up
@@ -97,26 +97,37 @@ export default defineLevel({
   spawn: { x: 204, floor: px(12) },
   checkpoints: [
     { id: "start", x: 176, floor: px(12) },
-    // Before the island chain (out of every cone: the chain stares right).
-    { id: "chain", x: px(29), floor: px(12) },
-    { id: "mid", x: px(65) + 16, floor: px(18) },
-    { id: "wall", x: px(88), floor: px(11) }, // on the 7-tile wall: the twist is banked
+    // On the flat ground before the dip: the duel replays from here, dry.
+    { id: "dip", x: px(30) + 16, floor: px(16) },
+    // On the wall's top: the duel is banked, the water comes next.
+    { id: "wall", x: px(57), floor: px(11) },
+    // On the far bank: the chain is banked.
+    { id: "mid", x: px(97) + 16, floor: px(18) },
     // Saved by GREEN GET itself (a death can't take green away).
     { id: "green", x: px(124) + 16, floor: px(18), get: "green" },
   ],
   stickers: [
-    { id: 1, x: px(19) + 28, y: 350, line: "main", note: "over the pit: the first bounce's peak (hold jump; a tap tops out 24 px below it)" },
-    { id: 2, x: px(75), y: 296, line: "off", note: "on the 8-tile ledge: stomp from behind, air jump, drift left" },
-    { id: 3, x: px(61) + 16, y: 228, line: "mastery", note: "the slab over the last island: held bounce + air jump" },
+    { id: 1, x: px(25) + 16, y: 340, line: "main", note: "over the teach card: any bounce off its head passes through it" },
+    { id: 2, x: px(42), y: 296, line: "off", note: "on the 8-tile ledge: stomp the dip card, air jump at the peak, drift left" },
+    { id: 3, x: px(91) + 16, y: 228, line: "mastery", note: "the slab over the last island: held bounce + air jump" },
   ],
   guards: [
-    // A slow patrol: it walks at 60% pace and turns with a readable look-back.
-    { id: "pit", job: "gate", pad: true, kind: "green", mode: "patrol", pace: 0.6, x: px(16) + 16, floor: px(18), dir: 1, min: px(14) + 16, max: px(18) + 16 },
-    lookout("isle-a", 38, 16),
-    lookout("isle-b", 45, 16),
-    lookout("isle-c", 52, 16),
-    lookout("isle-d", 58, 16),
-    { id: "wall", job: "gate", pad: true, kind: "green", mode: "patrol", pace: 0.7, x: px(75) + 16, floor: px(18), dir: 1, min: px(73) + 16, max: px(79) + 16 },
+    // The teach card: a sentinel on its post, staring at the way Rubik comes.
+    // It cannot chase, so the first strike is a read, not a race: "?", "!", a
+    // 0.65 s windup with the strike strip drawn on the floor, a jab 100 px
+    // ahead, and then its open recovery. The head is the answer: the stomp
+    // (a jump from outside its reach lands on it) bounces through sticker 1.
+    // Not a gate: nothing waits behind it, and walking past it is allowed.
+    { id: "first", job: "teach", kind: "green", mode: "sentry", fixed: true, x: px(25) + 16, floor: px(16), dir: -1, min: px(25) + 16, max: px(25) + 16 },
+    // The dip's walker: its far bound is the wall's foot (1 tile off: Rubik
+    // pinned against the wall stands inside its reach), so the card he must
+    // stomp is the card standing at the thing it opens, and it stays flat
+    // there as a springboard.
+    { id: "wall", job: "gate", pad: true, kind: "green", mode: "patrol", pace: 0.75, x: px(45) + 16, floor: px(18), dir: 1, min: px(42) + 16, max: px(49) + 16 },
+    lookout("isle-a", 68, 16),
+    lookout("isle-b", 75, 16),
+    lookout("isle-c", 82, 16),
+    lookout("isle-d", 88, 16),
     // The green card: it holds Rubik's green and faces away from the drop. Its
     // stomp head is 24 px wider each side (not 10): with the overhang, every
     // way off the run-up lands on its back.

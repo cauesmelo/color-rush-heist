@@ -242,7 +242,7 @@ test("A3: presses at the edges - landing, respawn, freezes, stomps - are honoure
   // you land" - the high bounce - and it never spends white's air jump.
   const stomp = (pressAfter) => {
     const g = fresh("1-2"),
-      c = g.guards.find((x) => x.id === "pit");
+      c = g.guards.find((x) => x.id === "first");
     for (const other of g.guards) if (other !== c) other.state = "away";
     Object.assign(c, { dir: 1, turning: 0, state: "calm", x: 17 * T, fixed: true, mode: "sentry" });
     place(g, c.x - 4, c.floor - M.GUARD.h - 40, { grounded: false, vy: 200 });
@@ -765,7 +765,7 @@ function cardDrop(dx, { face = 1, held = false, vy = 160, from = -1 } = {}) {
   const g = fresh("1-2"),
     c = g.guards.find((x) => x.id === "wall");
   for (const other of g.guards) if (other !== c) other.state = "away";
-  Object.assign(c, { x: 76 * T, dir: face, state: "calm", turning: 0, turnClock: 0, pace: 0, sideX: from });
+  Object.assign(c, { x: 44 * T, dir: face, state: "calm", turning: 0, turnClock: 0, pace: 0, sideX: from });
   c.min = c.max = c.x;
   place(g, c.x + dx, c.floor - M.GUARD.h - 60, { grounded: false, vy, jumpHeld: held, jumps: held ? 1 : 0 });
   let top = Infinity;

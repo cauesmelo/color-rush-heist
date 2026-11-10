@@ -2,7 +2,7 @@
 
 This project exports independently. Run `npm run build:itch` here, then upload `dist/color-rush-heist-itch.zip` as an HTML Game on its own itch.io page. There is no shared launcher or server runtime in the ZIP.
 
-The entry is root `index.html`. All art, audio, scripts and renderer dependencies are local. The exporter normalizes runtime module extensions to `.js`, preserves asset bytes, and writes the unpacked site to `dist/itch/` plus a hash/size report to `dist/build-report.json`.
+The entry is root `index.html`. All art, audio, scripts and renderer dependencies are local, including the six level modules in `levels/` and the campaign rules in `campaign.js`. Progress (clears, stickers, stamps, hint budget) is saved in the player's browser under `color-rush-heist:save`; when an iframe blocks storage the game still plays and keeps progress for the visit. The world map's menu has Reset progress. The exporter normalizes runtime module extensions to `.js`, preserves asset bytes, and writes the unpacked site to `dist/itch/` plus a hash/size report to `dist/build-report.json`.
 
 Standalone index.html is a plain green page with only the actual game centered. The same game fills its iframe, with its HUD, pause card and touch pads inside the game surface; no surrounding website or shared launcher is included. Music is on by default but the 7 MB track is requested only after the player's first key or tap; it is downloaded once and played through Web Audio, so no media request stays open (and none is cancelled when the player opens the art archive). The setting is remembered.
 

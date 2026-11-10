@@ -1,5 +1,5 @@
 /** Art archive: every one of the 103 original images, byte-identical, with a
- * record of whether Stage 1 draws it on screen or keeps it in the archive. */
+ * record of whether World 1 draws it on screen or keeps it in the archive. */
 const files = await fetch("./art-manifest.json").then((response) => {
   if (!response.ok) throw new Error("Art manifest unavailable");
   return response.json();
@@ -33,7 +33,7 @@ function draw(filter) {
     container.append(figure);
   }
   const onScreen = files.filter((entry) => entry.use === "screen").length;
-  document.querySelector("#count").textContent = `${shown.length} / ${files.length} original images - ${onScreen} drawn on screen in Stage 1`;
+  document.querySelector("#count").textContent = `${shown.length} / ${files.length} original images - ${onScreen} drawn on screen in World 1`;
   document.querySelectorAll("[data-filter]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.filter === filter)));
 }
 document.querySelectorAll("[data-filter]").forEach((button) => button.addEventListener("click", () => draw(button.dataset.filter)));

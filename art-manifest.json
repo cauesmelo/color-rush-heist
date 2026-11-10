@@ -2,25 +2,25 @@
  {
   "file": "bg1-sky.png",
   "use": "screen",
-  "where": "Sky above bg1 in high sections (parallax x0.15), colorized with the forest",
+  "where": "Sky above bg1 in high sections (parallax x0.15) and on the world map; colorized with the forest",
   "sha256": "a6d24ae633a0e52a28c5e116ae5a570c98c7ec075eceb3649fd982402b1deec4"
  },
  {
   "file": "bg1.png",
   "use": "screen",
-  "where": "Stage parallax (x0.35), drained; colorized at runtime as the stage clears; story crossfade",
+  "where": "Level parallax (x0.35) and the world map; drained, regaining color per cleared level (runtime color compositing); story crossfade; tinted at runtime for 1-4 storm, 1-5 dusk, 1-6 night",
   "sha256": "1e19221ec5bd9b35581298aafbac106046348d3024ab94b851a70e0310afde3e"
  },
  {
   "file": "bg2.png",
   "use": "archive",
-  "where": "Archive: Stage 2 (Blue Mountains) not built",
+  "where": "Archive: World 2 (Blue Mountains) not built",
   "sha256": "b3c2889bb69ff44dd117962c8c29bd3ef077bf0b910c2722c664f00497fefb3d"
  },
  {
   "file": "bg2exp.png",
   "use": "archive",
-  "where": "Archive: Stage 2 not built",
+  "where": "Archive: World 2 not built",
   "sha256": "ff91ed3e7d83ab27b3beda6c573e278d482c4fb19e1d97adb3c6b47c1b356a85"
  },
  {
@@ -32,7 +32,7 @@
  {
   "file": "cofre.png",
   "use": "screen",
-  "where": "The vault; favicon",
+  "where": "The vault in 1-6 (4x) and its world-map node (2x); favicon",
   "sha256": "4716e9c76e1b94d4d57b3e409169b6cb5ab7610b9634d9556bd1d0de73b2a009"
  },
  {
@@ -50,25 +50,25 @@
  {
   "file": "end_game.png",
   "use": "screen",
-  "where": "Full-frame ending after the results",
+  "where": "Full-frame ending after the World 1 clear",
   "sha256": "b01aea2a2787697a469be01c6f7df731b92430b4fe82e81e4e17a5bccbc2e70f"
  },
  {
   "file": "inimigo2-Sheet.png",
   "use": "archive",
-  "where": "Archive: blue cards belong to Stage 2",
+  "where": "Archive: blue cards belong to World 2",
   "sha256": "ae1aeecfd1ac9d96077bbf20ab29387ba11e5c402d435575fc9d1be27b19271a"
  },
  {
   "file": "inimigo3-Sheet.png",
   "use": "screen",
-  "where": "Red enforcer cards (unused in the original game)",
+  "where": "Red enforcer cards in 1-5 and 1-6 (unused in the original game)",
   "sha256": "dcc8a12e7a0e6e43cc53c5d281fde3e48d7fd3ba503229974884011e7b9551c1"
  },
  {
   "file": "inimigo_verde.png",
   "use": "screen",
-  "where": "Green cards: walk, idle, sleep, spear attack frames; grey copy for the drained card",
+  "where": "Green cards: walk, idle, sleep (1-2 trampolines), spear attack frames; grey copy for the drained glowing card",
   "sha256": "2dec30a545c57d7b2a2742a6bb5e50c4c02c5acf485d691e5fc2b0c0c56f697e"
  },
  {
@@ -218,25 +218,25 @@
  {
   "file": "rubik_green.png",
   "use": "screen",
-  "where": "Player, green form",
+  "where": "Player, green form; 4x on the GREEN GET card",
   "sha256": "f0b64240545f005968ab5ff39b6c1e9a82f66ab98c7098f2b8ca6b7b08109cc0"
  },
  {
   "file": "rubik_red.png",
   "use": "screen",
-  "where": "Player, red form; results screen",
+  "where": "Player, red form; 4x on the RED GET card; world clear",
   "sha256": "38819fca1df09c6bf57438e521f2f333156cee9e712fca0846b087df6e4b56eb"
  },
  {
   "file": "rubik_storm.png",
   "use": "screen",
-  "where": "Transformation frames; frames 1-3 cropped as the dash refill orb",
+  "where": "Transformation frames; 1-4 storm-swirl pickup and the DASH GET card; frames 1-3 cropped as the dash refill orb",
   "sha256": "d02f984ecb009231f517921477bf10449a16365cadd76e00b87c0e08717f7337"
  },
  {
   "file": "rubik_white.png",
   "use": "screen",
-  "where": "Player, white form (all rows: idle, dash, run, jump, landing, storm)",
+  "where": "Player, white form (all rows: idle, dash, run, jump, landing, storm); world-map walker (run row)",
   "sha256": "0fde0cc322c1c269de1fef0a43afc6ba8054025f95518903db01e83cf51983a5"
  },
  {
@@ -602,13 +602,13 @@
  {
   "file": "tiles/Tileset.png",
   "use": "screen",
-  "where": "Every terrain tile, ledge, back wall, sealed stone, water frame and stone debris (16 px cells at 2x)",
+  "where": "Every terrain tile, ledge, back wall, sealed stone, water frame, stone debris and the world-map slab path (16 px cells at 2x)",
   "sha256": "6a598fed77705b203619b2926ea28229fdddb8581ef07ea49edd44ab85147bb8"
  },
  {
   "file": "tiles/tileset_ice.png",
   "use": "archive",
-  "where": "Archive: Stage 2 not built",
+  "where": "Archive: World 2 not built",
   "sha256": "764f873fa1883757f6b50ccb30c28d4aacc7f9560b6a2b7e8c5a535af07c8796"
  },
  {

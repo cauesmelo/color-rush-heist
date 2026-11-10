@@ -162,6 +162,20 @@ D2 is 1-4 7.9% (was 2.3%), 1-5 26.6% (was 20.3%) and 1-6 escape 8.0%:
   was not kept.
 - Green still can't skip 1-4's twist orb: the gap sweeps are unchanged and pass.
 
+## Combat revision (2026-11-10, combat squad)
+
+Movement physics are untouched (the audit stays 27 PASS / 2 WARN / 0 FAIL; `tests/browser-movement.mjs`
+23/23). The combat pass changed interactions, and four audit tests with them:
+- **C2** now asserts the hit shape equals the drawn spear within 2 px (green tip 102 px, box 100;
+  red tip 98 px, box 96), not just "never past the tip".
+- **C4** lists the heart sources (a spear strike, a body bump, water) and what ends a try (the last heart,
+  a catch in 1-3); **D3** and **F** assert that a landing at a card's face is a stomp (the spear-up pop was
+  deleted), with the same >= 64 px window from the front as from behind.
+- The stomp feel numbers (hold 520 px/s, tap 400, freeze 0.08 s) are unchanged; a chained stomp adds
+  20 px/s per link after the first, at most +40 (about +14 px of apex).
+- The real-Chrome check A3 counts a fall into water (now a heart and a hop back, not a death) as the
+  respawn it measures: the held direction still moves Rubik 266 ms after it.
+
 ## Not verified
 
 Physical phones and touch timing on real hardware (touch pads go through the same stamped

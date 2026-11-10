@@ -223,21 +223,41 @@ before and after the audit's tuning; every level gate test re-passes.
   see white and green. The sight area *is* `cone_de_visao.png` (per-column alpha
   silhouette at 2×, tested pixel for pixel); walls cut the cone and its drawing at the
   same distance. Cones that can see Rubik's current color get a crisp edge.
-- **Stomps:** land on a card's head from above or behind and it is stunned for 3 s.
-  A card that faces the side Rubik came from (the last side he was on while clear of
-  its head), or any aware card ("!", wind-up, lunge), raises its spear (drawn over its
-  head): landing on it pops Rubik up and away, no damage. So a run-and-jump at a
-  lookout's face can't skip it. The 0.7 s recovery after a lunge is always stompable,
-  and so is the card holding Rubik's green in 1-2.
-- **Awareness ladder:** in sight 0.25 s → "?"; 0.6 s → "!" (a 0.45 s beat, then a
-  240 px/s charge); in range → wind-up → spear lunge (30–70 px up, jumpable in the
-  open) → recovery. Body contact only knocks Rubik back; brushing a calm card's back
-  doesn't alert it; only spears and water kill. A card pinned at its patrol bound with
-  Rubik out of the spear's reach turns back after 0.8 s instead of winding up forever.
-  **Before 1-5 there are no spears** (`spears: false`). In 1-3 (`caught: true`) a
-  card's "!" sends Rubik back to the checkpoint instead ("caught!"). A card that has
-  shown "?" is locked on: in its cone or right before its face it sees him in any
-  colour, and its body blocks him even in its own colour (no swap-and-walk-through).
+- **Hearts and combat (revision five, `RESEARCH_COMBAT.md`):** Rubik has **3 hearts** (under the
+  form cards). A spear strike, a card's body and a fall into water each cost **one**. A hit freezes
+  the world for 0.12 s, knocks him back (300 px/s bump, 380 px/s spear) with a hop, and makes him blink
+  for **1.5 s** (solid but unhurt; water ignores it). **Water** hops him back onto the last safe ground
+  (a bank he stood 14 px inside both edges of, with no live card within 130 px) after 0.45 s, the cards
+  holding still for 0.75 s; the third fall, or the last heart, is a death: the checkpoint segment is
+  restored with full hearts. **A new checkpoint refills every heart**, and a stomp chain of 3 pays one.
+  1-3 is unchanged: a card's "!" there is "caught!" (back to the checkpoint, no heart).
+- **Three enemy types, one state machine:** calm -> "?" (the card stops and turns to face Rubik) -> "!"
+  (a 0.45 s beat) -> chase -> **windup** (committed, drawn as a hatched strip on the floor: the exact
+  swept zone) -> **strike** (the only moment the spear hurts; the hit shape is the drawn spear within
+  2 px) -> **recover** (open: no body damage, stompable, a bobbing arrow marks the head) -> search (1.2 s)
+  -> patrol. A card that cannot reach him gives up after 1 s instead of staring.
+  - **Walker** (green patrols): chases at 190 px/s inside its bounds, windup 0.55 s, steps 72 px.
+  - **Sentinel** (cards nailed to a post): never moves, windup 0.65 s, the same spear in place.
+  - **Charger** (red mobile cards, 1-5's enforcer): windup 0.8 s, rushes 288 px in 0.6 s; a rush that
+    ends on its bound dazes it for 1.6 s.
+  - From first sight to the first possible hit is at least 1.5 s for every type (measured 1.6 / 1.7 / 1.9 s).
+- **Stomp:** from above, behind or the **front**, while falling, with the feet within **34 px** of the
+  head's top, over a head 76 px wide. No spear-up rule and no pop any more. Hold jump for the high bounce,
+  tap for the hop (unchanged). A walker or sentinel is **defeated** (flattens, bursts into confetti); the
+  armoured charger is **dazed** for a visible 2.0 s ring (a second stomp or a red dash defeats it); a card
+  flagged `pad` (1-2's gates, 1-4's springboards) flattens grey and stays a springboard, so one missed
+  bounce never strands Rubik. **Chain:** every stomp or dash-knock before touching the ground is a link:
+  +20 px/s of bounce per link after the first (at most +40), a longer freeze, a higher sound, an "xN"
+  popup; the 3rd pays a heart; `chainBest` is saved and 1-2's **Chain** stamp wants 4 (the island chain).
+- **Dash-knock:** a red dash into any card (including a dazed red one) defeats it, refunds the dash and
+  joins the chain; any other dash into a card is a bump.
+- **A card can't see its own color.** Green cards see white and red; red enforcers see white and green. The
+  sight area *is* `cone_de_visao.png` (per-column alpha silhouette at 2x, tested pixel for pixel); walls cut
+  the cone and its drawing at the same distance. Cones that can see Rubik's current color get a crisp edge.
+  A card that has shown "?" is locked on: in its cone or right before its face it sees him in any colour,
+  and its body blocks him even in its own colour (no swap-and-walk-through). **Before 1-5 only 1-4 and
+  1-3 are attack-free:** 1-3 sends "!" to the checkpoint, 1-4's cards are springboards (their bodies still
+  cost a heart).
 - **Mid-air swap** with a 0.15 s cooldown; a green jump keeps white's unspent air jump.
 - **Dash charge:** one air dash; ground, stomps, refill orbs, smashed stones and
   knocked cards refill it. Before DASH GET, Shift does nothing at all.
@@ -261,8 +281,6 @@ before and after the audit's tuning; every level gate test re-passes.
     pace (the card outside the door is gone).
   - **Cone lock:** a card that has shown "?" keeps seeing Rubik in its cone whatever colour he
     swaps to, until he leaves the cone; its "?" and lit cone persist.
-  - **Spear pop:** landing on a raised spear lifts Rubik only 150 px/s, a stumble, not a
-    springboard.
   - **1-5:** the enforcer is the gate; no perch stands over it.
   - **1-6 ledge:** a red/green pair, so no single colour passes.
 - **Checkpoints:** whole-segment restore; markers only advance in the direction of

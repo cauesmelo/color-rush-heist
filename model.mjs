@@ -16,8 +16,9 @@
  * same forest in REVERSE (red dash smashes sealed stones and knocks cards aside)
  * back to the level's start. A card can't see its own color: green cards see
  * white/red, red enforcers see white/green. Being seen escalates "?" -> "!" ->
- * charge -> spear lunge; body contact only knocks Rubik back. Only spears and
- * water kill.
+ * windup -> spear strike. Rubik has three hearts: a strike, a card's body and
+ * a fall into water cost one each; the last heart is a death (the checkpoint
+ * restore). A stomp from any side defeats a card (RESEARCH_COMBAT.md).
  */
 import { TILE, ROWS, WATER_ROW } from "./levels/builder.mjs";
 import { getLevel } from "./levels/index.mjs";

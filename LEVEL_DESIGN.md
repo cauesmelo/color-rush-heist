@@ -298,14 +298,39 @@ every one down.
   this run's tally and the best saved (`takedownBest`). The `takedown` routes earn it (and
   happen to stay unseen, the expert's double); the baselines do not.
 
+## Combat (revision five, combat squad: `RESEARCH_COMBAT.md`)
+
+Cards are walkers, sentinels or chargers (`M.enemyType`: level data may set `type`), Rubik has 3
+hearts, and a stomp defeats a card from any side. What changed for the levels, and what the level lead
+needs to keep true when re-tuning:
+
+| Level | Cards by type | Combat notes |
+| --- | --- | --- |
+| 1-1 | none | Water is the only cost: a heart and a hop back to safe ground (the puddle and stump stay cheap). A new checkpoint refills hearts. |
+| 1-2 | pit and wall: walkers (pads); isle-a..d, glow: sentinels (pads) | The first fight: the pit walker chases and strikes now (`spears: false` removed). Every gate card is a `pad`: stomped, it stays flat as a springboard, so one missed bounce never strands Rubik under the 7-tile wall. The island chain is a 4-stomp chain (`chainPar: 4`, the Chain stamp; the baseline route earns it). |
+| 1-3 | walkers and sentinels | Unchanged rule: "!" is "caught!" (no heart). Bodies cost a heart. |
+| 1-4 | sentinels (pads) | `spears: false` kept: the dash level's cards are springboards, their bodies cost a heart. |
+| 1-5 | teacher: walker; p1: sentinel; p2: sentinel; enforcer: charger (armoured); cross-red: `type: "sentinel"`; cross-green: walker | The ladder in the open. The enforcer needs two stomps (or a red dash on a dazed card); cross-red is a one-stomp sentinel because the main line must kill it with the bounce it uses. |
+| 1-6 | corridor, lookout, alarm, ambush: walkers; ledge-red, vault-guard: sentinels | The ambush card's job is `knock` (a landing on its head is a stomp, so the green swap-through is gone). |
+
+Rules to keep when editing a level:
+- **A gate card needs `pad: true` if its bounce is the only way over** (a wall, a gap); otherwise a failed
+  attempt strands the player. The test "pads are exactly the springboard cards the levels need" lists them.
+- **A chasing card needs room:** its bounds are its leash (walker chase 190 px/s, charger rush 288 px).
+  A card that cannot reach Rubik gives up after 1 s, so a tight bound is safe, not a bug.
+- **Bodies hurt:** a route that brushes a card costs a heart. The planner rejects any option that does, so
+  keep takeoffs 130+ px from a card you stomp (a falling jump meets the head, a rising one meets the side).
+- **Telegraphs:** first sight to first hit is at least 1.5 s per type (a test); no card strikes from off-screen.
+- Every baseline and mastery route takes 0 hearts (`tests/combat.test.mjs`).
+
 ## Known design limits
 
 - Cards follow fixed timers, so a human's arrival time decides a patrol's facing; the
-  "?" stage, riser cover and the spear-up tell exist for that reason.
+  "?" stage (the card stops and turns), riser cover and the strike strip exist for that reason.
 - 1-2's island chain: a perfect white double jump from the rim can land on isle-c's back,
   skipping isle-a and isle-b (a sweep of jump timings finds it). It is still a stomp, and
-  the bot never finds it (it drowns: 0/31 clean); a cave ceiling would close it but would
-  also cost the sticker-3 slab.
+  the bot never finds it (it falls into the water: 0/31 clean); a cave ceiling would close it
+  but would also cost the sticker-3 slab. Only the full 4-link chain earns the Chain stamp.
 - 1-3's watchers can be beaten without waiting by a swap to green within ~0.25 s of the
   air jump. That is the expert's line by design (a later swap is caught); a first-time
   player is guided to wait for the back.

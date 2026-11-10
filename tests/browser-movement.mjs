@@ -180,7 +180,7 @@ const deathRun = await page.evaluate(
         const s = g.getState(),
           now = performance.now();
         if (respawnAt === null && s.respawns > 0) (respawnAt = now), (x0 = s.player.x);
-        if (respawnAt !== null && s.player.x > x0 + 8) return resolve({ movedAfterMs: Math.round(now - respawnAt), deaths: s.deaths });
+        if (respawnAt !== null && s.player.x > x0 + 8) return resolve({ movedAfterMs: Math.round(now - respawnAt), deaths: s.deaths, falls: s.falls });
         if (now - t0 > 4000) return resolve({ movedAfterMs: null, deaths: s.deaths, respawns: s.respawns, x: s.player.x, x0 });
         requestAnimationFrame(poll);
       };
@@ -188,7 +188,8 @@ const deathRun = await page.evaluate(
     }),
 );
 await page.keyboard.up("ArrowRight");
-check("A3 right held through a death moves again <= 0.3 s after the respawn", deathRun.deaths === 1 && deathRun.movedAfterMs !== null && deathRun.movedAfterMs <= 300, deathRun);
+// A fall into water now costs a heart and hops back to safe ground (not a death), so count either.
+check("A3 right held through a death moves again <= 0.3 s after the respawn", deathRun.deaths + (deathRun.falls ?? 0) === 1 && deathRun.movedAfterMs !== null && deathRun.movedAfterMs <= 300, deathRun);
 
 // C1 on the canvas itself: Rubik drawn standing at two spots (the camera is
 // clamped at the level start), the frames diffed: his drawn feet and body

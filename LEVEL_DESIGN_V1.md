@@ -201,3 +201,28 @@ What a naive human still struggles with in the real-key runs: the first-timer's 
 three deaths and 71 s (water at the orb crossing, then the corridor patrol in the escape), and at 1-4 the
 first-timer still pays 7 hearts to water on a bad seed. Seeds are not rates: one seed per level is a smoke
 test, and Chrome runs are real time so even the same seed differs between runs.
+
+## Checks (actual, on the rebased tip, branch `levels` on origin/main `37cb60a`)
+
+- `npm test`: **180/180** (179 on main plus the REVERSE test). The movement audit is part of it and its
+  physics are untouched. The cone-blind rule, the respawn-cone test (it now honors a `fixed` lookout's
+  facing), the pads list, the job test (27 cards) and every route (0 deaths, 0 hearts) follow the new
+  geometry.
+- `node tests/browser-ending.mjs` on the served source: **53/53** (the ending and credits still play after
+  the vault flow; 1-6's last room and its escape changed, the vault, the theft and the home cliff did not).
+- Release gate `--only=crh` on a clean clone of the tip (a mirrored workspace in the session scratchpad):
+  Build, ZIP, Refs, Meta PASS, Tests 180/180, RootZIP 1/1, **BrowserQA 16/16** (the `ONLY=CTS` root QA on the
+  packaged ZIP, including the 1-6 vault room, the mobile embed and the ending), Probe PASS; the only WARN is
+  "on branch levels, release builds come from main". The pixel audit was not re-run (no UI was added).
+- Two checks failed on earlier mirrors and are explained, not hidden: the root QA's vault-room scenario
+  (it needs the vault guard to grey out into its pad after the theft, which a stomped guard had stopped doing
+  until the last model fix) and, once, the mobile embed jump check (a timing read under a load average of
+  about 20; it passed on the next two runs).
+
+## What a human still has to play
+
+Nobody has played any of this by hand. In order of how much it matters: 1-2 end to end (does the sentinel
+read, does the dip duel feel like an instinct, does the flat card at the wall's foot read as a springboard);
+1-6 (is one card per beat readable, is the escape survivable, are the stepping rock and the 5-tile water a
+gift or a cheat); 1-4's swirl, rocks and two orbs; whether any miss costs more than about 10 s; and whether
+the proxies' "clear" is what a person calls fun (they cannot say).

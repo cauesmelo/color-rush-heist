@@ -195,8 +195,8 @@ test("sprite row tables are rectangular and the form glyphs are three distinct s
 
 // ------------------------------------------------- source-level guards ----
 const FORBIDDEN = ["globalAlpha", "createLinearGradient", "createRadialGradient", "rgba(", ".arc(", "ctx.ellipse(", "rotate(", "roundRect", "quadraticCurveTo", "setLineDash", ".stroke(", "strokeRect", "shadowBlur", "globalCompositeOperation", ".scale("];
-test("pixel-ui.mjs and ui-draw.mjs: no arcs, gradients, rotation, alpha, strokes or system text", () => {
-  for (const file of ["pixel-ui.mjs", "ui-draw.mjs"]) {
+test("pixel-ui.mjs, ui-draw.mjs and ending-draw.mjs: no arcs, gradients, rotation, alpha, strokes or system text", () => {
+  for (const file of ["pixel-ui.mjs", "ui-draw.mjs", "ending-draw.mjs"]) {
     const src = read(file).replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     for (const token of FORBIDDEN) {
       // The kit may composite its own masks (destination-in/out) and flip a sprite

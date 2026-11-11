@@ -156,6 +156,41 @@ a {
 [data-screen="title"] .version {
   display: block;
 }
+/* Title: the Credits button, bottom centre on the same baseline as the v1.0
+ * label. It wears the menu button sprite (hover and pressed included); the
+ * baked 'press any key' line above it is untouched. 54 art px = 7 letters of
+ * body text plus the border and padding. */
+.title-btn {
+  display: none;
+  position: absolute;
+  left: calc(var(--ap) * 213);
+  bottom: calc(var(--ap) * 6);
+  width: calc(var(--ap) * 54);
+  margin: 0;
+  padding: 0 calc(var(--ap) * 2) calc(var(--ap) * 2);
+  border: solid calc(var(--ap) * 3) transparent;
+  border-image: var(--spr-btn) 3 fill / calc(var(--ap) * 3) / 0 stretch;
+  image-rendering: pixelated;
+  background: none;
+  color: var(--cream);
+  font-size: var(--fs);
+  line-height: var(--lh);
+  text-align: center;
+  cursor: pointer;
+  z-index: 5;
+}
+[data-screen="title"] .title-btn {
+  display: block;
+}
+.title-btn:hover {
+  border-image-source: var(--spr-btn-hover);
+  color: var(--white);
+}
+.title-btn:active {
+  border-image-source: var(--spr-btn-down);
+  padding-top: var(--ap);
+  padding-bottom: var(--ap);
+}
 .corner {
   position: absolute;
   top: calc(var(--ap) * 6);
@@ -221,6 +256,7 @@ a {
 [data-screen="results"] .corner,
 [data-screen="world"] .corner,
 [data-screen="ending"] .corner,
+[data-screen="credits"] .corner,
 [data-screen="story"] .corner {
   display: none;
 }

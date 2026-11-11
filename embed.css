@@ -39,7 +39,8 @@ body {
 [data-screen="story"] .itch-fullscreen,
 [data-screen="results"] .itch-fullscreen,
 [data-screen="world"] .itch-fullscreen,
-[data-screen="ending"] .itch-fullscreen {
+[data-screen="ending"] .itch-fullscreen,
+[data-screen="credits"] .itch-fullscreen {
   display: none;
 }
 @media (orientation: portrait) and (max-width: 820px) {

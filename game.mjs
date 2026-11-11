@@ -9,7 +9,10 @@
  *
  * Front-end flow: title -> comic (first visit) -> 1-1 -> level clear -> world
  * map -> level intro card -> play -> clear ... -> 1-6 -> world clear ->
- * end_game.png -> title. Returning players go from the title to the map.
+ * the three closing pages (the colours come back) -> the credits -> title.
+ * The title's Credits button plays the same credit cards. Returning players go
+ * from the title to the map. credits.mjs holds the ending's and the credits'
+ * data and timing rules; ending-draw.mjs paints them.
  */
 import * as M from "./model.mjs";
 import * as B from "./levels/builder.mjs";
@@ -18,6 +21,7 @@ import * as C from "./campaign.mjs";
 import { FixedStep } from "./loop.mjs";
 import { PAL, FORM, installCss, ditherOn, nearestColour } from "./pixel-ui.mjs";
 import { createUiDraw } from "./ui-draw.mjs";
+import * as CR from "./credits.mjs";
 
 const W = 960,
   H = 540,
@@ -257,6 +261,10 @@ let LV = getLevel(save.last) || LEVELS[0],
   lastEventId = 0,
   lastRespawns = 0,
   clock = 0; // wall clock for decoration (never affects the simulation)
+/** The closing pages / credit cards in progress (credits.mjs createReel), and
+ * where the credits were opened from ("world" after the ending, "title"). */
+let reel = null,
+  reelFrom = "title";
 const cam = { x: 0, y: 164, shake: 0, look: 80 };
 /** Canvas px hidden at each side by the portrait play crop (HUD pulls in). */
 let hudInset = 0;
@@ -421,7 +429,7 @@ function stopMusic() {
   track.source = null;
 }
 function syncMusic() {
-  const wanted = settings.music && ["story", "play", "results", "map", "world"].includes(screen) && game.phase !== "paused" && !menuOpen;
+  const wanted = settings.music && ["story", "play", "results", "map", "world", "ending", "credits"].includes(screen) && game.phase !== "paused" && !menuOpen;
   if (!wanted) return stopMusic();
   const a = audioContext();
   if (!a) return;
@@ -430,7 +438,7 @@ function syncMusic() {
     return;
   }
   // The original track "changes gear" for the getaway (Pizza Tower-style).
-  const rate = game.stolen && game.phase !== "won" ? 1.12 : 1;
+  const rate = game.stolen && game.phase !== "won" && !["ending", "credits"].includes(screen) ? 1.12 : 1;
   if (track.source && rate !== track.rate) {
     track.offset = musicPosition();
     track.startedAt = a.currentTime;
@@ -454,6 +462,7 @@ function syncMusic() {
 // --------------------------------------------------------------- screens ---
 const ui = {
   start: $("start"),
+  credits: $("credits-btn"),
   pause: $("pause"),
   music: $("music"),
   pauseCard: $("pause-card"),
@@ -485,7 +494,8 @@ function setScreen(name) {
       results: `${LV.id} ${LV.name} clear!`,
       map: `World 1, Green Forest. ${LV.id} ${LV.name}. Left and right choose a level, Enter plays.`,
       world: "World clear! You got your red back!",
-      ending: "Thanks for playing! That's it by now.",
+      ending: "The ending. Press any key to go on, Escape to skip.",
+      credits: "Credits. Press any key to go on, Escape to skip.",
     }[name] || "",
   );
 }
@@ -712,11 +722,13 @@ addEventListener("keydown", (event) => {
     if (gameKeys.has(key)) stepper.push(event.timeStamp, { key, down: true });
     return;
   }
-  if (screen === "ending") {
-    if (!event.repeat && key !== "tab") {
-      event.preventDefault();
-      setScreen("title");
-    }
+  if (screen === "ending" || screen === "credits") {
+    // A fresh press only (credits.mjs press(): a held key repeats with
+    // `repeat` set and never counts, and a page ignores presses for its first
+    // 0.6 s). Modifiers and Tab alone are not presses; Esc leaves the reel.
+    if (key === "tab" || ["shift", "control", "alt", "meta", "capslock"].includes(key)) return;
+    event.preventDefault();
+    reelPress({ repeat: event.repeat, escape: key === "escape" });
     return;
   }
   if (["results", "world"].includes(screen)) {
@@ -809,8 +821,9 @@ canvas.addEventListener("pointerdown", (event) => {
   if (event.pointerType === "touch") inputMode = "touch";
   syncTouch();
   if (screen === "story") startLevel(C.WORLD1[0]);
-  else if (screen === "ending") setScreen("title");
-  else if (screen === "map" && !menuOpen) {
+  else if (screen === "ending" || screen === "credits") {
+    if (event.button === 0) reelPress({});
+  } else if (screen === "map" && !menuOpen) {
     const box = canvas.getBoundingClientRect(),
       x = ((event.clientX - box.left) / box.width) * W,
       y = ((event.clientY - box.top) / box.height) * H;
@@ -822,6 +835,7 @@ canvas.addEventListener("pointerdown", (event) => {
   }
 });
 ui.start.addEventListener("click", () => beginFrontEnd());
+ui.credits.addEventListener("click", () => showCredits("title"));
 ui.pause.addEventListener("click", () => togglePause());
 ui.resume.addEventListener("click", () => togglePause(false));
 ui.music.addEventListener("click", (event) => {
@@ -867,7 +881,7 @@ $("opt-reset-yes").addEventListener("click", () => {
 });
 for (const button of document.querySelectorAll("[data-show]")) button.addEventListener("click", () => showPanel(button.dataset.show));
 $("continue").addEventListener("click", () => {
-  if (screen === "world") return setScreen("ending");
+  if (screen === "world") return showEnding();
   // 1-6 is World 1's finale: its clear goes on to the world clear.
   if (LV.id === C.WORLD1[C.WORLD1.length - 1]) return setScreen("world");
   openMap(save.last);
@@ -879,6 +893,61 @@ $("continue").addEventListener("click", () => {
   }
 });
 $("again").addEventListener("click", () => startLevel(LV.id, { intro: false }));
+// ----------------------------------------------- ending and credits reels --
+/** The three closing pages (screen "ending") and the credit cards (screen
+ * "credits") are two reels of pages. Each page times itself out and a fresh
+ * press moves on after a short lockout (credits.mjs); the ending runs into the
+ * credits, and the credits end on the title. Esc leaves from either. */
+function startReel(name, from) {
+  reelFrom = from;
+  setScreen(name);
+  reel = CR.createReel(name === "ending" ? CR.ENDING_PAGES : CR.CREDITS);
+  document.activeElement?.blur?.();
+  focusGame();
+  pageShown();
+}
+function showEnding() {
+  startReel("ending", "world");
+  return true;
+}
+/** The credits, from the title's button (or, with "world", after the ending). */
+function showCredits(from = "title") {
+  if (!assetsReady || (screen !== "title" && screen !== "ending")) return false;
+  startReel("credits", from);
+  return true;
+}
+/** A page just appeared: say it for screen readers, and give the two moments of
+ * the ending their sounds (the colour coming back, THE END). */
+function pageShown() {
+  const page = CR.pageOf(reel);
+  announce(page.top ? `${page.top} ${page.note || ""}`.trim() : [page.head, page.note, ...page.lines, page.foot].filter(Boolean).join(". "));
+  if (screen === "ending" && page.id === "colors") play("unlock");
+  if (screen === "ending" && page.id === "end") play("win");
+}
+function reelTick() {
+  const next = CR.tick(reel, screenTime);
+  if (next === reel) return;
+  reel = next;
+  if (reel.done) leaveReel(false);
+  else pageShown();
+}
+function reelPress({ repeat = false, escape = false }) {
+  if (!reel) return;
+  const { reel: next, outcome } = CR.press(reel, screenTime, { repeat, escape });
+  if (outcome === "ignored") return;
+  reel = next;
+  if (outcome === "done") leaveReel(escape);
+  else pageShown();
+}
+/** The ending runs into the credits; the credits (and any Esc) end on the title. */
+function leaveReel(skipped) {
+  if (screen === "ending" && !skipped) return startReel("credits", "world");
+  const fromTitle = reelFrom === "title" && screen === "credits";
+  reel = null;
+  setScreen("title");
+  if (fromTitle) ui.credits.focus({ preventScroll: true }); // Enter again plays them again
+  else focusGame();
+}
 // ------------------------------------------------------------- world map --
 /** Six nodes 140 px apart on a slab path whose top is y = 400: each a chalk
  * face on a stick above the path (1-6 is the vault). Rubik walks the path. */
@@ -1543,6 +1612,9 @@ const pix = createUiDraw({
   },
   get colorAmount() {
     return colorAmount;
+  },
+  get reel() {
+    return reel;
   },
 });
 /** World-anchored UI helpers: canvas px in, the 2 px art grid out. */
@@ -2316,6 +2388,8 @@ function frame(now) {
         play("win");
       }
     }
+  } else if ((screen === "ending" || screen === "credits") && reel) {
+    reelTick();
   } else if (screen === "map") {
     updateMap(dt);
     if (fx.irisDir) fx.iris = Math.max(0, Math.min(1, fx.iris + fx.irisDir * dt * (1 / 0.8)));
@@ -2333,6 +2407,7 @@ function render() {
   if (screen === "title") return pix.drawTitle();
   if (screen === "story") return drawStory();
   if (screen === "ending") return pix.drawEnding();
+  if (screen === "credits") return pix.drawCredits();
   if (screen === "results") return pix.drawResults();
   if (screen === "world") return pix.drawWorldClear();
   if (screen === "map") {
@@ -2396,6 +2471,9 @@ function getState() {
     // QA: the performance.now() moment the simulation state corresponds to
     // (loop.mjs), so a browser test can map a key's timeStamp to its tick.
     simClock: stepper.time,
+    // The ending / credits reel: which page, how long it has been up, whether a
+    // press would move it (past the lockout), and where the credits came from.
+    reel: reel ? { kind: screen, from: reelFrom, id: CR.pageOf(reel).id, index: reel.index, count: reel.pages.length, age: CR.pageAge(reel, screenTime), canPress: CR.pageAge(reel, screenTime) >= CR.LOCKOUT, done: reel.done } : null,
   };
 }
 /** Straight into play for QA (no card, no iris): the level's own kit. */
@@ -2431,6 +2509,9 @@ window.__game = {
     render();
     return getState();
   },
+  /** QA: straight to the closing pages / the credits (the real route is a 1-6 clear, then Continue). */
+  showEnding,
+  showCredits: (from = "title") => showCredits(from),
   /** Erase campaign progress (clears, stickers, stamps, hints); settings stay. */
   resetSave() {
     save = C.resetSave(storage, settings);

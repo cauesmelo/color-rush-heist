@@ -16,6 +16,7 @@ import {
   paintBubble, paintKey, paintSocket, paintFormCard, paintSeal, paintChalkFace, paintIcon, paintOutlinedIcon, ICON_ROWS,
   paintIris, paintEdgeFlash,
 } from "./pixel-ui.mjs";
+import { createEndingDraw } from "./ending-draw.mjs";
 
 export const AW = 480,
   AH = 270;
@@ -522,30 +523,6 @@ export function createUiDraw(env) {
     blit(ctx, s, AW - 26, AH - 14);
     blit(ctx, s, AW - 17, AH - 14);
   }
-  function drawEnding() {
-    const { save } = env;
-    ctx.drawImage(derived.forestColor, 0, 0, 960, 540);
-    dim(7);
-    // The page itself at 2x (its pixels are art pixels): a 280x100 window of
-    // end_game.png, framed. Its baked "That's it by now." is covered by a plate.
-    const sw = 280,
-      sh = 100,
-      fx0 = AW / 2 - sw / 2,
-      fy0 = 46;
-    paintCard(g, fx0 - 4, fy0 - 4, sw + 8, sh + 8, { field: PAL.ink });
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img.ending, 100, 100, sw, sh, fx0 * A, fy0 * A, sw * A, sh * A);
-    g.rect(fx0 + 68, fy0 + 66, 150, 22, PAL.ink);
-    T("That's it for now.", AW / 2, fy0 + 80, { color: PAL.white, align: "center", outline: null });
-    const feet = (fy0 + sh + 8 + 14) * A;
-    env.drawRubik("red", (Math.floor(env.clock * 4) % 2) * 32, 0, (fx0 - 40) * A, feet, 1);
-    env.drawRubik("green", (Math.floor(env.clock * 4 + 1) % 2) * 32, 0, (fx0 + sw + 40) * A, feet, -1);
-    T("World 2: Blue Mountains - coming soon", AW / 2, fy0 + sh + 52, { color: PAL.white, align: "center", shadow: PAL.void });
-    T(`${C.stickerTotal(save)}/${C.TOTAL_STICKERS} stickers`, AW / 2, fy0 + sh + 70, { color: PAL.lemon, align: "center" });
-    if (env.screenTime > 1.2) T(env.inputMode === "touch" ? "tap to continue" : "any key to continue", AW / 2, AH - 10, { color: PAL.mist, align: "center" });
-    iris(Math.max(0, 1 - env.screenTime / 0.8));
-  }
-
   // ---------------------------------------------------------- tally screens --
   /** Card panel shared by the tally screens (cream rim, plum field). */
   const panel = (x, y, w, h) => paintCard(g, x, y, w, h);
@@ -654,7 +631,9 @@ export function createUiDraw(env) {
   }
   function drawWorldClear() {
     const { save, game } = env;
-    ctx.drawImage(derived.forestColor, 0, 0, 960, 540);
+    // The forest as it was before the vault: 12% of its colour back per level. The
+    // ending is where the rest returns (ending-draw.mjs), so it is not shown early.
+    ending.forest(Math.round(ending.forestBefore() * 16));
     dim(7);
     const x = 40,
       y = 9,
@@ -707,7 +686,7 @@ export function createUiDraw(env) {
         by = y + h - 30;
       g.rect(bx, by, 336, 20, PAL.ink);
       g.rect(bx + 1, by + 1, 334, 18, PAL.cream);
-      T("Green and red are back. Blue is up in the mountains.", AW / 2, by + 13, { color: PAL.ink, align: "center", outline: null });
+      T("Rubik is home. Now the forest can wake up in color.", AW / 2, by + 13, { color: PAL.ink, align: "center", outline: null });
     }
   }
 
@@ -900,9 +879,12 @@ export function createUiDraw(env) {
     T(prompt, px + 322, py + 24, { color: map.prompt > 0 ? PAL.rose : PAL.lemon, align: "right", outline: null });
   }
 
+  // The three closing pages and the credit cards: data in credits.mjs, drawing in ending-draw.mjs.
+  const ending = createEndingDraw(env, { g, T, ditherDraw, iris });
+
   return {
     A, bubble, note, strikeZone, openMarker, dazeRing, drawPopups, drawHint, drawHud, drawIntro, drawGetCard, drawReverse, drawFlash,
-    iris, drawBoot, drawTitle, drawStorySkip, drawEnding, drawResults, drawWorldClear, drawMap, badge, keycap, sticker, star, text: T,
+    iris, drawBoot, drawTitle, drawStorySkip, drawEnding: ending.drawEnding, drawCredits: ending.drawCredits, drawResults, drawWorldClear, drawMap, badge, keycap, sticker, star, text: T,
     formCard, dashPill, keycapCentered, stickerOutline, ditherDraw, glow, ring, crack, helmet, dimWash, scrimPx,
   };
 }

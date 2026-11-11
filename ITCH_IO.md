@@ -43,6 +43,18 @@ Progress and settings share one versioned, game-prefixed key, `color-rush-heist:
 
 Inside itch's iframe the save is third-party storage, so Chrome with third-party cookies blocked makes it throw, and Safari or Brave may wipe it. In that case the game still boots and plays, and keeps progress for the visit. The release gate boots the ZIP with `localStorage` and `sessionStorage` throwing. The world map's menu has Reset progress, which keeps the player's settings.
 
+## Ending and credits (added 2026-11-10)
+
+The game has a beginning (title, the original comic, 1-1), a middle (six levels, the world map) and an end:
+
+1. **World clear** (after 1-6, as before): totals, medals, and the caption "Rubik is home. Now the forest can wake up in color." The forest behind it is shown as it was before the vault (60% of its colour, the map's 12% per level), so the ending has something to bring back.
+2. **Three closing pages** in the comic's voice (Continue starts them): *Rubik ran all the way home with his red.* (the forest still dull, Rubik red) → *...and the colors came back, one tree at a time.* (a dithered wave of colour spreads from Rubik until the whole title picture, logo included, is back: the first beat of the comic in reverse) → *Once again, Rubik shone with all his colors.* (THE END, the original game's own "Thanks for playing!" line from `end_game.png`, and white, green and red Rubik hopping in turn).
+3. **Six credit cards**, one at a time over the restored title art, with Rubik walking home along the bottom. After the last, the title.
+
+Rules: each page times itself out (ending 3.6 + 4.6 + 5.2 s, cards 4.4 s each, about 40 s in all); a fresh key or a primary click moves on after a 0.6 s lockout per page; a held key (auto-repeat) never counts; Shift, Ctrl, Alt, Meta and Tab alone are not presses; **Esc** leaves for the title (after the lockout). The title's **Credits** button (bottom centre, Tab then Enter, or a click) plays the same six cards and returns to the title. The list is `credits.mjs` (`CREDITS`); each card names its `source`. The original track keeps playing under all of it.
+
+"World 2: Blue Mountains - coming soon" is gone from the world clear and the ending (owner: every game needs an end). `ENDING.teaser` in `credits.mjs` brings one line back if wanted.
+
 ## Accessibility (v1.0)
 
 - **Colour is never the only cue.**
@@ -110,7 +122,7 @@ No gate check had to change for CRH. The only edits to `common/` were the CTS bl
   - Shift / K / J: dash (from 1-4).
   - Z X C or 1 2 3: white, green, red.
   - R: back to the checkpoint.
-  - P / Esc: pause, with Options, Controls, Art and Credits.
+  - P / Esc: pause, with Options, Controls, Art and Credits. After the ending or the title's Credits: any key moves on, Esc skips.
   - Touch: the on-screen pads (◀ ▶, JUMP, DASH, the form cards).
 - **Genre:** Platformer.
 - **Tags (10):** stealth, pixel-art, heist, 2d, colorful, cute, singleplayer, short, keyboard, retro.
@@ -132,10 +144,24 @@ No gate check had to change for CRH. The only edits to `common/` were the CTS bl
 ## Owner checklist before publishing (not run by the squad)
 
 - [ ] Verify or keep withholding the Pink Monster pack (`itch.json` `withhold`).
-- [ ] Confirm the authorship and licence of `assets/track.mp3`. The Credits call it "the original jam track", and no author is recorded in the original repository. Also confirm what `assets/SOURCE-LICENSE.txt` (MIT, "nklbdev", copied from the original repository's root) covers.
+- [ ] Answer the **CREDITS_TODO** list below (the track's composer, the tileset's origin, who made what, the MIT file's "nklbdev"). The credits now say only what the original repository supports.
 - [ ] Approve this page copy, a cover and the screenshots; decide the AI disclosure and the pricing.
 - [ ] Upload the RC ZIP as a Restricted draft and run the plan's section 5 checklist, CRH part, on rows D1–D7. Include the colour check with DevTools → Rendering → Emulate vision deficiencies, and the Slow spotting and Less motion toggles.
 - [ ] Turn on Mobile friendly (landscape) only after a physical phone passes.
 - [ ] The lead tags `v1.0.0` only after approval.
+
+## CREDITS_TODO (needs the owner; nothing here is claimed in the game)
+
+The credits (`credits.mjs`, the pause menu's Credits panel, the page copy) say only what the original repository, the shipped files or the owner's earlier instructions support. The cards' `source` fields give the evidence. These are the gaps:
+
+1. **Music: `assets/track.mp3`.** Byte-identical to the original game's file and the `AudioStreamPlayer` of its `world.tscn`; 4:52, 192 kb/s, 48 kHz, no ID3 tags (only the encoder string). The composer and licence are unknown, so the card says "Music: the original game's track" with no name. If you know who made it (or where it came from), add the name to the Sound card in `credits.mjs`, to the pause panel in `index.html` and to the page copy. The old wording "the original jam track" was dropped: nothing says it was made for the jam.
+2. **The tileset.** `assets/tiles/Tileset.png`, `tileset_ice.png` and `Tile_01..60` have no author or licence anywhere in the original repository. The file was saved in Photoshop CS6 and the `Tile_NN` naming is common to third-party tile packs; that is a suspicion, not a finding. If it is third-party, the "Pixel art: Vitor Farias" card (and the CHANGELOG's "every picture is Vitor Farias's original art") overstates it. Tell me who drew it or where it came from, and its licence.
+3. **"Art by Vitor Farias".** It is the credit you asked for (the pause menu's Art panel). The original's own cards only say *made by* for both names (`intro.jpeg`: "Made by: Vitor Farias @cauesmelo"; `title_screen.png`: "an awesome game made by: @cauesmelo @vitorf.png"), and every commit of the original repository is by Cauê Melo. The roll therefore credits both names for the original game (verified) and the art to Vitor Farias (yours). Confirm who did what (art, design, code, music), and whether `@vitorf.png` is Vitor Farias.
+4. **Names and handles.** "Cauê Melo" is the git author of the original; "@cauesmelo" is how the original's cards write it. Say if you want a different spelling, only handles, or only full names.
+5. **"nklbdev".** The original repository's `LICENSE` is MIT, "Copyright (c) 2023 nklbdev", copied into the ZIP as `assets/SOURCE-LICENSE.txt` (which is what MIT asks of a copy). Nothing in the workspace says who nklbdev is or whether they made any shipped asset (they are not in the git history). They are not in the roll. If they made something that ships, add them; if the file is only a template licence, decide whether to keep it.
+6. **The font.** `assets/font.ttf` is "monogramextended" (its name table names the holder as "ViniciusMenezio"); datagoblin's itch.io page lists monogram and its extended version as CC0 (checked by web search, 2026-11-10). The roll says "monogram by datagoblin (CC0)". If you want the real name beside the handle, confirm they are the same person.
+7. **minigamejam 22, 2023.** From the original project's name (`minigamejam-22` in `project.godot`) and its commit dates (30 Sep to 1 Oct 2023); the jam's organiser and exact name are not recorded.
+8. **The Pink Monster pack** is withheld from the ZIP and not credited. If you verify its licence and ship it, add its credit (RESEARCH.md lists "Tiny Hero Sprites" under OGA-BY 3.0, which asks for attribution).
+9. **The web version's own line** reads "Web version, 2026 / Built with AI assistance (Claude Code)". Add your name or studio there if you want to be listed as director of this version. The sound effects are Web Audio oscillators written for this version (no third-party audio).
 
 Further references: `../common/docs/V1_RELEASE_PLAN.md`, validation evidence in `../common/docs/VALIDATION.md`, and shared continuity in `../common/SHARED_MEMORY.md`. These are optional when copying this project elsewhere. Official upload reference: https://itch.io/docs/creators/html5

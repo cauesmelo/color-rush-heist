@@ -340,7 +340,7 @@ const STATES = [
     id: "title",
     async run(d) {
       await d.open({ saveJson: save({}, { comicSeen: false }) });
-      return { regions: [D("version tag", "#version", true), D("music button", "#music"), D("fullscreen button", ".itch-fullscreen")] };
+      return { regions: [D("version tag", "#version", true), D("credits button", "#credits-btn", true), D("music button", "#music"), D("fullscreen button", ".itch-fullscreen")] };
     },
   },
   {
@@ -643,16 +643,59 @@ const STATES = [
       return { regions: [R("world-clear card", 100, 10, 760, 430, false), D("buttons", "#results-actions button", true)] };
     },
   },
-  {
-    id: "ending",
+  // The ending after the vault level: three closing pages (3.6 s, 4.6 s, 5.2 s), then the
+  // six credit cards. Captions are flat comic boxes (opaque); the wave, the title art and
+  // the Rubiks are the world (palette check only).
+  ...[
+    ["ending-home", 1.6, [R("top caption", 24, 20, 280, 62, true), R("short caption", 792, 300, 144, 40, true), R("hint and the dull forest (whole frame)", ...FULL)]],
+    ["ending-colors", 3.6 + 2.0, [R("top caption", 24, 20, 280, 84, true), R("short caption", 756, 300, 180, 40, true), R("colour wave: forest, logo, Rubik (whole frame)", ...FULL)]],
+    ["ending-end", 3.6 + 4.6 + 2.2, [R("top caption", 24, 20, 280, 84, true), R("original closing line in its frame", 192, 332, 576, 76, true), R("THE END and the three Rubiks", 300, 400, 360, 140), R("whole frame", ...FULL)]],
+  ].map(([id, at, regions]) => ({
+    id,
     async run(d) {
-      await d.open({ saveJson: save(Object.fromEntries(["1-1", "1-2", "1-3", "1-4", "1-5"].map((id) => [id, rec({ stickers: [1, 2, 3] })])), { last: "1-6" }) });
+      await d.open({ saveJson: save(Object.fromEntries(["1-1", "1-2", "1-3", "1-4", "1-5"].map((k) => [k, rec({ stickers: [1, 2, 3] })])), { last: "1-6" }) });
       await d.winLevel("1-6", "mastery");
       await d.waitScreen("world");
       await d.wait(300);
       await d.ev(() => document.querySelector("#continue").click());
-      await d.wait(1700);
-      return { regions: [R("ending plate and captions", 160, 190, 640, 160), R("bottom captions", 100, 400, 760, 140)] };
+      await d.wait(Math.round(at * 1000));
+      return { regions, note: await d.ev(() => window.__game.getState().reel?.id) };
+    },
+  })),
+  // The credits from the title's button: the plate over the logo, then (below) the words
+  // part way through a fade.
+  ...[
+    ["credits-card", 1.2, "game"],
+    ["credits-names", 4.4 + 1.2, "original"],
+  ].map(([id, at]) => ({
+    id,
+    async run(d) {
+      await d.open({ saveJson: save({}) });
+      await d.ev(() => window.__game.showCredits("title"));
+      // The iris opens over the first 0.8 s, so 1.2 s is the first card at rest.
+      await d.wait(Math.round(at * 1000));
+      return { regions: [R("credit plate and its words", 200, 56, 560, 260, true), R("whole frame (art, Rubiks, hint, iris)", ...FULL)], note: await d.ev(() => window.__game.getState().reel?.id) };
+    },
+  })),
+  {
+    id: "credits-mid-card-fade",
+    async run(d) {
+      await d.open({ saveJson: save({}) });
+      await d.ev(() => window.__game.showCredits("title"));
+      await d.wait(4400 + 140); // a quarter into the second card: its words are at step 2
+      return { regions: [R("credit plate and its words (step 2)", 200, 56, 560, 260, true)], note: await d.ev(() => window.__game.getState().reel?.id) };
+    },
+  },
+  {
+    id: "focus-credits",
+    async run(d) {
+      await d.open({ saveJson: save({}) });
+      for (let i = 0; i < 4; i++) {
+        await d.page.keyboard.press("Tab");
+        if ((await d.ev(() => document.activeElement?.id)) === "credits-btn") break;
+      }
+      await d.wait(100);
+      return { regions: [D("title buttons", "#credits-btn, #version", true), D("focused Credits button", "#credits-btn:focus-visible", true)] };
     },
   },
   {

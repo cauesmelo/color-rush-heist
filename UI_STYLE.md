@@ -101,7 +101,7 @@ Both follow the rules above and are painted by `ending-draw.mjs` from the data i
 - **The credits plate**: one `paintCard` (cream rim, plum field, hard shadow), 280 x 130 art px, standing where the
   title's logo is. Its words fade in and out in **four steps** through palette colours (void, stone, mist or fog,
   white or cream), never alpha; progress pips (4 x 4 art px squares, the current one lemon) sit under them.
-- **The hint** ("any key: next   Esc: skip") is S text in cream with the ink outline, top right, shown once a press
+- **The hint** ("any key or click: next   Esc: skip", or "tap: next" on a touch screen) is S text in cream with the ink outline, top right, shown once a press
   would count.
 - **Rubik** (the three forms, hopping on the last page, walking in the credits) is the world's own sprite with a
   hard `void` ellipse for a shadow, as on the other screens.

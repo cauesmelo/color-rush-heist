@@ -118,7 +118,7 @@ declared pair). `LEVEL_DESIGN.md` lists each card's safe and expert line.
     forest, Rubik red, "He did it!") → *...and the colors came back, one tree at a time.*
     (after a beat a wave of colour spreads out from Rubik: a Bayer-dithered ring of the
     title picture over the dull forest, in steps of 4 art px, until the whole picture,
-    logo included, is back; "Welcome home!"; "Esc: skip" and "any key: next" appear in the
+    logo included, is back; "Welcome home!"; "any key or click: next   Esc: skip" appears in the
     corner after 1.2 s; reduced motion cuts to the finished picture) → *Once again, Rubik
     shone with all his colors.* (the title art whole, THE END, the original game's own
     "Thanks for playing!" line cut from `end_game.png` in a frame, and white, green and

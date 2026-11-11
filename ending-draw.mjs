@@ -123,7 +123,7 @@ export function createEndingDraw(env, { g, T, ditherDraw, iris }) {
   }
   /** A small cue in the top right corner: what a press does (shown once it can). */
   function hint(show) {
-    if (show) T("any key: next   Esc: skip", AW - 8, 14, { color: PAL.cream, align: "right" });
+    if (show) T(env.inputMode === "touch" ? "tap: next" : "any key or click: next   Esc: skip", AW - 8, 14, { color: PAL.cream, align: "right" });
   }
   /** The iris of the comic: opens on the first page, closes on the last one. */
   function irises(frame) {

@@ -13,7 +13,7 @@ import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { ROUTES } from "./routes.mjs";
-import { CREDITS, ENDING_PAGES, LOCKOUT, totalSeconds } from "../credits.mjs";
+import { CREDITS, ENDING_PAGES, totalSeconds } from "../credits.mjs";
 
 const url = process.argv[2] || "http://127.0.0.1:4401/",
   shots = process.argv[3] || null;
@@ -64,7 +64,7 @@ async function open(save, { reduced = false } = {}) {
 const st = (page) => page.evaluate(() => window.__game.getState());
 const reelOf = async (page) => (await st(page)).reel;
 const screenOf = async (page) => (await st(page)).screen;
-async function waitScreen(page, name, ms = 15000) {
+async function waitScreen(page, name, ms = 60000) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
     if ((await screenOf(page)) === name) return true;
@@ -72,7 +72,7 @@ async function waitScreen(page, name, ms = 15000) {
   }
   return false;
 }
-async function waitPage(page, index, ms = 12000) {
+async function waitPage(page, index, ms = 60000) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
     const r = await reelOf(page);
@@ -81,6 +81,12 @@ async function waitPage(page, index, ms = 12000) {
   }
   return reelOf(page);
 }
+/** The game's clock is frame time (one frame counts for at most 0.1 s), so on a busy
+ * machine a page's age runs slower than the wall clock. Waits are therefore in the game's
+ * own terms: until a press would count (past the lockout), or until the page is `s` old. */
+const until = (page, fn, arg, timeout = 60000) => page.waitForFunction(fn, arg, { timeout });
+const canPress = (page) => until(page, () => window.__game.getState().reel?.canPress === true);
+const ageAtLeast = (page, s) => until(page, (s) => window.__game.getState().reel?.age >= s, s);
 /** Win 1-6 in QA stepping, then let the real frame loop run into the world clear. */
 async function winVault(page, kind = "baseline") {
   await page.evaluate((route) => {
@@ -91,7 +97,7 @@ async function winVault(page, kind = "baseline") {
     g.step(0.05, {});
     g.setManual(false);
   }, ROUTES["1-6"][kind]);
-  return waitScreen(page, "world", 12000);
+  return waitScreen(page, "world");
 }
 const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, name + ".png") }) : null);
 
@@ -119,23 +125,26 @@ const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, n
 
   // A held key never skips: hold ArrowRight through the lockout (auto-repeat arrives as repeat:true).
   await page.keyboard.down("ArrowRight");
-  const heldFrom = Date.now();
-  while (Date.now() - heldFrom < (LOCKOUT + 0.9) * 1000) {
+  for (let i = 0; i < 6; i++) {
     await sleep(80);
     await page.keyboard.down("ArrowRight"); // Playwright marks the second down of a held key as a repeat
   }
+  await canPress(page);
+  for (let i = 0; i < 6; i++) {
+    await sleep(80);
+    await page.keyboard.down("ArrowRight");
+  }
   r = await reelOf(page);
-  check("ending: a held key never skips (held 1.5 s, past the lockout)", r.index === 0 && r.canPress === true, r);
+  check("ending: a held key never skips (held past the lockout)", r.index === 0 && r.canPress === true, r);
   await page.keyboard.up("ArrowRight");
-  await sleep(100);
   // A fresh press now moves on.
   await page.keyboard.press("KeyA");
   r = await reelOf(page);
   check("ending: a fresh press after the lockout moves to page 2 (the colours)", r.index === 1 && r.id === "colors" && r.age < 0.5 && r.canPress === false, r);
-  await sleep(1400);
+  await ageAtLeast(page, 1.4);
   await shot(page, "03-ending-colors");
   // Modifier keys alone are not presses.
-  await sleep(300);
+  await canPress(page);
   await page.keyboard.press("Shift");
   await page.keyboard.press("Tab");
   r = await reelOf(page);
@@ -147,26 +156,25 @@ const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, n
   await page.mouse.click(640, 360);
   r = await reelOf(page);
   check("ending: a click inside the lockout is ignored", (await screenOf(page)) === "ending" && r.index === 2, r);
-  await sleep(1800);
+  await ageAtLeast(page, 1.8);
   await shot(page, "04-ending-end");
   await page.mouse.click(640, 360);
   check("ending: the last page's press goes on to the credits", (await screenOf(page)) === "credits", await screenOf(page));
   r = await reelOf(page);
   check("credits: card 1 of 6, opened from the ending", r.id === CREDITS[0].id && r.count === CREDITS.length && r.from === "world" && r.index === 0, r);
-  await sleep(1500);
+  await ageAtLeast(page, 1.5);
   await shot(page, "05-credits-1");
   // Walk the cards by real keys: each press after its lockout moves on, in data order.
   const seen = [r.id];
   for (let i = 1; i < CREDITS.length; i++) {
-    await sleep(LOCKOUT * 1000 + 200);
+    await canPress(page);
     await page.keyboard.press("Space");
     r = await reelOf(page);
     seen.push(r?.id);
-    if (i === 1) await sleep(1400), await shot(page, "06-credits-2");
-    if (i === CREDITS.length - 1) await sleep(1400), await shot(page, "07-credits-last");
+    if (i === 1 || i === CREDITS.length - 1) await ageAtLeast(page, 1.4), await shot(page, i === 1 ? "06-credits-2" : "07-credits-last");
   }
   check("credits: the cards come in the order of credits.mjs", JSON.stringify(seen) === JSON.stringify(CREDITS.map((c) => c.id)), seen);
-  await sleep(LOCKOUT * 1000 + 200);
+  await canPress(page);
   await page.keyboard.press("Enter");
   check("credits: a press on the last card returns to the title", (await screenOf(page)) === "title" && (await reelOf(page)) === null, await screenOf(page));
   const s = await st(page);
@@ -184,7 +192,7 @@ const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, n
   check("Space on Continue goes to the ending too", (await screenOf(page)) === "ending", await screenOf(page));
   await page.keyboard.press("Escape");
   check("ending: Esc inside the lockout does nothing", (await screenOf(page)) === "ending", await screenOf(page));
-  await sleep(900);
+  await canPress(page);
   await page.keyboard.press("Escape");
   check("ending: Esc after the lockout leaves for the title (the credits are skipped)", (await screenOf(page)) === "title", await screenOf(page));
   // Back through the real flow; this time nobody touches a key: the timeline itself.
@@ -195,13 +203,15 @@ const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, n
   await page.keyboard.press("Enter");
   const started = Date.now();
   check("replay: the ending plays again after another 1-6 clear", (await screenOf(page)) === "ending", await screenOf(page));
-  const expected = totalSeconds(ENDING_PAGES) + totalSeconds(CREDITS);
-  check("the ending's timeline reaches the credits by itself", await waitScreen(page, "credits", (totalSeconds(ENDING_PAGES) + 4) * 1000), await screenOf(page));
+  const authored = totalSeconds(ENDING_PAGES) + totalSeconds(CREDITS);
+  // The page clock never runs ahead of the wall clock (a frame counts for at most 0.1 s), so
+  // finishing sooner than the authored time would be a bug; a busy machine only makes it later.
+  check("the ending's timeline reaches the credits by itself", await waitScreen(page, "credits", 5 * 1000 * totalSeconds(ENDING_PAGES)), await screenOf(page));
   const toCredits = (Date.now() - started) / 1000;
-  check("the ending takes its authored time", Math.abs(toCredits - totalSeconds(ENDING_PAGES)) < 1.2, { toCredits, authored: totalSeconds(ENDING_PAGES) });
-  check("the credits reach the title by themselves", await waitScreen(page, "title", (totalSeconds(CREDITS) + 5) * 1000), await screenOf(page));
+  check("the ending takes at least its authored time", toCredits >= totalSeconds(ENDING_PAGES) - 0.3, { toCredits, authored: totalSeconds(ENDING_PAGES) });
+  check("the credits reach the title by themselves", await waitScreen(page, "title", 5 * 1000 * totalSeconds(CREDITS)), await screenOf(page));
   const total = (Date.now() - started) / 1000;
-  check("ending + credits take their authored time with no input", Math.abs(total - expected) < 2.5, { total, expected });
+  check("ending + credits take at least their authored time with no input", total >= authored - 0.3, { total, authored });
   check("no errors across the unattended timeline", errors.length === 0, errors);
   await context.close();
 }
@@ -213,20 +223,17 @@ const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, n
   await page.locator("#credits-btn").click();
   let r = await reelOf(page);
   check("title: clicking Credits plays the cards (not the game)", (await screenOf(page)) === "credits" && r.from === "title" && r.id === CREDITS[0].id && r.count === CREDITS.length, r);
-  await sleep(300);
   await page.mouse.click(640, 360);
   r = await reelOf(page);
-  check("credits: a click inside the lockout does not move on", r.index === 0, r);
-  await sleep(500);
+  check("credits: a click inside the lockout does not move on", r.index === 0 && !r.canPress, r);
+  await canPress(page);
   await page.mouse.click(640, 360);
   r = await reelOf(page);
   check("credits: a click after it does", r.index === 1, r);
-  await page.mouse.click(640, 360, { button: "right" });
-  await sleep(700);
+  await canPress(page);
   await page.mouse.click(640, 360, { button: "right" });
   r = await reelOf(page);
-  check("credits: a right click is not a press", r.index === 1, r);
-  await sleep(700);
+  check("credits: a right click is not a press (even past the lockout)", r.index === 1 && r.canPress, r);
   await page.keyboard.press("Escape");
   check("credits (from the title): Esc returns to the title", (await screenOf(page)) === "title" && (await reelOf(page)) === null, await screenOf(page));
   // Keyboard only: Tab to the button, Enter, and the same cards.
@@ -249,16 +256,21 @@ const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, n
   check("title: Enter on Credits plays the cards, the game does not start", (await screenOf(page)) === "credits" && r.id === CREDITS[0].id, r);
   // Held Enter (the key that opened it) cannot skip card 1: repeats arrive with repeat:true.
   await page.keyboard.down("Enter");
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 4; i++) {
+    await sleep(100);
+    await page.keyboard.down("Enter");
+  }
+  await canPress(page);
+  for (let i = 0; i < 4; i++) {
     await sleep(100);
     await page.keyboard.down("Enter");
   }
   await page.keyboard.up("Enter");
   r = await reelOf(page);
-  check("credits: the Enter that opened them, held down, does not skip card 1", r.index === 0, r);
+  check("credits: the Enter that opened them, held down past the lockout, does not skip card 1", r.index === 0 && r.canPress, r);
   await page.keyboard.press("Space");
   check("credits: a fresh press moves to card 2", (await reelOf(page)).index === 1, await reelOf(page));
-  await sleep(700);
+  await canPress(page);
   await page.keyboard.press("Escape");
   const back = await page.evaluate(() => ({ id: document.activeElement?.id, screen: window.__game.getState().screen }));
   check("credits: Esc returns to the title with Credits focused (Enter again replays them)", back.screen === "title" && back.id === "credits-btn", back);
@@ -287,7 +299,7 @@ const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, n
       g.step(0.05, {});
       g.setManual(false);
     }, { id, steps: ROUTES[id].baseline });
-    return waitScreen(page, "results", 12000);
+    return waitScreen(page, "results");
   };
   check("1-2 clears to its results card", await win("1-2"), await screenOf(page));
   await sleep(300);
@@ -314,18 +326,18 @@ const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, n
 {
   const { context, page, errors } = await open(saveOf({ reduceMotion: true }));
   await page.locator("#credits-btn").click();
-  await sleep(700);
+  await canPress(page);
   const a = await page.evaluate(() => ({ reel: window.__game.getState().reel, reduced: window.__game.getState().motion.reduced }));
   check("reduced motion: the credits still play, one card at a time", a.reduced && a.reel.kind === "credits" && a.reel.index === 0, a);
-  await sleep(2000);
+  await ageAtLeast(page, 1.5);
   await shot(page, "09-credits-reduced");
   await page.keyboard.press("Escape");
   await winVault(page);
   await sleep(200);
   await page.keyboard.press("Enter");
-  await sleep(2600);
+  await canPress(page);
   await page.keyboard.press("Space");
-  await sleep(2500);
+  await ageAtLeast(page, 2.2);
   await shot(page, "10-ending-colors-reduced");
   const r = await reelOf(page);
   check("reduced motion: the colours page cuts to full colour (no wave to wait for)", r.id === "colors", r);

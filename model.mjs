@@ -1370,7 +1370,9 @@ function steal(g) {
     // spared the `stunned` and `drained`; since the combat rebuild a stomp
     // defeats, and the card Rubik stomped on the way in was alive again at the
     // theft and hit him on the way home).
-    if (guard.state === "drained" || guard.state === "defeated") continue;
+    // (A `drainOnTheft` card, the vault guard, still greys out into its pad: the
+    // vault's red goes into Rubik whether or not he stomped it on the way in.)
+    if (guard.state === "drained" || (guard.state === "defeated" && !guard.drainOnTheft)) continue;
     guard.dir = guard.theftDir ?? 1;
     guard.bumps = 0;
     if (guard.drainOnTheft) {

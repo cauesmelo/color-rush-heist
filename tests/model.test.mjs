@@ -659,9 +659,9 @@ test("1-6: the theft - RED GET, REVERSE, the room's cards turn, the door seals a
   }
   // Taking red drains the vault's red guard; the room's one threat is the
   // alarm card, out at the back and facing away from Rubik.
-  assert.ok(["drained", "defeated"].includes(guard(g, "vault-guard").state), "the vault guard is greyed out or already down");
+  assert.equal(guard(g, "vault-guard").state, "drained");
   const seal = getLevel("1-6").stones.find((s) => s.id === "seal-low");
-  const threats = g.guards.filter((c) => !["away", "drained", "defeated"].includes(c.state) && c.x > (seal.x + 2) * T && M.canSee(c, "red"));
+  const threats = g.guards.filter((c) => !["away", "drained"].includes(c.state) && c.x > (seal.x + 2) * T && M.canSee(c, "red"));
   assert.deepEqual(threats.map((c) => c.id), ["alarm"]);
   assert.equal(guard(g, "alarm").dir, 1, "it comes out facing the alcove");
   assert.ok(guard(g, "alarm").x - cx(g) > 250, "out at the back");

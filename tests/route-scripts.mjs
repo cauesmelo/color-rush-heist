@@ -371,7 +371,7 @@ function heistInbound(pl, { alcove = false } = {}) {
   pl.color("green").right().to(tx(41) + 8); // the canopy corridor, green
   // The ledge: the green lookout sees white, so the climb waits below in the
   // corridor for its back. White up (green again in the air), through the
-  // lookout as green, and a plain jump over the 7 tiles of water onto the
+  // lookout as green, and a plain jump over the 5 tiles of water onto the
   // island. The first wait that stays unseen is kept.
   const unseen = pl.g.spotted;
   pl.choose(
@@ -385,7 +385,7 @@ function heistInbound(pl, { alcove = false } = {}) {
         f.check(f.g.stickers[0].collected, "swap alcove");
         f.color("green");
       }
-      f.right().to(tx(56) + 20).jump().landAt(tx(66));
+      f.right().to(tx(58) + 20).jump().landAt(tx(66));
     }),
     (f) => f.g.spotted === unseen && f.g.deaths === 0 && Math.abs(f.feet - tx(14)) < 1,
     "ledge",

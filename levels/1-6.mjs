@@ -57,18 +57,21 @@ export default defineLevel({
     fill(22, 41, 10, 12); // canopy: 3-tile corridor; its roof (row 10) is the escape shortcut
     back(23, 40, 13, 15);
     // --- Develop 2 (44-53): the white lookout ledge + swap alcove ----------
-    ground(44, 56, 12); // 4 tiles over the corridor floor: white inbound (levels round: 3 tiles longer, below)
+    ground(44, 58, 12); // 4 tiles over the corridor floor: white inbound (levels round: 5 tiles longer, below)
     ledge(47, 50, 7); // swap alcove 5 tiles above the lookout (sticker 1)
     // --- Develop 3 (54-83): the dash crossing --------------------------------
-    // Levels round: the ledge runs 3 tiles further (cols 54-56) and the water
-    // is 7 tiles, not 10. A plain jump from the lip crosses it with room to
-    // spare (a held jump crosses <= 11), so the first water no longer needs the
-    // stomp-and-dash line (which the proxies missed 79 times); the guided line
-    // still takes it. The extra ledge past the sentry's reach is also ground a
-    // water fall hops back to (safe ground needs no live card within 130 px),
-    // instead of the corridor floor under the lookout, which sent every miss
-    // back through the white climb and both cards.
-    water(57, 63); // 7 tiles to the island (2 down)
+    // Levels round: the ledge runs 5 tiles further (cols 54-58) and the water
+    // is 5 tiles, not 10. A plain jump crosses it from either side with room to
+    // spare (a held jump crosses <= 11, and coming home from the island a held
+    // jump is still 88 px up after 160 px, over the ledge's 64 px), so the first
+    // water no longer needs the stomp-and-dash line (which the proxies missed
+    // 79 times); the guided line still takes it. (7 tiles was tried: home from
+    // the island a plain jump is only 33 px up after 224 px, so red needed the
+    // dash, and the expert proxy fell there repeatedly.) The far end of the ledge is also ground a water
+    // fall can hop back to (safe ground needs no live card within 130 px of a
+    // standing place; the lookout patrols cols 46-50), instead of the corridor
+    // floor under it, which sent every miss back through the white climb.
+    water(59, 63); // 5 tiles to the island (2 down)
     ground(64, 67, 14); // the island (an escape-only card arrives here)
     water(68, 83); // 16 tiles with a refill orb in the middle
     // Levels round: a 3-tile stepping rock under the orb, 2 down: a plain jump

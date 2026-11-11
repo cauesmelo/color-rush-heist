@@ -50,7 +50,7 @@
  {
   "file": "end_game.png",
   "use": "screen",
-  "where": "Full-frame ending after the World 1 clear",
+  "where": "Its \"Thanks for playing!\" line (a 280x30 strip, black page and all) in a frame on the last ending page; its baked \"That's it by now.\" is not shown",
   "sha256": "b01aea2a2787697a469be01c6f7df731b92430b4fe82e81e4e17a5bccbc2e70f"
  },
  {
@@ -614,7 +614,7 @@
  {
   "file": "title_screen.png",
   "use": "screen",
-  "where": "Full-frame title; its forest is drained into bg1 at the start of the story",
+  "where": "Full-frame title; its forest is drained into bg1 at the start of the story, and given back (logo included, its baked press-any-key line lifted out in a derived canvas) by the ending's colour wave and under the credit cards",
   "sha256": "fabbb7f934b93d99552cd0d382778fa5f53bc82cddab1b77cb0c98aeac2364c0"
  }
 ]

@@ -4,6 +4,15 @@ Player-facing changes in Color Rush Heist. Versions follow `package.json`; the t
 
 ## [Unreleased]
 
+### Ending and credits
+
+- **The game now has an end.** After the vault level's world clear, Continue plays three closing comic pages in the original's voice: *Rubik ran all the way home with his red*, then *...and the colors came back, one tree at a time* (a wave of colour spreads out from Rubik until the whole title picture, logo and all, is back: the comic's first beat in reverse), then *Once again, Rubik shone with all his colors* with THE END and the original game's own "Thanks for playing!" line.
+- **Credits.** Six cards, one at a time, over the finished forest while white, green and red Rubik walk home along the bottom. They credit the original game's makers, the pixel art, the music (the original game's track), the browser-made sound effects, the font and this web version, and say nothing the project cannot back up. After the last card, the title.
+- **The title has a Credits button** (bottom centre; the same button and focus frame as the menus). It plays the same six cards.
+- **Calm and skippable.** Every page times itself out (the ending takes 13 seconds, the credits 26). Any fresh key or click moves on after a short 0.6 s lockout; a key you are holding never skips a page; Esc skips the rest. The music keeps playing underneath. Reduced motion cuts instead of waving.
+- **No "coming soon".** The world clear and the ending no longer announce World 2 (Blue Mountains is not built): the story ends here. The world clear's backdrop now shows the forest as it was before the vault, so the colour the ending brings back is a real change.
+- The pause menu's credit line says "music: the original game's track" (it said "the original jam track"; the original repository does not say so).
+
 ### Pixel UI
 
 - **The red beacon is gone.** The distant red light pillar behind the forest (in play and on the world map) was removed at the owner's request. The `beacon` keys in the level files are now unused.

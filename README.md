@@ -21,11 +21,12 @@ plan is in the brief, §8). `LEVEL_DESIGN.md` covers each level beat by beat.
 
 ```sh
 npm run dev          # http://127.0.0.1:4174 (this folder only, loopback)
-npm test             # 162 tests: model, levels, movement audit, campaign/save, combat, held input, human proxies, release, pixel UI (~20 s)
+npm test             # 179 tests: model, levels, movement audit, campaign/save, combat, held input, human proxies, release, pixel UI, credits and the ending's wiring (~20 s)
 node tests/cone-blind-audit.mjs   # ~40 s: full report of what a cone-blind player gets past (LEVEL_DESIGN.md)
 npm run routes       # regenerate tests/routes.mjs after a level edit
 npm run build:itch   # dist/color-rush-heist-itch.zip
 npm run audit:pixels -- http://127.0.0.1:4174/ --out /tmp/pixel-audit   # Chrome: every screen's pixels vs the UI palette and grid (UI_STYLE.md)
+node tests/browser-ending.mjs http://127.0.0.1:4174/ [shots-dir]        # Chrome, real keys and clicks: the ending, the credits, the title's button (~90 s)
 ```
 
 No CDN, account, backend or parent server. HTTP is needed for ES modules.
@@ -40,6 +41,8 @@ No CDN, account, backend or parent server. HTTP is needed for ES modules.
 | White / green / red | Z / X / C (or 1 2 3) | form cards (only owned ones) |
 | Back to checkpoint | R | pause menu |
 | Pause (in a level) / menu (on the map) | P, Esc, ❚❚ button | ❚❚ button |
+| The ending and the credits: next page / skip them | any key (not a held one, not Shift/Ctrl/Alt/Tab alone) or a click, after a 0.6 s lockout / Esc | tap |
+| The title's Credits | Tab to the button, Enter or Space (or a click) | tap |
 
 Any key or tap starts the title and skips the comic; the key that skips also counts
 as your first input. Leaving the tab pauses.
@@ -107,10 +110,43 @@ declared pair). `LEVEL_DESIGN.md` lists each card's safe and expert line.
 9. **World clear (after 1-6):** "You got your red back!", world totals (stickers n/18,
    levels, getaway), six little faces for per-level stickers, three world medals
    (Full face 18/18, Ghost = the Ghost stamp on 1-3, 1-5 and 1-6, Quick getaway = 1-6 par) and one
-   caption in the comic's style: "Green and red are back. Blue is up in the mountains."
-   → the ending: `end_game.png` framed on the colored forest with red and green Rubik,
-   its baked "That's it by now." covered by a plate reading "That's it for now." (the
-   file is untouched) and "World 2: Blue Mountains - coming soon" → title.
+   caption in the comic's style: "Rubik is home. Now the forest can wake up in color."
+   The forest behind it is the map's: 12% of its colour per cleared level 1-1..1-5 (60%),
+   so the ending has colour left to bring back. Continue starts the ending.
+10. **The ending (screen `ending`, three pages, 13.4 s on its own):** the comic's voice,
+    its first beat in reverse. *Rubik ran all the way home with his red.* (the dull
+    forest, Rubik red, "He did it!") → *...and the colors came back, one tree at a time.*
+    (after a beat a wave of colour spreads out from Rubik: a Bayer-dithered ring of the
+    title picture over the dull forest, in steps of 4 art px, until the whole picture,
+    logo included, is back; "Welcome home!"; "Esc: skip" and "any key: next" appear in the
+    corner after 1.2 s; reduced motion cuts to the finished picture) → *Once again, Rubik
+    shone with all his colors.* (the title art whole, THE END, the original game's own
+    "Thanks for playing!" line cut from `end_game.png` in a frame, and white, green and
+    red Rubik hopping in turn). `credits.mjs` holds the pages and the timing rules;
+    `ending-draw.mjs` paints them. The title art's baked "PRESS ANY KEY TO START" line is
+    lifted out once at runtime (a derived canvas; the file is untouched).
+11. **The credits (screen `credits`, 26.4 s on its own):** six cards, one at a time, on one
+    plum plate that covers the title art's logo, over the finished forest, with white,
+    green and red Rubik walking home along the bottom (15 art px a second, stopping short
+    of the title art's own credit in the corner). The words step in and out in four
+    grey-to-white levels (never alpha) and small pips under the words count the cards.
+    The cards (`CREDITS` in `credits.mjs`, each with its `source`): *Color Rush Heist*;
+    *Color Theft Story, the original game, made by Vitor Farias and Cauê Melo
+    (@cauesmelo), minigamejam 22, 2023*; *Pixel art, Vitor Farias*; *Sound: Music: the
+    original game's track; Effects: made in the browser*; *Web version, 2026: built with AI
+    assistance (Claude Code); font: monogram by datagoblin (CC0)*; *Thanks for playing!*
+    The credits end on the title. Nothing is claimed that the workspace cannot support:
+    the open questions (the track's composer, the tileset, who made what, the MIT file's
+    "nklbdev") are in `ITCH_IO.md` under CREDITS_TODO.
+12. **Pressing during the ending and the credits:** a page times itself out, so nobody has
+    to press. A fresh key (or a primary click) moves on after the page's first 0.6 s; a
+    held key never counts (auto-repeat arrives as `repeat`); Shift, Ctrl, Alt, Meta and Tab
+    alone are not presses; Esc leaves for the title (credits skipped too). The title's
+    **Credits** button (bottom centre, the same pixel button and focus frame as the
+    menus) plays the same six cards and returns to the title with the button focused.
+    The track keeps playing under the ending and the credits and stops at the title.
+    After the credits a returning player goes title → world map as before, all six levels
+    open and Rubik on 1-6; winning the vault again plays the ending again.
 
 **Pause (in a level):** Resume, Back to checkpoint, Restart level, World map, Sound /
 Music / Options, Controls, Art ("Art by Vitor Farias"), Credits. **Options:** Slow
@@ -305,7 +341,9 @@ on-screen tile record is computed from all six maps, the map path and the vault
 pillars by `tilesOnScreen()` in `levels/builder.mjs`.
 
 - **On screen (43):** `title_screen`, `bg1`, `bg1-sky` (levels and world map),
-  `bg_black`, `quadro1–4`, `cutout`, `end_game`, `intro.jpeg` (credits),
+  `bg_black`, `quadro1–4`, `cutout`, `end_game` (its "Thanks for playing!" line, on the last
+  ending page), `intro.jpeg` (credits), `title_screen` also returns, logo and all, as the
+  ending's colour wave and under the credit cards,
   `tiles/Tileset.png`, `rubik_white` (also the map walker), `rubik_green`, `rubik_red`
   (also 4× on GET cards), `rubik_storm` (swirl pickup, DASH GET card, refill orbs),
   `inimigo_verde`, `inimigo3-Sheet`, `cone_de_visao`, `cofre` (vault and map node), and
@@ -337,6 +375,11 @@ derived canvases; no asset file is modified.
   (still shipped for QA; nothing in the game links to it).
 - `tests/movement-audit.test.mjs` — the movement rubric, measured (`MOVEMENT_AUDIT.md`);
   `tests/browser-movement.mjs` — its real-Chrome checks (dev tool, needs Playwright).
+- `credits.mjs` — the ending's pages, the credit cards (with their sources) and the pure
+  reel rules (lockout, held keys, Esc, fade steps, the colour wave, the parade); no
+  imports. `ending-draw.mjs` — paints them with the pixel kit. `tests/credits.test.mjs`
+  (rules, data, the truth guard), `tests/ending-flow.test.mjs` (source wiring),
+  `tests/browser-ending.mjs` (Chrome, real keys; not in `npm test`).
 - `tests/model.test.mjs`, `tests/campaign.test.mjs` — the suites; `tests/routes.mjs` —
   generated route fixtures; `tests/route-planner.mjs`, `tests/route-scripts.mjs`,
   `tests/generate-routes.mjs` — the planner that produced them; `tests/png.mjs` — a
@@ -347,13 +390,15 @@ derived canvases; no asset file is modified.
 Kept: `setManual(bool)`, `restart()` (the current level straight into play: 1-1 on a
 fresh page), `step(seconds, input, {render})`, `getState()`, `start()`, `skipStory()`,
 `model`, `togglePause()`. DOM ids are unchanged: `#start`, `#game`, `#pause`, `#resume`,
-`[data-action="jump"]`, `#continue` (level clear → map; 1-6 → world clear → ending),
+`[data-action="jump"]`, `#continue` (level clear → map; 1-6 → world clear → ending → credits → title), `#credits-btn` (the title's Credits button),
 the Pause → Art panel; `#again` is now labelled Retry.
 
 New: `startLevel(id)` (any of `"1-1"…"1-6"`, straight into play, no card, the level's
-own kit), `openMap(id?)`, `resetSave()`, `campaign` (the `campaign.mjs` module).
+own kit), `openMap(id?)`, `resetSave()`, `campaign` (the `campaign.mjs` module),
+`showEnding()` and `showCredits(from = "title")` (QA shortcuts into the closing pages and the
+credit cards; the real route is a 1-6 clear, then Continue).
 
-`getState()` keeps `screen` (`boot|title|story|play|results|map|world|ending`),
+`getState()` keeps `screen` (`boot|title|story|play|results|map|world|ending|credits`),
 `phase`, `stickers` (0–3, this run), `stickerIds`, `stickerList`, `smashes`, `stolen`,
 `stomps`, `spotted`, `knockouts`, `medals` (after a win: `fullFace` = 3/3 this run,
 `neverSpotted`, `quickGetaway` = 1-6 par or `null` elsewhere), `escapeTime`,
@@ -365,7 +410,7 @@ color, jumps, grounded, vy, dashTime, dashCooldown, dashCharge, …}`. New field
 `chainBest`, `hits`, `falls` (combat; each guard also carries `type` and `defeatT`),
 `hud {hearts, heartFx, popups, edge}` (what the hearts row and the hit edge show),
 `bounces`, `dashes`, `calm`, `intro`, `getCard`, `map {cursor, id, walking, revealing,
-menuOpen}`, `campaign {levels, unlocked, stickerTotal, totalStickers, worldClear,
+menuOpen}`, `reel` (null, or `{kind: "ending"|"credits", from, id, index, count, age, canPress, done}`), `campaign {levels, unlocked, stickerTotal, totalStickers, worldClear,
 worldMedals, forestColor}`, `save`, `result` (the last tally), `simClock` (the
 `performance.now()` moment the simulation corresponds to, for mapping a key's
 `timeStamp` to its tick).

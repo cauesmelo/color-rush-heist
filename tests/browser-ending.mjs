@@ -273,6 +273,43 @@ const shot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, n
   await context.close();
 }
 
+// ------------------------------- the rest of the game still works around it --
+{
+  const { context, page, errors } = await open(
+    JSON.stringify({ v: 2, last: "1-2", comicSeen: true, migratedFrom: null, hints: {}, levels: { "1-1": rec({ stickers: [1] }) }, settings: { sfx: false, music: false, timer: false, slowSpotting: false, reduceMotion: false } }),
+  );
+  const win = async (id) => {
+    await page.evaluate((route) => {
+      const g = window.__game;
+      g.setManual(true);
+      g.startLevel(route.id);
+      for (const [s, input] of route.steps) g.step(s, input, { render: false });
+      g.step(0.05, {});
+      g.setManual(false);
+    }, { id, steps: ROUTES[id].baseline });
+    return waitScreen(page, "results", 12000);
+  };
+  check("1-2 clears to its results card", await win("1-2"), await screenOf(page));
+  await sleep(300);
+  const buttons = await page.evaluate(() => [...document.querySelectorAll("#results-actions button:not([hidden])")].map((b) => b.id));
+  check("results: Continue and Retry are both there (the world clear's Retry stays hidden)", JSON.stringify(buttons) === JSON.stringify(["continue", "again"]), buttons);
+  await page.locator("#again").click();
+  check("results: Retry replays the level", (await screenOf(page)) === "play" && (await st(page)).level.id === "1-2", await screenOf(page));
+  check("1-2 clears again", await win("1-2"), await screenOf(page));
+  await sleep(300);
+  await page.keyboard.press("Enter");
+  const m = await st(page);
+  check("results: Continue goes to the world map, on the level just opened", m.screen === "map" && m.map.id === "1-3", m.map);
+  await sleep(1400);
+  await page.keyboard.press("Escape");
+  check("map: the menu opens (Credits panel and Reset progress still there)", (await page.evaluate(() => !document.querySelector("#pause-card").hidden && !!document.querySelector('[data-show="credits"]') && !!document.querySelector('[data-show="reset"]'))), await screenOf(page));
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Enter");
+  check("map: Enter still plays the chosen level", await page.waitForFunction(() => window.__game.getState().screen === "play", null, { timeout: 5000 }).then(() => true, () => false), await screenOf(page));
+  check("no errors around the ending", errors.length === 0, errors);
+  await context.close();
+}
+
 // --------------------------------------------------- reduced motion, DPR 2 ---
 {
   const { context, page, errors } = await open(saveOf({ reduceMotion: true }));

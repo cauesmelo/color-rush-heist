@@ -89,12 +89,36 @@ and a heart that is empty is cracked as well as dark.
 10. **Keyboard focus is a pixel frame:** 2 art px of lemon over 1 of ink, square,
     on every control (and a lemon inset frame on the title's "press any key").
 
+## The ending and the credits (added 2026-11-10)
+
+Both follow the rules above and are painted by `ending-draw.mjs` from the data in `credits.mjs`:
+
+- **Comic captions** (the closing pages): a flat cream box in a 1 px ink outline, ink text at S, on art-pixel
+  coordinates, as the original panels carry theirs. No notch, no shadow.
+- **The colour wave**: the title picture shown through an ordered-dither mask (the 4 x 4 Bayer matrix over a
+  36 art px band, a whole step of 4 art px at a time), over the dull forest. Pixels switch between two textures;
+  nothing blends.
+- **The credits plate**: one `paintCard` (cream rim, plum field, hard shadow), 280 x 130 art px, standing where the
+  title's logo is. Its words fade in and out in **four steps** through palette colours (void, stone, mist or fog,
+  white or cream), never alpha; progress pips (4 x 4 art px squares, the current one lemon) sit under them.
+- **The hint** ("any key: next   Esc: skip") is S text in cream with the ink outline, top right, shown once a press
+  would count.
+- **Rubik** (the three forms, hopping on the last page, walking in the credits) is the world's own sprite with a
+  hard `void` ellipse for a shadow, as on the other screens.
+- **The title's Credits button** is a DOM `.title-btn`: the menu button sprite (`--spr-btn`, hover and pressed
+  variants), S text, 54 x 19 art px, on the same baseline as the `v1.0` label; focus is the usual pixel frame.
+- **The title picture, reused**: `title_screen.png` with its baked "PRESS ANY KEY TO START" line lifted out
+  once at runtime (a derived canvas; the strip's text pixels take the colour of the pixel 18 rows lower in the
+  same column). The file is untouched. Its own corner credit ("an awesome game made by ...") stays, and the
+  parade stops short of it.
+
 ## Where things live
 
 | File | Role |
 | --- | --- |
 | `pixel-ui.mjs` | Palette, geometry (pure, tested), `Grid` painter, sprite bake, bitmap text, panel/plate/bubble/key/button/heart/sticker/seal painters, dither scrim, pixel iris, CSS sprite export |
-| `ui-draw.mjs` | Every screen and HUD element (state in, pixels out): HUD, hearts, chain, hints, awareness bubbles, popups, level/GET/REVERSE cards, results, world clear, map, ending, flashes |
+| `ui-draw.mjs` | Every screen and HUD element (state in, pixels out): HUD, hearts, chain, hints, awareness bubbles, popups, level/GET/REVERSE cards, results, world clear, map, flashes |
+| `ending-draw.mjs`, `credits.mjs` | The three closing pages and the credit cards: drawing (same kit, same rules, scanned by the same source test) and data/timing (pure, no imports) |
 | `style.css`, `embed.css`, `gallery.css` | DOM overlays in `--ap` units; sprites are CSS custom properties (`--spr-*`) baked at boot by `installCss()` |
 | `game.mjs` | State, input, audio and the world; reads UI state into `createUiDraw(env)` |
 | `tests/pixel-ui.test.mjs` | Palette = art, CSS and source rules, geometry |
@@ -106,8 +130,9 @@ The model, campaign, levels and loop never import the UI modules (tested).
 
 Drives the real game in Chrome through 30 screens and states (boot, title, comic,
 iris, map x3, every pause/map-menu panel, HUD x4, bubbles, pause, level card,
-GET, REVERSE, getaway, hit flash, results x3, world clear, ending, two focus
-states), at device-pixel ratio 1 and 2, on a deterministic page clock, and
+GET, REVERSE, getaway, hit flash, results x3, world clear, the three ending pages,
+the credit cards (at rest, part way through a fade), three focus states), at
+device-pixel ratio 1 and 2, on a deterministic page clock, and
 measures UI regions of each screenshot:
 
 - **off-palette**: pixels that are neither a palette colour, an original art

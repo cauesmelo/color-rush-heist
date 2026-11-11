@@ -652,8 +652,8 @@ test("1-6: the theft - RED GET, REVERSE, the room's cards turn, the door seals a
   assert.equal(g.player.color, "red");
   assert.equal(g.checkpoint, "vault");
   assert.deepEqual(g.gets, ["red"]);
-  for (const id of ["corridor", "lookout", "ambush"]) assert.equal(guard(g, id).dir, 1, `${id} faces the incoming Rubik`);
-  for (const id of ["alarm", "ambush"]) {
+  for (const id of ["corridor", "lookout"]) assert.equal(guard(g, id).dir, 1, `${id} faces the incoming Rubik`);
+  for (const id of ["alarm"]) {
     assert.equal(fresh("1-6").guards.find((c) => c.id === id).state, "away", `${id} is absent inbound`);
     assert.equal(guard(g, id).state, "calm", `${id} arrived with the alarm`);
   }
@@ -912,9 +912,9 @@ test("every card has a job, proved on the routes; cards that did no work are gon
   // The cards revision five removed (no route ever engaged them, or they only
   // crowded the vault room) stay gone.
   const ids = (id) => getLevel(id).guards.map((c) => c.id);
-  for (const [id, gone] of [["1-2", ["chain-a", "chain-b"]], ["1-3", ["corridor-a", "floor"]], ["1-4", ["island"]], ["1-6", ["burst-a", "burst-b"]]])
+  for (const [id, gone] of [["1-2", ["chain-a", "chain-b"]], ["1-3", ["corridor-a", "floor"]], ["1-4", ["island"]], ["1-6", ["burst-a", "burst-b", "ambush"]]])
     for (const card of gone) assert.ok(!ids(id).includes(card), `${id} ${card}`);
-  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 29);
+  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 28);
 });
 test("no stacked cards: two cards on one floor keep 2+ tiles between their bodies, unless a declared pair", () => {
   for (const level of LEVELS)

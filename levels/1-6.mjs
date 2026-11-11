@@ -16,9 +16,8 @@
  *            Rubik and its guard greys out; the door slams (two stones), and
  *            the alarm card comes out at the back of the room: one slow,
  *            visible threat while the first smash is worked out.
- * conclude:  right to left, each card one job: the alarm card (smash out
- *            before it reaches you, or knock it), the island card (land as
- *            green, or knock it), the ledge pair (a green lookout and a red
+* conclude:  right to left, each card one job: the alarm card (smash out
+ *            before it reaches you, or knock it), the ledge pair (a green lookout and a red
  *            sentry: no single colour passes) and the corridor patrol (green
  *            past it, or the roof gates: red smashes, sticker 3).
  *
@@ -165,11 +164,12 @@ export default defineLevel({
     // mastery's way to the alcove sticker behind it), or go green (it can't
     // see green, and the drained vault guard can't see anything).
     { id: "alarm", job: "knock", kind: "green", mode: "patrol", pace: 0.6, x: px(126) + 16, floor: px(8), dir: 1, theftDir: 1, min: px(113) + 16, max: px(129) + 16, escapeOnly: true },
-    // Escape only: it arrives on the island facing the incoming Rubik (spear
-    // up, so no stomp). Safe line: swap to green after the last dash and land
-    // through it. Red line: land clear of it and knock it with a ground dash
-    // (the knock refunds the dash for the jump + dash to the ledge).
-    { id: "ambush", job: "knock", kind: "green", mode: "patrol", x: px(65) + 16, floor: px(14), dir: 1, min: px(64) + 24, max: px(67) + 8, escapeOnly: true },
+    // (Levels round: the escape-only island card is gone. It stood on a 4-tile
+    // island with water on both sides, so every spear or bump knocked Rubik into
+    // the water: a heart for the hit and another for the fall, 30 of the first-
+    // timer, casual and expert proxies' deaths at 1-6's crossing each. The
+    // escape keeps one card per beat: the alarm card, the ledge lookout, the
+    // corridor patrol.)
   ],
 
   /** cofre.png drawn at 4x on a carved dais, raised 24 px (old cx 6064 - 2240). */

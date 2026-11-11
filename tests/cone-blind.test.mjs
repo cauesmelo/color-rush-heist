@@ -26,7 +26,6 @@ const EXEMPT = {
   "1-5 cross-green": "swap: the line swaps to green before landing in its view; passing disguised is the point",
   "1-6 corridor": "swap (escape): red must go green, knock it or take the roof; inbound it is 1-3's disguise",
   "1-6 alarm": "knock (escape): the forced smash's dash knocks it",
-  "1-6 ambush": "knock (escape): a landing on the island card is a stomp now; the guided line knocks it with a red ground dash",
 };
 
 test("cone-blind rule: the exempt cards are exactly the documented ones", () => {

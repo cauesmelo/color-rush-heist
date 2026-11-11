@@ -461,20 +461,15 @@ function heistEscape(pl, { roof = false, alcove = false, knockAll = false } = {}
     stomps = pl.g.stomps;
   const island = tx(67); // the island's right edge
   pl.choose(
-    [0, 0.3, 0.6, 0.9, 1.2, 1.5].flatMap((wait) => [0, 120, 240].flatMap((vy) => (knockAll ? [false] : [true, false]).map((green) => [wait, vy, green]))).map(([wait, vy, green]) => (f) => {
+    [0, 0.3, 0.6, 0.9, 1.2, 1.5].flatMap((wait) => [0, 120, 240].flatMap((vy) => [false].map((green) => [wait, vy, green]))).map(([wait, vy, green]) => (f) => {
       f.stop().wait(wait).left().to(tx(85) + 8).jump().apex().dash();
       f.until((p) => p.p.dashCharge > 0 && p.p.dashTime <= 0 && p.p.vy >= vy, f.dir, 160, "orb").dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash");
-      if (green) f.color("green"); // green lands unseen and walks through it
       f.until((p) => p.p.grounded || p.g.phase !== "playing", (p) => (p.cx - M.PLAYER.foot > island - 4 ? { left: true } : {}), 240, "island");
-      if (!green && !isDown(f.guard("ambush"))) {
-        f.until((p) => p.p.dashCooldown <= 0, {}, 60, "cooldown").left().dash();
-        f.until((p) => p.p.dashTime <= 0, f.dir, 60, "knock");
-      }
       f.left().to(tx(64) + 8).jump().apex().dash();
       f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash").landAt(tx(50));
     }),
-    (f) => f.g.deaths === deaths && f.g.hits === hits && (knockAll ? isDown(f.guard("ambush")) : f.g.spotted === spotted && f.g.stomps === stomps) && Math.abs(f.feet - tx(12)) < 1 && f.g.phase === "playing",
+    (f) => f.g.deaths === deaths && f.g.hits === hits && f.g.spotted === spotted && f.g.stomps === stomps && Math.abs(f.feet - tx(12)) < 1 && f.g.phase === "playing",
     "island crossing",
   );
   // The ledge pair on the way home: red walks past the red sentry; the green

@@ -438,8 +438,8 @@ Rebuilt and re-tuned on top of the combat; the human-proxy table is in `LEVEL_DE
 ("Measured"), the raw runs in `common/artifacts/revision-5/crh-levels/proxy/`.
 - 1-2 rebuilt: a sentinel to learn on, the wall duel (a walker at the 7-tile wall's foot, its pad
   stays flat there), the island chain, the green card. 1-4: the swirl is on the path, recovery rocks
-  at the develop gaps, a second orb and a rock at the orb gap. 1-6: a longer ledge (7-tile first
-  water), a stepping rock under the orb, no card on the escape's island. 1-1, 1-3, 1-5 unchanged.
+  at the develop gaps, a second orb and a rock at the orb gap. 1-6: a longer ledge (5-tile first
+  water), one card on the ledge, a stepping rock under the orb, no card on the escape's island. 1-1, 1-3, 1-5 unchanged.
 - Model, one condition: the theft no longer brings defeated cards back.
 - The human proxies were fixed first (flat pads are springboards, an air jump after a bounce has to
   land where walking on is safe, swap to white before the jump, brake over a wall, widest-margin

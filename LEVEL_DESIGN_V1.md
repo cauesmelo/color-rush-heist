@@ -109,17 +109,20 @@ sentry's colour): both are clever somewhere. 12/12/12 with the fixed proxy; not 
 
 ### 1-6 The Vault
 
-- **Develop:** the ledge runs 3 tiles further (cols 54-56) and its water is 7 tiles, not 10: a plain
-  jump crosses, and the far end of the ledge is safe ground once its sentry is down, so a fall can hop
-  back there instead of to the corridor floor under the lookout (every card on the old ledge was within
-  130 px of any standing place, so each miss sent the player back through the white climb and both
-  cards; the hop-back target after the change was not measured separately). The 16-tile orb crossing gets a 3-tile stepping
-  rock under the orb (a plain jump reaches it from either bank).
+- **Develop:** the ledge runs 5 tiles further (cols 54-58) and its water is 5 tiles, not 10: a plain
+  jump crosses it in both directions (7 tiles was tried first: coming home from the island a plain jump
+  is only 33 px up after 224 px, under the ledge's 64, so red needed the dash and the expert proxy fell
+  there again and again). The red sentry that shared the ledge with the green lookout is gone: two cards two tiles
+  apart was the stacking the owner dislikes, and a real-key casual run stood between them taking 26 hits
+  (`chrome-final/1-6-casual-stuck2.png`). The ledge is one card, the lookout (wait for its back, white up,
+  green in the air). The 16-tile orb crossing gets a 3-tile stepping rock under the orb (a plain jump
+  reaches it from either bank).
 - **Escape:** the island card is gone (a 4-tile island with water on both sides: every hit knocked Rubik
   into the water, a heart for the hit and another for the fall). One card per beat: alarm card,
   ledge lookout, corridor patrol.
-- **Model (one condition):** the REVERSE no longer brings defeated cards back (the ledge sentry stomped
-  on the way in was alive again on the way home).
+- **Model (one condition):** the REVERSE no longer brings defeated cards back (a card stomped on the way
+  in was alive again on the way home). The vault guard keeps its old rule (it greys out into its pad
+  whether or not it was stomped; the root QA's vault-room scenario relies on that pad).
 - **Combat role:** the vault guard (stomp it from behind while it looks at the vault), the red dash
   as the second weapon on the way home (knock the lookout and the alarm card), and avoiding (green past
   the corridor patrol).
@@ -138,23 +141,28 @@ partial pass that mixed proxy versions: not used).
 | 1-3 | 7 / 12 / 12 | 12 / 12 / 12 | 12 / 12 / 12 | 0, 0 / 0, 0 / 0, 0 | 31.9 / 26.9 / 26.7 |
 | 1-4 | 8 / 7 / 8 | 8 / 4 / 6 | 12 / 12 / 12 | 2, 7 / 0, 3 / 1, 3 | 34.4 / 25.1 / 22.3 |
 | 1-5 | 11 / 11 / 12 | 12 / 12 / 12 | 12 / 12 / 12 | 0, 1 / 0, 1 / 0, 1 | 17.9 / 20.2 / 16.0 |
-| 1-6 | 1 / 0 / 5 | 1 / 0 / 0 | 10 / 12 / 11 | 4, 13 / 3, 12 / 0, 4 | 57.1 / 79.7 / 27.2 |
+| 1-6 | 1 / 0 / 5 | 1 / 0 / 0 | 12 / 12 / 12 | 0, 3 / 0, 3 / 0, 3 | 30.0 / 37.2 / 25.7 |
 
 Reading it honestly:
 
 - **Targets met** (first-timer >= 8, casual >= 10, expert 12 of 12, an expert still loses hearts in
-  1-4..1-6): 1-1 to 1-5 on every column, and 1-6 for the first-timer (10) and the casual (12). **Missed:**
-  1-6's expert is 11 of 12 (seed 1 never got home in 60 s without progress), and 1-6's hearts are still high
-  (first-timer median 13, p90 26). Nothing here says the finale is fun, only that the proxies get home.
+  1-4..1-6): all six levels, on every column. Experts still lose a heart at 1-4 (median 3), 1-5 (1) and
+  1-6 (3). Hearts are still many at 1-4 (first-timer median 7, p90 17: water) and 1-6 (casual p90 9).
+  Nothing here says the finale is fun, only that the proxies get home.
 - **Most of the movement between the first two columns is the proxies, not the levels.** 1-3 and 1-5 did not
   change (1-3: 7 to 12, 1-5: 11 to 12) and 1-2's casual and expert went 1 and 4 to 12 and 12 on the OLD
   level. That is the point of fixing them first: with the old numbers the levels looked broken where the
   proxies were.
-- **Level changes with a measurable effect:** 1-4 (8 / 4 / 6 to 12 / 12 / 12: the swirl on the path was the
-  biggest, since the proxies never took the dash and then died at the first real gap 100+ times; the rocks
-  and the second orb cut falls) and 1-6 (1 / 0 / 0 to 10 / 12 / 11). In 1-6 the order of gains was: the
-  longer ledge, the stepping rock, the card staying down after the theft (3 to 9 of 12 for the first-timer
-  in one step), and the escape island's card removed (9 to 10, casual 7 to 12, expert 6 to 11).
+- **Level changes with a measurable effect:** 1-4 (8 / 4 / 6 to 12 / 12 / 12: the swirl on the path was
+  the biggest, since the proxies never took the dash and then died at the first real gap 100+ times; the
+  rocks and the second orb cut falls) and 1-6 (1 / 0 / 0 to 11 / 12 / 12). In 1-6, in the order tried: a
+  stepping rock under the orb (1 to 3 of 12 for the first-timer), a longer ledge with a 7-tile water
+  (3 to 6), the card stomped on the way in staying down through the theft (6 to 9), the escape island's
+  card removed (9 to 10, casual 7 to 12, expert 6 to 11), the ledge's red sentry removed (first-timer 10 to 12;
+  casual 12 to 11 and expert 11 to 10, which is seed noise), and a 5-tile water instead of 7 (expert 10
+  to 12, casual 11 to 12, first-timer 12 to 11: home from the island a plain jump falls short of the
+  ledge at 7 tiles), and the vault guard still greying out into its pad when it was stomped inbound
+  (as before; the card-stays-down rule had skipped it): first-timer 11 to 12, hearts p90 22 to 5. Each step was measured on the 12 seeds, not only the last.
 - **1-2 did not move on the proxies** (11 / 12 / 12 before, 12 / 11 / 12 after). Its rebuild is for the
   reason the owner's real-key play found (a flat pad 8 tiles from the wall nothing explained); the proxies
   never reproduced that failure. The one stuck casual run (col 48, the wall's foot) is a loop: after the
@@ -164,6 +172,32 @@ Reading it honestly:
   retry (R), and fight only with a stomp reflex against a chasing walker; "hearts lost" is what a
   non-fighter pays. A first-timer's 10 to 13 hearts at 1-6 is mostly water.
 
-### Real keys in Chrome (`tests/human-proxy-chrome.mjs`, first-timer seed 1, headless Chrome 960x540)
+### Real keys in Chrome (`tests/human-proxy-chrome.mjs`, headless Chrome 960x540 at DPR 1, final levels)
 
-See "Chrome" below for the final table (filled when the last pass finished).
+The proxy brain runs in the page; its wishes are trusted keyboard events (Playwright/CDP). 1-1 goes through
+the real title, comic and level card (play live 452 ms after the card with no key). Screenshots and the raw
+results: `common/artifacts/revision-5/crh-levels/chrome-final/` (`results.json`, `summary.txt`, PNGs).
+
+| Run | Result | Game s | Deaths | Hearts lost (hits / falls) |
+| --- | --- | --- | --- | --- |
+| first-timer seed 1: 1-1 / 1-2 / 1-3 / 1-4 / 1-5 / 1-6 | all cleared | 17.7 / 13.8 / 27.6 / 19.9 / 16.7 / 27.0 | 0 / 0 / 0 / 0 / 0 / 0 | 0 / 0 / 0 / 2 (0/2) / 1 (1/0) / 1 (1/0) |
+| first-timer seed 2: 1-4 / 1-6 | both cleared | 29.6 / 71.0 | 1 / 3 | 7 (0/7) / 11 (4/7) |
+| casual seed 1: 1-2 / 1-4 / 1-6 | all cleared | 31.1 / 17.2 / 26.0 | 0 / 0 / 0 | 0 / 0 / 2 |
+| expert seed 1: 1-2 / 1-4 / 1-6 | all cleared | 23.3 / 19.7 / 27.7 | 0 / 0 / 0 | 1 / 2 / 3 |
+
+16 of 16 runs cleared, 0 console or page errors, 0 failed requests. The sanity session (Esc/Esc, Esc then
+a click on Resume, R, each with a direction and jump key held) passed: the clock froze for 600 ms, the game
+resumed, the held direction moved Rubik (+265, +58 px in 0.8 s), R respawned without counting a death.
+Every checked respawn and water hop-back moved Rubik after a held key (a key pressed against a wall is not
+counted as a freeze). Latency: wish to key event p50 about 1 ms (p95 2-3 ms), jump press to the game's
+latch p50 17-19 ms (one 60 Hz frame).
+
+Two earlier Chrome findings, for the record: the first driver run reported "frozen" respawns and a failed
+resume check; both were the harness (a hop-back that lands at a wall's foot, a pause taken while Rubik
+stood at 1-1's 4-tile wall), now handled in the driver. No real-key bug in the game was found: no held key
+stuck after a death, a hop-back, a pause or a retry.
+
+What a naive human still struggles with in the real-key runs: the first-timer's second seed at 1-6 took
+three deaths and 71 s (water at the orb crossing, then the corridor patrol in the escape), and at 1-4 the
+first-timer still pays 7 hearts to water on a bad seed. Seeds are not rates: one seed per level is a smoke
+test, and Chrome runs are real time so even the same seed differs between runs.

@@ -17,7 +17,7 @@ Player-facing changes in Color Rush Heist. Versions follow `package.json`; the t
 
 - **1-2 Stomping Ground is rebuilt.** It starts with a sentinel on its post to learn the strike and the head stomp on; then a dry dip ends at a 7-tile wall with a walker patrolling right up to its foot: stomping it is the way up (an air jump at the bounce's peak), and the flat card stays a springboard at the foot. The four-island chain over the first water and the green card are as before.
 - **1-4 Storm Dash:** the dash swirl now floats on the path (it used to rest on a stump you could hop over), the 12- and 14-tile gaps have a recovery rock at the far side, and the 20-tile orb gap has a second orb and a rock at the bank's foot.
-- **1-6 The Vault:** the ledge runs 3 tiles further so the first water is 7 tiles, a stepping rock sits under the orb crossing, and the island card on the way home is gone. A card you stomped on the way in now stays down after the theft.
+- **1-6 The Vault:** the ledge runs 5 tiles further so the first water is 5 tiles (a plain jump crosses it both ways), the ledge's red sentry is gone (it stood two tiles from the lookout), a stepping rock sits under the orb crossing, and the island card on the way home is gone. A card you stomped on the way in now stays down after the theft.
 
 ### Pixel UI
 

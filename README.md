@@ -52,7 +52,7 @@ as your first input. Leaving the tab pauses.
 | Lv | Name | New idea | Twist | Kit at start | GET |
 | --- | --- | --- | --- | --- | --- |
 | 1-1 | Home Cliff | Jump | Double jump (4-tile wall on dry ground) | white | — |
-| 1-2 | Stomping Ground | Stomp a card's head | Stomp from behind, then air-jump (7-8-tile heights) | white | GREEN, at the end |
+| 1-2 | Stomping Ground | Stomp a card's head | A walker at a 7-tile wall's foot: stomp it, air-jump at the peak; the flat card stays a springboard | white | GREEN, at the end |
 | 1-3 | Hide in Green | Disguise | White/green trade-off: every white climb has a watcher; a card's "!" sends Rubik back (caught) | white, green (spawns green) | — |
 | 1-4 | Storm Dash | Dash | Refills chain dashes (orb, lookout, a turning card over 27 tiles) | white, green (starts green) | DASH, in the first seconds |
 | 1-5 | Lookouts | The awareness ladder and the spear | A red card sees green | white, green, dash | — |
@@ -431,6 +431,20 @@ remain as aliases for 1-6's routes.
 - Root QA `ONLY=CTS` on the packaged ZIP of a clean clone at `9cd555f` (a mirrored workspace in the session scratchpad): **16/16**, 0 console, script or asset errors. The new check plays the ending by real keys on the packaged build, served from the strict nested host. Release gate `--only=crh` there: Build, ZIP, Refs, Meta, Tests 179/179, RootZIP 1/1, BrowserQA 16/16, Probe all PASS; the only WARN is "on branch ending" (ready in 1.64 s, 0.28 MiB before ready, title frames median 16.7 ms, boots with storage blocked).
 - ZIP: **116 files, 7.07 MiB** (7,412,129 bytes, sha256 `42a67fda4630a2dae8baa7b72923d80600798101f7116548f1b813af5727b59e`; was 114 files, the two new modules are the difference), root `index.html`, relative paths only, no `.mjs` left, no external request, no tests or research notes, largest file `track.mp3`.
 - Not done: nobody has watched the ending or listened to it with the music; the wave is judged from still frames and the audit, not in motion on a GPU (SwiftShader only); no physical keyboard, only Playwright's; the credits' truth is limited to what the workspace supports (see CREDITS_TODO).
+
+### Levels round (2026-11-10, level-design squad; `LEVEL_DESIGN_V1.md`)
+
+Rebuilt and re-tuned on top of the combat; the human-proxy table is in `LEVEL_DESIGN_V1.md`
+("Measured"), the raw runs in `common/artifacts/revision-5/crh-levels/proxy/`.
+- 1-2 rebuilt: a sentinel to learn on, the wall duel (a walker at the 7-tile wall's foot, its pad
+  stays flat there), the island chain, the green card. 1-4: the swirl is on the path, recovery rocks
+  at the develop gaps, a second orb and a rock at the orb gap. 1-6: a longer ledge (7-tile first
+  water), a stepping rock under the orb, no card on the escape's island. 1-1, 1-3, 1-5 unchanged.
+- Model, one condition: the theft no longer brings defeated cards back.
+- The human proxies were fixed first (flat pads are springboards, an air jump after a bounce has to
+  land where walking on is safe, swap to white before the jump, brake over a wall, widest-margin
+  technique for the casual and expert, a fight reflex against a chasing walker) and a Chrome driver
+  (`tests/human-proxy-chrome.mjs`) plays the levels with real key events.
 
 **Combat redesign (combat squad), 2026-11-10** (`RESEARCH_COMBAT.md`; movement physics unchanged):
 

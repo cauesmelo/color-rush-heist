@@ -660,9 +660,6 @@ test("1-6: the theft - RED GET, REVERSE, the room's cards turn, the door seals a
   // Taking red drains the vault's red guard; the room's one threat is the
   // alarm card, out at the back and facing away from Rubik.
   assert.ok(["drained", "defeated"].includes(guard(g, "vault-guard").state), "the vault guard is greyed out or already down");
-  // A card put down on the way in stays down (levels round): the REVERSE turns
-  // the living cards, it does not bring a stomped one back to hit him on the way home.
-  assert.equal(guard(g, "ledge-red").state, "defeated", "the ledge sentry the baseline stomped inbound stays down");
   const seal = getLevel("1-6").stones.find((s) => s.id === "seal-low");
   const threats = g.guards.filter((c) => !["away", "drained", "defeated"].includes(c.state) && c.x > (seal.x + 2) * T && M.canSee(c, "red"));
   assert.deepEqual(threats.map((c) => c.id), ["alarm"]);
@@ -687,6 +684,22 @@ test("1-6: the theft - RED GET, REVERSE, the room's cards turn, the door seals a
     assert.ok(cx(t) > 112 * T, `${color} stays inside`);
   }
 });
+test("1-6: the REVERSE turns the living cards and leaves a card Rubik put down, down", () => {
+  // Focused-fault setup (like `place` elsewhere): a card put down on the way in,
+  // then Rubik walks into the vault. Before the levels round the theft set every
+  // non-drained card back to calm, so a stomped card was alive on the way home.
+  const g = fresh("1-6"),
+    vault = getLevel("1-6").vault;
+  guard(g, "lookout").state = "defeated";
+  place(g, vault.cx - 70, vault.floor, { vx: 0 });
+  ticks(g, seconds(1.2), { right: true });
+  assert.equal(g.stolen, true, "the vault was reached");
+  assert.equal(guard(g, "lookout").state, "defeated", "a defeated card stays down through the theft");
+  assert.equal(guard(g, "corridor").state, "calm", "a living card is turned to face the way home");
+  assert.equal(guard(g, "corridor").dir, 1);
+  assert.equal(guard(g, "alarm").state, "calm", "the escape's card arrives");
+});
+
 test("1-6 fairness: after RED GET every card holds still through REVERSE (+0.8 s), and Rubik can't be hit", () => {
   const g = replayTo("1-6", ROUTES["1-6"].baseline, (x) => x.stolen);
   const at = () => g.guards.map((c) => [c.id, c.x, c.state]);
@@ -912,9 +925,9 @@ test("every card has a job, proved on the routes; cards that did no work are gon
   // The cards revision five removed (no route ever engaged them, or they only
   // crowded the vault room) stay gone.
   const ids = (id) => getLevel(id).guards.map((c) => c.id);
-  for (const [id, gone] of [["1-2", ["chain-a", "chain-b"]], ["1-3", ["corridor-a", "floor"]], ["1-4", ["island"]], ["1-6", ["burst-a", "burst-b", "ambush"]]])
+  for (const [id, gone] of [["1-2", ["chain-a", "chain-b"]], ["1-3", ["corridor-a", "floor"]], ["1-4", ["island"]], ["1-6", ["burst-a", "burst-b", "ambush", "ledge-red"]]])
     for (const card of gone) assert.ok(!ids(id).includes(card), `${id} ${card}`);
-  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 28);
+  assert.equal(Object.values(out).reduce((n, level) => n + Object.keys(level).length, 0), 27);
 });
 test("no stacked cards: two cards on one floor keep 2+ tiles between their bodies, unless a declared pair", () => {
   for (const level of LEVELS)

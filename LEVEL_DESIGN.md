@@ -37,7 +37,7 @@ the build differs, this file says so.
 - **Every card has a job** (revision five; see "Every card has a job" below): a
   declared `job` that the routes prove, never a card the guided line just walks
   through. Two cards on one floor keep 2+ tiles between their bodies unless they are a
-  declared `pair` (1-6's ledge).
+  declared `pair` (none left: 1-6's ledge pair was removed in the levels round).
 - **Teeth for a player who ignores cones** (critic round two): every gate or watch card
   stops a cone-blind bot in at least half of 31 arrival times (`tests/cone-blind.test.mjs`,
   see "Cone-blind audit"). A watcher stands 4-6 tiles back from the 4-tile climb it
@@ -155,14 +155,14 @@ escape-only card) is reused at an offset of −70 columns.
 | Columns | Beat | Content | Stickers / CP |
 | --- | --- | --- | --- |
 | 0–20 | Introduce | The home cliff (the finish line) and its 2-tile steps; the roof gates are already visible | CP start; CP steps (15, the riser shields it) |
-| 21–56 | Develop | A short canopy with one patrol (1-3); a 4-tile white ledge with a lookout and the swap alcove (1-3/1-5). Levels round: the ledge runs 3 tiles further (cols 54-56), so the first water below is 7 tiles, not 10 | ★1 in the swap alcove |
+| 21–56 | Develop | A short canopy with one patrol (1-3); a 4-tile white ledge with a lookout and the swap alcove (1-3/1-5). Levels round: the ledge runs 3 tiles further (cols 54-56), so the first water below is 7 tiles, not 10, and the red sentry that shared the ledge with the lookout is gone (two cards two tiles apart was the stacking the owner dislikes) | ★1 in the swap alcove |
 | 57–83 | Develop | A jump down to an island over 7 tiles of water (a plain jump crosses it; the stomp-and-dash line still does), then 16 tiles with a refill orb (1-4). Levels round: a 3-tile stepping rock 2 down under the orb (75–77), reached by a plain jump from either bank and climbed by a plain jump; the guided routes fly clear above it, so the dash line is the fast one, not the only one | CP bank (90, 6 tiles of runway from the water) |
 | 84–109 | Develop | Vault steps: stair 3 is below every chamber cone (the wait is banked); the landing is empty inbound | CP stairs (98); CP stair 3 (104) |
 | 110–132 | Twist: the approach | The vault room is **one readable lock**: a red sentry posted 4 tiles inside the door (red sees green, so the disguise is useless), turning every 2.6 s with a 0.4 s look-back. Wait on stair 3, go when it looks at the vault, stomp its back | — |
 | 110–132 | Twist: the theft | Touch the vault: hit-stop, **RED GET**, REVERSE. Two stones drop into the chamber door (a 5-row room: no gap left), so the first smash is forced, and **safe: nothing left in the room can see red** (the red guard hums at red Rubik). While the door is sealed it pulses, storm streaks run into it and the upper stone carries the dash key (`drawDoorCue`) | auto CP "vault" **inside the room by the door**; ★2 in the alcove behind a stone (smash it) |
-| 109 → 0 | Conclude: the escape | Right to left, one card per beat: the **alarm card** (escape-only) stares at the door from the landing, inside the reach of a dash fired from the doorway, so the forced smash knocks it too (from deeper in the room the dash stops in the doorway: it sees red, and the refunded dash or green answers it); down the stairs; the crossing back (orb), the **island card** (escape-only, spear up: green after the last dash and land through it, or land clear and knock it); green past the lookout and the corridor patrol, or the roof shortcut: from the ledge's edge, jump + red dash through the stacked gate, run the roof, dash the mid gate (stacked three high, so white can't hop it inbound) | ★3 between the roof gates |
+| 109 → 0 | Conclude: the escape | Right to left, one card per beat: the **alarm card** (escape-only) stares at the door from the landing, inside the reach of a dash fired from the doorway, so the forced smash knocks it too (from deeper in the room the dash stops in the doorway: it sees red, and the refunded dash or green answers it); down the stairs; the crossing back (orb, or the stepping rock); green past the lookout and the corridor patrol, or the roof shortcut: from the ledge's edge, jump + red dash through the stacked gate, run the roof, dash the mid gate (stacked three high, so white can't hop it inbound) | ★3 between the roof gates |
 
-Levels round (model, one condition): **a card Rubik put down stays down through the theft.** The REVERSE used to set every card that was not `drained` back to calm, so a ledge sentry stomped on the way in (a defeat since the combat rebuild) was alive again and hit him on the way home. Now the REVERSE turns the living cards and leaves the defeated ones down.
+Levels round (model, one condition): **a card Rubik put down stays down through the theft.** The REVERSE used to set every card that was not `drained` back to calm, so a card stomped on the way in (a defeat since the combat rebuild) was alive again and hit him on the way home. Now the REVERSE turns the living cards and leaves the defeated ones down.
 
 Every climb home is ≤ 2 tiles (red jumps once). No fail timer; the "Quick" par (18 s
 = the baseline escape 12.2 s × 1.5) is shown as the seal it awards, struck through at
@@ -237,13 +237,11 @@ Safe line = the guided route; expert line = what rewards skill.
 | 1-5 cross-green | swap | white up the goal block, green before landing, walk through it | stomp its back as it walks to the goal; the high line (★3) ends on its block |
 | 1-6 corridor | swap | escape: green before the corridor (inbound it is 1-3's disguise, green walks through) | knock it with a red dash (Takedown); the roof gates above it: ★3 |
 | 1-6 lookout | watch (pair) | inbound green through it; home: knock it with a red dash | swap alcove inbound: ★1; the stacked gate on the escape |
-| 1-6 ledge-red | gate (pair) | wait in the corridor for its back, stomp it at the lip, dash at the bounce's apex to the island; home: red walks past it | wait in the swap alcove (above its cone) for its back |
 | 1-6 vault-guard | gate | wait on stair 3, go when it looks at the vault, stomp its back; taking red drains it | — |
 | 1-6 alarm | knock | (escape) out at the back, it turns and walks at the vault at 60% pace: smash the door and go | knock it aside to reach ★2 in the alcove behind it |
-| 1-6 ambush | swap | green after the last dash, land through it | land clear as red and knock it with a ground dash |
 
 Removed because no route needed them: 1-2 `chain-a`/`chain-b`, 1-3 `corridor-a`, 1-6
-`burst-a`/`burst-b`, and the inbound landing patrol. Added in the critic round: 1-6 `ledge-red` (a red sentry paired with the green lookout) and the escape-only `alarm` card, which replaced the alarm card outside the door. Removed in critic round two (no teeth possible): 1-3 `floor` and 1-4 `island`. 29 cards remain (was 35).
+`burst-a`/`burst-b`, and the inbound landing patrol. Added in the critic round: 1-6 `ledge-red` (a red sentry paired with the green lookout) and the escape-only `alarm` card, which replaced the alarm card outside the door. Removed in critic round two (no teeth possible): 1-3 `floor` and 1-4 `island`. 27 cards remain (was 35); the levels round removed 1-6 `ledge-red` and `ambush` (below).
 
 ## Cone-blind audit and rule (revision five, critic rounds one and two)
 
@@ -263,7 +261,7 @@ the wall it guards, is not a pass. A card must be passed clean in fewer than hal
 
 **Exempt** (listed in the test, with reasons): `teach` cards (1-3 glade, 1-5 teacher: an
 idea's first card, met in the open on purpose), `disguise` (1-3 corridor-b: walking through
-it is the lesson), `swap` (1-5 cross-green, 1-6 ambush and corridor: passing disguised is
+it is the lesson), `swap` (1-5 cross-green, 1-6 corridor: passing disguised is
 the point), `refill` (1-4 pillar, chain: springboards over water, where the gap is the
 obstacle and the card the way across; the chain card also turns), `knock` (1-6 alarm) and
 `offLine` cards (1-3 roof: it guards sticker 2's roof route, which the bot never takes).
@@ -315,7 +313,7 @@ needs to keep true when re-tuning:
 | 1-3 | walkers and sentinels | Unchanged rule: "!" is "caught!" (no heart). Bodies cost a heart. |
 | 1-4 | sentinels (pads) | `spears: false` kept: the dash level's cards are springboards, their bodies cost a heart. |
 | 1-5 | teacher: walker; p1: sentinel; p2: sentinel; enforcer: charger (armoured); cross-red: `type: "sentinel"`; cross-green: walker | The ladder in the open. The enforcer needs two stomps (or a red dash on a dazed card); cross-red is a one-stomp sentinel because the main line must kill it with the bounce it uses. |
-| 1-6 | corridor, lookout, alarm, ambush: walkers; ledge-red, vault-guard: sentinels | The ambush card's job is `knock` (a landing on its head is a stomp, so the green swap-through is gone). |
+| 1-6 | corridor, lookout, alarm: walkers; vault-guard: sentinel | The levels round removed the ledge's red sentry and the escape's island card (one card per beat, no stacking, no knockback into water). |
 
 Rules to keep when editing a level:
 - **A gate card needs `pad: true` if its bounce is the only way over** (a wall, a gap); otherwise a failed

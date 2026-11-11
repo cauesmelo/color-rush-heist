@@ -369,16 +369,13 @@ function enforcerStomp(pl) {
  * (optionally the swap alcove), the dash crossing, the steps, and the vault. */
 function heistInbound(pl, { alcove = false } = {}) {
   pl.color("green").right().to(tx(41) + 8); // the canopy corridor, green
-  // The ledge pair: the red sentry at the ledge's lip sees green, and its
-  // cone covers the whole ledge, so the climb waits below in the corridor
-  // for its back. Then white up (green again in the air), through the green
-  // lookout, and a stomp on the red sentry's back, a dash at the bounce's
-  // apex (the stomp refills it) onto the island.
-  // The first wait that stays unseen is kept.
-  const red = (p) => p.guard("ledge-red"),
-    unseen = pl.g.spotted;
+  // The ledge: the green lookout sees white, so the climb waits below in the
+  // corridor for its back. White up (green again in the air), through the
+  // lookout as green, and a plain jump over the 7 tiles of water onto the
+  // island. The first wait that stays unseen is kept.
+  const unseen = pl.g.spotted;
   pl.choose(
-    [0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3, 3.3, 3.6, 3.9, 4.2, 4.5].flatMap((w) => [140, 160, 180].map((run) => [w, run])).map(([w, run]) => (f) => {
+    [0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3, 3.3, 3.6, 3.9, 4.2, 4.5].map((w) => (f) => {
       f.stop().wait(w).right().to(tx(42) + 8);
       f.press({ color: "white", jump: true }).airJump().wait(0.15).press({ color: "green" });
       f.until((p) => p.p.grounded && Math.abs(p.feet - tx(12)) < 1, { right: true }, 240, "ledge");
@@ -386,22 +383,12 @@ function heistInbound(pl, { alcove = false } = {}) {
         // Sticker 1: green jump up through the lookout, white air jump at the apex.
         f.to(tx(47) + 8).stop().wait(0.1).jump().apex().press({ color: "white", jump: true }).landAt(tx(48) + 16);
         f.check(f.g.stickers[0].collected, "swap alcove");
-        // The alcove is above the red sentry's cone: wait up here for its back.
-        f.color("green").stop();
-        f.until((p) => red(p).dir === 1 && red(p).turning <= 0 && red(p).turnClock < 1, {}, 900, "ledge sentry away (alcove)");
+        f.color("green");
       }
-      // The takeoff is 140+ px back: the jump must be FALLING when it meets the
-      // card's body (a card is a body that hurts), or the stomp becomes a bump.
-      const from = red(f).x - run;
-      if (f.cx > from) f.left().until((p) => p.cx <= from, { left: true }, 240, "back to the takeoff");
-      f.right().to(from).jump().steerTo((p) => red(p).x - 8);
-      f.check(isDown(red(f)), "ledge sentry stomped");
-      // The stomp refilled the dash: dash at the bounce's apex onto the island.
-      f.right().apex().dash();
-      f.until((p) => p.p.dashTime <= 0, f.dir, 60, "dash").landAt(tx(66));
+      f.right().to(tx(56) + 20).jump().landAt(tx(66));
     }),
     (f) => f.g.spotted === unseen && f.g.deaths === 0 && Math.abs(f.feet - tx(14)) < 1,
-    "ledge pair",
+    "ledge",
   );
   pl.check(Math.abs(pl.feet - tx(14)) < 1, "island");
   pl.to(tx(67) + 26).jump().apex().dash();
@@ -472,8 +459,8 @@ function heistEscape(pl, { roof = false, alcove = false, knockAll = false } = {}
     (f) => f.g.deaths === deaths && f.g.hits === hits && f.g.spotted === spotted && f.g.stomps === stomps && Math.abs(f.feet - tx(12)) < 1 && f.g.phase === "playing",
     "island crossing",
   );
-  // The ledge pair on the way home: red walks past the red sentry; the green
-  // lookout sees red, so knock it aside with a red dash.
+  // The ledge on the way home: the green lookout sees red, so knock it aside
+  // with a red dash.
   pl.left().color("red");
   pl.until((p) => Math.abs(p.guard("lookout").x - p.cx) < 120 || isDown(p.guard("lookout")), pl.dir, 240, "near the lookout");
   if (!isDown(pl.guard("lookout"))) pl.dash().until((p) => p.p.dashTime <= 0, pl.dir, 60, "knock the lookout");
